@@ -4,7 +4,7 @@ import {
 } from "@/backend/controllers/contactController";
 import { getUserMessageTemplates } from "@/backend/controllers/messagerController";
 import MessageWrapper from "@/components/message/messageWrapper";
-import { requireValidUser } from "@/utilities/authServer";
+import { withUserSsr } from "@/utilities/withUserSsr";
 import React from "react";
 
 export default function Messager({
@@ -24,11 +24,7 @@ export default function Messager({
     </>
   );
 }
-export async function getServerSideProps(context) {
-  const { user, redirect } = await requireValidUser(context);
-  if (redirect) return { redirect };
-
-  const pageData = {};
+export const getServerSideProps = withUserSsr(async (context, { user }) => {
   let contacts = [];
   let groups = [];
   let savedTemplates = [];
@@ -43,14 +39,11 @@ export async function getServerSideProps(context) {
   if (groupsData?.status) groups = groupsData.data;
   if (savedTemplatesData?.status) savedTemplates = savedTemplatesData.data;
 
-  pageData.user = user;
-
   return {
     props: {
-      pageData,
       contacts,
       groups,
       savedTemplates,
     },
   };
-}
+});

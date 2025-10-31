@@ -3,7 +3,7 @@ import {
   getUserCntactGroups,
 } from "@/backend/controllers/contactController";
 import ManageContactsWrapper from "@/components/message/manageContactsWrapper";
-import { requireValidUser } from "@/utilities/authServer";
+import { withUserSsr } from "@/utilities/withUserSsr";
 import React from "react";
 
 export default function ManageContacts({ pageData, contacts, groups }) {
@@ -17,12 +17,9 @@ export default function ManageContacts({ pageData, contacts, groups }) {
     </>
   );
 }
-export async function getServerSideProps(context) {
-  const { tab = "" } = context.query;
-  const { user, redirect } = await requireValidUser(context);
-  if (redirect) return { redirect };
 
-  const pageData = {};
+export const getServerSideProps = withUserSsr(async (context, { user }) => {
+  const { tab = "" } = context.query;
   let contacts = [];
   let groups = [];
 
@@ -31,22 +28,14 @@ export async function getServerSideProps(context) {
     getUserCntactGroups(user.userId),
   ]);
 
-  if (contactsData?.status) {
-    contacts = contactsData.data;
-  }
-
-  if (groupsList?.status) {
-    groups = groupsList.data;
-  }
-
-  pageData.user = user;
-  pageData.tab = tab;
+  if (contactsData?.status) contacts = contactsData.data;
+  if (groupsList?.status) groups = groupsList.data;
 
   return {
     props: {
-      pageData,
+      pageData: { tab },
       contacts,
       groups,
     },
   };
-}
+});
