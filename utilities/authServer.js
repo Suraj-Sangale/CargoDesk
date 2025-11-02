@@ -41,7 +41,6 @@ export async function requireValidUser(context) {
   if (!decoded) {
     return redirectToLogin(res);
   }
-  console.log("decoded====", decoded);
   // Prefer user claims from JWT to avoid DB call when available
   if (decoded.userId && decoded.email && decoded.firstName && decoded.role) {
     return {
