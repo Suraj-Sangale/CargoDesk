@@ -5,7 +5,9 @@ export const internalList = {
   UPDATE_VEHICALE_DOCUMENTS: "/api/vehicale-document/update",
 
   // node api
-  SEND_SMS: "/api/sendSms",
+  SEND_SMS: "/api/sendSms", // cms node Api
+
+  // Message API
   SEND_MESSAGE: "/api/sendMessage",
   ADD_MSG_TEMPLATE: "/api/message/add-template",
   DELETE_MSG_TEMPLATE: "/api/message/delete-template",
@@ -32,7 +34,6 @@ export const internalList = {
   GET_GROUP_MEMBERS: "/api/contact/get-group-members",
   UPDATE_USERS_GROUP_DETAILS: "/api/contact/update-users-group-details",
   DELETE_BULK_GROUPS: "/api/contact/bulk-delete-groups",
-
 
   // emi
   ADD_NEW_EMI: "/api/emi/add-new",
