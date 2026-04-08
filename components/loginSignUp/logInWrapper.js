@@ -229,7 +229,7 @@ export default function LoginWrapper() {
             <button
               type="button"
               onClick={tempLogIn}
-              className="w-full bg-white text-black font-semibold py-2 rounded hover:bg-opacity-80 transition cursor-pointer mb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2"
+              className="w-full bg-white  text-black font-semibold py-2 rounded hover:bg-opacity-80 transition cursor-pointer mb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2"
               disabled={loading}
             >
               {loading ? "Logging in..." : "Temp Log In"}
