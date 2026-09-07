@@ -1,62 +1,23 @@
-// import { postSiteApiData } from "@/utilities/services/apiService";
-import { Twilio } from "twilio";
 import {
   addNewMessageTemplateModel,
   deleteMessageTemplateModel,
   getUserMessageTemplatesModel,
 } from "../models/messangerModel";
+import { sendBulkSms } from "../services/smsService";
 
-export default async function sendMessage(req, res) {
-  const accountSid = process.env.ACCOUNT_SID;
-  const authToken = process.env.AUTH_TOKEN;
-
-  const client = new Twilio(accountSid, authToken);
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method Not Allowed" });
-  }
-
-  const { message, contacts } = req.body;
-
-  // Initial response structure
-  const response = { status: false };
-
-  // Input validation
-  if (
-    !message ||
-    !contacts ||
-    !Array.isArray(contacts) ||
-    contacts.length === 0
-  ) {
-    response.message = "Message and at least one contact are required.";
-    return res.status(400).json(response);
-  }
-
+/**
+ * Main controller to send messages to one or multiple recipients.
+ * Delegates to the unified SMS service (supporting Twilio, Fast2SMS, etc.)
+ */
+export default async function sendMessage(requestBody = {}) {
   try {
-    // Send messages one by one
-    // for (const contact of contacts) {
-    //   const formattedContact = "+91" + contact.trim();
-
-    //   if (!formattedContact.startsWith("+")) {
-    //     throw new Error(`Invalid phone number format: ${formattedContact}`);
-    //   }
-
-    //   await client.messages.create({
-    //     body: message,
-    //     from: process.env.TWILIO_SENDER_PHONE_NO,
-    //     to: formattedContact,
-    //   });
-    // }
-
-    response.status = true;
-    response.message = "Messages sent successfully";
-    return res.status(200).json(response);
+    return await sendBulkSms(requestBody);
   } catch (error) {
-    console.error("Error sending message:", error);
-
-    response.message = "Failed to send message";
-    response.error = error?.message || "Unknown error";
-    return res.status(500).json(response);
+    console.error("Error in messagerController:", error);
+    return {
+      status: false,
+      message: error?.message || "Internal error occurred while processing message dispatch.",
+    };
   }
 }
 

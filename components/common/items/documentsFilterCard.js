@@ -40,7 +40,12 @@ const cardThemes = {
   },
 };
 
-const DocumentsFilterCard = ({ item, onFilterClick, isSelected }) => {
+const DocumentsFilterCard = ({
+  item,
+  onFilterClick,
+  isSelected,
+  isLoading = false,
+}) => {
   const typeKey = (item.value || "").toLowerCase();
   const theme = cardThemes[typeKey] || {
     bg: "bg-slate-50 hover:bg-slate-100",
@@ -87,14 +92,22 @@ const DocumentsFilterCard = ({ item, onFilterClick, isSelected }) => {
           {theme.label}
         </span>
         {/* Large Count */}
-        <div className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
-          {countDisplay}
-        </div>
+        {isLoading ? (
+          <div className="h-8 w-20 bg-slate-200/80 rounded-lg animate-pulse mt-1" />
+        ) : (
+          <div className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+            {countDisplay}
+          </div>
+        )}
       </div>
 
       {/* Bottom: Subtext */}
       <div className="text-xs font-medium text-slate-400 mt-1">
-        {subtext}
+        {isLoading ? (
+          <div className="h-3.5 w-24 bg-slate-200/60 rounded animate-pulse mt-0.5" />
+        ) : (
+          subtext
+        )}
       </div>
     </button>
   );

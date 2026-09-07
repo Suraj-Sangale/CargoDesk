@@ -10,6 +10,7 @@ export default function RecordsToolbar({
   onRemoveFilter,
   documentsTypeList = [],
   onFilterClick,
+  isLoading = false,
 }) {
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
 
@@ -22,9 +23,13 @@ export default function RecordsToolbar({
           <h2 className="text-lg md:text-xl font-bold text-slate-900 tracking-tight">
             All Records
           </h2>
-          <span className="inline-flex items-center justify-center bg-blue-100 text-blue-600 text-xs font-bold px-2.5 py-0.5 rounded-full">
-            {totalCount}
-          </span>
+          {isLoading ? (
+            <span className="inline-flex items-center justify-center bg-blue-100/70 w-8 h-5 rounded-full animate-pulse" />
+          ) : (
+            <span className="inline-flex items-center justify-center bg-blue-100 text-blue-600 text-xs font-bold px-2.5 py-0.5 rounded-full">
+              {totalCount}
+            </span>
+          )}
         </div>
 
         {/* Right Toolbar: Search, Filter, + Add Document */}

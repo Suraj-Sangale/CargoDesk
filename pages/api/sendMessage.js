@@ -1,21 +1,18 @@
 import sendMessage from "@/backend/controllers/messagerController";
 
-export default function handler(req, res) {
-  return new Promise((resolve, reject) => {
-    const request = req.body;
-    const response = {
-      status: false,
-    };
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ status: false, message: "Method Not Allowed" });
+  }
 
-    sendMessage(req, res)
-      .then((result) => {
-        res.status(200).json(result);
-        resolve(result);
-      })
-      .catch((error) => {
-        response.error = error;
-        res.status(200).json(response);
-        resolve();
-      });
-  });
+  try {
+    const result = await sendMessage(req.body);
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error in sendMessage API route:", error);
+    return res.status(500).json({
+      status: false,
+      message: error?.message || "An unexpected error occurred while sending messages.",
+    });
+  }
 }

@@ -1,3 +1,4 @@
+import { scrollSectionIntoView } from "@/utilities/utils";
 import React, { useState, useRef, useEffect } from "react";
 import {
   FiCopy,
@@ -48,13 +49,18 @@ export default function PrevMessageCard({
   const menuRef = useRef(null);
 
   const theme = pastelThemes[index % pastelThemes.length];
-  const isCurrentlyConfirming = isConfirm && isConfirm.id === item.id;
-  const isDeletingThis =
-    deleteMsgLoading && toDelete && toDelete.id === item.id;
+  const isCurrentlyConfirming = Boolean(
+    isConfirm && (isConfirm.id == item.id || isConfirm == item.id),
+  );
+  const isDeletingThis = Boolean(
+    deleteMsgLoading &&
+    (toDelete == item.id || (toDelete && toDelete.id == item.id)),
+  );
 
   // Extract title (first line or truncated first 20 chars) and body preview
   const firstLine = (item.message || "").split("\n")[0] || "Template";
-  const titleDisplay = firstLine.length > 24 ? firstLine.substring(0, 24) + "..." : firstLine;
+  const titleDisplay =
+    firstLine.length > 24 ? firstLine.substring(0, 24) + "..." : firstLine;
   const bodyDisplay = item.message || "";
 
   // Close dropdown on outside click
@@ -70,6 +76,7 @@ export default function PrevMessageCard({
 
   const handleUse = () => {
     handleChange("message", item.message);
+    scrollSectionIntoView("messageInput");
     if (setIsConfirm) setIsConfirm(false);
   };
 
@@ -84,19 +91,36 @@ export default function PrevMessageCard({
 
   return (
     <div
-      className={`group relative bg-white rounded-2xl p-4 border border-slate-200/70 shadow-2xs hover:shadow-md ${theme.hoverBorder} transition-all duration-200 flex flex-col justify-between min-h-[135px]`}
+      onClick={handleUse}
+      className={`contact-card group relative overflow-hidden bg-white rounded-2xl p-4 border shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer min-h-[135px] ${
+        isCurrentlyConfirming
+          ? "confirmContactDelete border-red-600"
+          : `border-slate-200/70 ${theme.hoverBorder}`
+      }`}
     >
-      {/* Delete Confirmation Overlay */}
+      {/* Delete Confirmation Overlay with expanding red circle background */}
       {isCurrentlyConfirming ? (
-        <div className="flex flex-col justify-center items-center text-center p-3 my-auto bg-rose-50/95 rounded-xl border border-rose-200 animate-slide-down">
-          <p className="text-xs font-semibold text-rose-900 mb-2.5">
-            Are you sure you want to delete this template?
-          </p>
-          <div className="flex items-center gap-2">
+        <div className="relative z-10 flex flex-col justify-between h-full min-h-[105px] text-white p-1">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white shrink-0">
+                <FiTrash2 className="w-4 h-4" />
+              </div>
+              <span className="font-bold text-sm text-white">
+                Delete Template?
+              </span>
+            </div>
+            <p className="text-xs text-white/90 font-medium leading-relaxed">
+              Are you sure you want to delete this template?
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-3">
             <button
               type="button"
               onClick={cancelDelete}
-              className="px-3 py-1 text-xs font-semibold bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
+              disabled={isDeletingThis}
+              className="px-3.5 py-1.5 text-xs font-semibold bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-xl shadow-2xs transition-all cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
@@ -104,15 +128,18 @@ export default function PrevMessageCard({
               type="button"
               onClick={() => handleDelete(item)}
               disabled={isDeletingThis}
-              className="px-3 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-4 py-1.5 text-xs font-bold bg-white text-red-600 hover:bg-red-50 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               {isDeletingThis ? (
                 <>
-                  <ImSpinner9 className="w-3 h-3 animate-spin" />
+                  <ImSpinner9 className="w-3.5 h-3.5 animate-spin" />
                   <span>Deleting...</span>
                 </>
               ) : (
-                "Yes, Delete"
+                <>
+                  <FiTrash2 className="w-3.5 h-3.5" />
+                  <span>Yes, Delete</span>
+                </>
               )}
             </button>
           </div>
@@ -148,7 +175,10 @@ export default function PrevMessageCard({
             <div className="relative shrink-0" ref={menuRef}>
               <button
                 type="button"
-                onClick={() => setMenuOpen(!menuOpen)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(!menuOpen);
+                }}
                 className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                 title="Options"
               >
@@ -161,6 +191,8 @@ export default function PrevMessageCard({
                     type="button"
                     onClick={() => {
                       setMenuOpen(false);
+                      e.stopPropagation();
+
                       handleUse();
                     }}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer"
@@ -172,6 +204,8 @@ export default function PrevMessageCard({
                     type="button"
                     onClick={() => {
                       setMenuOpen(false);
+                      e.stopPropagation();
+
                       handleCopy(item);
                     }}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer"
@@ -181,7 +215,10 @@ export default function PrevMessageCard({
                   </button>
                   <button
                     type="button"
-                    onClick={onConfirmDelete}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onConfirmDelete();
+                    }}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 cursor-pointer"
                   >
                     <FiTrash2 className="w-3.5 h-3.5 text-rose-500" />
@@ -194,7 +231,7 @@ export default function PrevMessageCard({
 
           {/* Bottom Row: Actions [+ Use] [Copy] [Delete] */}
           {/* <div className="flex items-center gap-2 pt-2 border-t border-slate-100/80"> */}
-            {/* + Use Button
+          {/* + Use Button
             <button
               type="button"
               onClick={handleUse}
@@ -205,7 +242,7 @@ export default function PrevMessageCard({
               <span>Use</span>
             </button> */}
 
-            {/* Copy Button 
+          {/* Copy Button 
             <button
               type="button"
               onClick={() => handleCopy(item)}
@@ -225,7 +262,7 @@ export default function PrevMessageCard({
               )}
             </button>*/}
 
-            {/* Delete Button
+          {/* Delete Button
             <button
               type="button"
               onClick={onConfirmDelete}

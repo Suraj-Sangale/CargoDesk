@@ -46,6 +46,8 @@ export default function MessageWrapper({
   });
 
   const [loading, setLoading] = useState(false);
+  const [sendProgress, setSendProgress] = useState(null);
+  const [sendSummary, setSendSummary] = useState(null);
   const [contactsError, setContactsError] = useState(false);
   const [selectedTab, setSelectedTab] = useState("contacts");
   const [copied, setCopied] = useState(false);
@@ -249,6 +251,8 @@ export default function MessageWrapper({
     setToDelete(false);
   };
 
+  const CLIENT_BATCH_SIZE = 50; // Configurable client-side batch size for chunked sending
+
   const onSubmit = async () => {
     if (formData.contacts.length === 0 && formData.groups.length === 0) {
       setContactsError(true);
@@ -260,9 +264,8 @@ export default function MessageWrapper({
       return;
     }
 
-    setLoading(true);
-
-    const contactNumbers = [
+    // Collect all phone numbers from selected individual contacts and groups
+    const rawContactNumbers = [
       ...formData.contacts.map((c) => c.contactNo),
       ...formData.groups.flatMap((group) =>
         (group.contactIds || []).map((id) => {
@@ -272,43 +275,123 @@ export default function MessageWrapper({
       ),
     ].filter(Boolean);
 
-    if (contactNumbers.length === 0) {
+    // Deduplicate and trim numbers
+    const uniqueNumbers = Array.from(
+      new Set(
+        rawContactNumbers
+          .map((num) =>
+            typeof num === "string" ? num.trim() : String(num).trim(),
+          )
+          .filter(Boolean),
+      ),
+    );
+
+    if (uniqueNumbers.length === 0) {
       showToast({
-        message: "No valid contacts found in selection.",
+        message: "No valid contacts or phone numbers found in selection.",
         type: "error",
       });
-      setLoading(false);
       return;
     }
 
-    const payload = {
-      message: formData.message,
-      contacts: [...new Set(contactNumbers)],
-    };
+    setLoading(true);
+    setSendMsgApiError("");
+    setSendSummary(null);
+
+    const totalRecipients = uniqueNumbers.length;
+    setSendProgress({ current: 0, total: totalRecipients, percent: 0 });
+
+    let overallSentCount = 0;
+    let overallFailedCount = 0;
+    let overallInvalidNumbers = [];
+    let overallFailedDetails = [];
 
     try {
-      const response = await postApiData("SEND_MESSAGE", payload);
-      if (response.status) {
-        setSendMsgApiError("");
+      // Chunk recipients into manageable batches to prevent HTTP timeouts & overload
+      for (let i = 0; i < totalRecipients; i += CLIENT_BATCH_SIZE) {
+        const batch = uniqueNumbers.slice(i, i + CLIENT_BATCH_SIZE);
+        const processedCount = Math.min(i + batch.length, totalRecipients);
+
+        setSendProgress({
+          current: processedCount,
+          total: totalRecipients,
+          percent: Math.round((processedCount / totalRecipients) * 100),
+        });
+
+        const payload = {
+          message: formData.message,
+          contacts: batch,
+        };
+
+        const response = await postApiData("SEND_MESSAGE", payload);
+
+        if (response && response.data) {
+          overallSentCount += response.data.sentCount || 0;
+          overallFailedCount += response.data.failedCount || 0;
+          if (Array.isArray(response.data.invalidNumbers)) {
+            overallInvalidNumbers.push(...response.data.invalidNumbers);
+          }
+          if (Array.isArray(response.data.failed)) {
+            overallFailedDetails.push(...response.data.failed);
+          }
+        } else if (response && response.status) {
+          overallSentCount += batch.length;
+        } else {
+          overallFailedCount += batch.length;
+          overallFailedDetails.push({
+            error: response?.message || "Batch request failed",
+            batch,
+          });
+        }
+      }
+
+      // Aggregate final campaign statistics
+      const summary = {
+        total: totalRecipients,
+        sentCount: overallSentCount,
+        failedCount: overallFailedCount,
+        invalidCount: overallInvalidNumbers.length,
+        failedDetails: overallFailedDetails,
+        invalidNumbers: overallInvalidNumbers,
+      };
+
+      setSendSummary(summary);
+
+      if (
+        overallSentCount === totalRecipients &&
+        overallInvalidNumbers.length === 0
+      ) {
         showToast({
-          message: response.message || "Message sent successfully!",
+          message: `Message sent successfully to all ${overallSentCount} recipient${overallSentCount > 1 ? "s" : ""}!`,
+          type: "success",
+        });
+      } else if (overallSentCount > 0) {
+        showToast({
+          message: `Sent to ${overallSentCount} of ${totalRecipients} recipient${totalRecipients > 1 ? "s" : ""}.${overallFailedCount > 0 ? ` ${overallFailedCount} failed.` : ""}`,
           type: "success",
         });
       } else {
-        setSendMsgApiError(response.message || "Failed to send message");
+        const errorMsg =
+          overallFailedDetails[0]?.error ||
+          "Failed to send messages. Please check your SMS configuration.";
+        setSendMsgApiError(errorMsg);
         showToast({
-          message: response.message || "Failed to send message",
+          message: errorMsg,
           type: "error",
         });
       }
     } catch (err) {
-      console.error("Message sending failed", err);
+      console.error("Message sending failed:", err);
+      setSendMsgApiError(
+        err?.message || "An error occurred while sending the message.",
+      );
       showToast({
         message: "An error occurred while sending the message.",
         type: "error",
       });
     } finally {
       setLoading(false);
+      setSendProgress(null);
     }
   };
 
@@ -367,7 +450,10 @@ export default function MessageWrapper({
               </div>
 
               {/* Textarea Box with Blue Border */}
-              <div className="relative rounded-2xl border border-blue-400 focus-within:ring-2 focus-within:ring-blue-500/20 bg-white p-4 transition-all">
+              <div
+                className="relative rounded-2xl border border-blue-400 focus-within:ring-2 focus-within:ring-blue-500/20 bg-white p-4 transition-all"
+                id="messageInput"
+              >
                 <textarea
                   rows={5}
                   value={formData.message}
@@ -513,7 +599,11 @@ export default function MessageWrapper({
                   {loading ? (
                     <>
                       <ImSpinner9 className="w-4 h-4 animate-spin" />
-                      <span>Sending...</span>
+                      <span>
+                        {sendProgress
+                          ? `Sending (${sendProgress.current}/${sendProgress.total})...`
+                          : "Sending..."}
+                      </span>
                     </>
                   ) : (
                     <>
@@ -523,6 +613,113 @@ export default function MessageWrapper({
                   )}
                 </button>
               </div>
+
+              {/* Progress Bar (Visible during batch transmission) */}
+              {loading && sendProgress && (
+                <div className="pt-2 space-y-1.5 animate-fade-in">
+                  <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                    <span className="flex items-center gap-1.5 text-blue-600 font-semibold">
+                      <ImSpinner9 className="w-3 h-3 animate-spin" />
+                      <span>Transmitting batch to recipients...</span>
+                    </span>
+                    <span>
+                      {sendProgress.current} of {sendProgress.total} (
+                      {sendProgress.percent}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
+                    <div
+                      className="bg-[#2563EB] h-full transition-all duration-300 rounded-full"
+                      style={{ width: `${sendProgress.percent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Delivery Report Summary Banner */}
+              {sendSummary && (
+                <div
+                  className={`p-4 rounded-2xl border text-xs space-y-2.5 animate-fade-in transition-all ${
+                    sendSummary.failedCount === 0 &&
+                    sendSummary.invalidCount === 0
+                      ? "bg-emerald-50/90 border-emerald-200 text-emerald-950"
+                      : sendSummary.sentCount > 0
+                        ? "bg-amber-50/90 border-amber-200 text-amber-950"
+                        : "bg-rose-50/90 border-rose-200 text-rose-950"
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-bold text-sm">
+                    <span className="flex items-center gap-1.5">
+                      {sendSummary.sentCount > 0
+                        ? "Campaign Summary Report"
+                        : "Message Transmission Failed"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSendSummary(null)}
+                      className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                      title="Dismiss report"
+                    >
+                      <FiX className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-0.5">
+                    <div className="bg-white/80 p-2.5 rounded-xl border border-black/5 shadow-2xs">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                        Total
+                      </span>
+                      <span className="font-extrabold text-base text-slate-900">
+                        {sendSummary.total}
+                      </span>
+                    </div>
+                    <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-100 shadow-2xs">
+                      <span className="text-[10px] uppercase font-bold text-emerald-600 block">
+                        Sent
+                      </span>
+                      <span className="font-extrabold text-base text-emerald-700">
+                        {sendSummary.sentCount}
+                      </span>
+                    </div>
+                    <div className="bg-white/80 p-2.5 rounded-xl border border-rose-100 shadow-2xs">
+                      <span className="text-[10px] uppercase font-bold text-rose-500 block">
+                        Failed
+                      </span>
+                      <span className="font-extrabold text-base text-rose-700">
+                        {sendSummary.failedCount}
+                      </span>
+                    </div>
+                    <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 shadow-2xs">
+                      <span className="text-[10px] uppercase font-bold text-amber-600 block">
+                        Invalid
+                      </span>
+                      <span className="font-extrabold text-base text-amber-700">
+                        {sendSummary.invalidCount}
+                      </span>
+                    </div>
+                  </div>
+
+                  {sendSummary.failedDetails &&
+                    sendSummary.failedDetails.length > 0 && (
+                      <div className="pt-1 text-[11px] text-slate-600 border-t border-black/5">
+                        <span className="font-semibold text-rose-700">
+                          Error Details:{" "}
+                        </span>
+                        {sendSummary.failedDetails.slice(0, 3).map((f, i) => (
+                          <span key={i} className="block truncate">
+                            • {f.to ? `${f.to}: ` : ""}
+                            {f.error}
+                          </span>
+                        ))}
+                        {sendSummary.failedDetails.length > 3 && (
+                          <span className="text-slate-400 italic">
+                            +{sendSummary.failedDetails.length - 3} more errors
+                          </span>
+                        )}
+                      </div>
+                    )}
+                </div>
+              )}
             </div>
 
             {/* 2. Saved Templates Section */}

@@ -122,3 +122,61 @@ input[type="number"] {
 	-moz-appearance: textfield;
 	/* Firefox */
 }
+
+/* ==========================================================================
+   Custom Scrollbar Styles
+   ========================================================================== */
+
+/* Dark Sidebar Scrollbar (Ultra-thin, sleek, unobtrusive) */
+.sidebar-scrollbar {
+	scrollbar-width: thin;
+	scrollbar-color: rgba(148, 163, 184, 0.2) transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+	width: 5px;
+	height: 5px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+	background: transparent;
+	margin: 6px 0;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+	background: rgba(148, 163, 184, 0.2);
+	border-radius: 9999px;
+	transition: background-color 0.2s ease;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+	background: rgba(148, 163, 184, 0.45);
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+/* Light / Global thin scrollbar */
+.custom-scrollbar {
+	scrollbar-width: thin;
+	scrollbar-color: rgba(203, 213, 225, 0.7) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+	width: 5px;
+	height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+	background: rgba(203, 213, 225, 0.7);
+	border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+	background: rgba(148, 163, 184, 1);
+}

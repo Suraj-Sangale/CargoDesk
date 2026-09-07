@@ -62,7 +62,7 @@ export default function CommonLayout({ children, pageProps = {} }) {
 
       {/* Main Content Area */}
       <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
           isCollapsed ? "md:pl-20" : "md:pl-64"
         }`}
       >
@@ -70,6 +70,8 @@ export default function CommonLayout({ children, pageProps = {} }) {
           pageData={pageProps.pageData}
           onToggleSidebar={handleToggleSidebar}
           toggleBtnRef={toggleBtnRef}
+          isCollapsed={isCollapsed}
+          isMobileOpen={isMobileOpen}
         />
         <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
           {children}

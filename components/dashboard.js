@@ -12,6 +12,7 @@ const Dashboard = ({ pageData }) => {
   const [isEdit, setIsEdit] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
+  const [tableLoading, setTableLoading] = useState(true);
   const [reminderData, setReminderData] = useState("");
   const [documentTableData, setDocumentTableData] = useState([]);
   const [selectedTab, setSelectedTab] = useState("document");
@@ -70,6 +71,7 @@ const Dashboard = ({ pageData }) => {
   };
 
   const getAllVehicleDocuments = async () => {
+    setTableLoading(true);
     try {
       const response = await postApiData("GET_ALL_VEHICALE_DOCUMENTS");
       if (response.status && response.data.length > 0) {
@@ -79,6 +81,8 @@ const Dashboard = ({ pageData }) => {
       }
     } catch (error) {
       console.error("Error occurred during fetching vehicle documents:", error);
+    } finally {
+      setTableLoading(false);
     }
   };
 
@@ -111,6 +115,7 @@ const Dashboard = ({ pageData }) => {
             tableData={documentTableData}
             setTableData={setDocumentTableData}
             onClickAddDocument={onClickAddReminder}
+            isLoading={tableLoading}
           />
         ) : selectedTab === "emi" ? (
           <EmiSection />

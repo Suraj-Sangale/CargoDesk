@@ -16,6 +16,7 @@ export default function DocumentsSection({
   setTableData,
   onClickAddDocument = () => {},
   rowsPerPageOptions = [5, 10, 25],
+  isLoading = false,
 }) {
   const [documentsTypeList, setDocumentsTypeList] = useState([]);
   const [deletePopup, setDeletePopup] = useState(false);
@@ -113,6 +114,7 @@ export default function DocumentsSection({
             item={item}
             isSelected={appliedFilter.includes(item.value)}
             onFilterClick={onFilterClick}
+            isLoading={isLoading}
           />
         ))}
       </div>
@@ -129,6 +131,7 @@ export default function DocumentsSection({
           onRemoveFilter={handleRemoveFilter}
           documentsTypeList={documentsTypeList}
           onFilterClick={onFilterClick}
+          isLoading={isLoading}
         />
 
         {/* Modern Document Data Table */}
@@ -144,6 +147,7 @@ export default function DocumentsSection({
           }}
           searchTerm={searchTerm}
           rowsPerPageOptions={rowsPerPageOptions}
+          isLoading={isLoading}
         />
       </div>
 
