@@ -3,6 +3,7 @@ import CommonModal from "../common/commonModal";
 import { postApiData } from "@/utilities/services/apiService";
 import DocumentsSection from "../layouts/documentsSection";
 import AddDocumentForm from "../common/molecules/addDocumentForm";
+import PageHeader from "../dashboard/pageHeader";
 
 export default function DocumetsWrapper({ pageData }) {
   const [reminderModal, setReminderModal] = useState(false);
@@ -11,11 +12,12 @@ export default function DocumetsWrapper({ pageData }) {
   const [addLoading, setAddLoading] = useState(false);
   const [reminderData, setReminderData] = useState("");
   const [documentTableData, setDocumentTableData] = useState(
-    pageData.documents || []
+    pageData?.documents || []
   );
 
   const onClickAddReminder = () => {
     setIsEdit(false);
+    setReminderData("");
     setReminderModal(true);
   };
 
@@ -66,9 +68,14 @@ export default function DocumetsWrapper({ pageData }) {
     setUpdateLoading(false);
   };
 
-  console.log("pageData jjjj", pageData);
   return (
-    <>
+    <div className="w-full">
+      <PageHeader
+        eyebrow="DOCUMENTS"
+        title="Vehicle Documents"
+        subtitle="Track and manage all your vehicle documents in one place."
+      />
+
       <DocumentsSection
         setReminderData={setReminderData}
         setReminderModal={setReminderModal}
@@ -76,14 +83,14 @@ export default function DocumetsWrapper({ pageData }) {
         tableData={documentTableData}
         setTableData={setDocumentTableData}
         onClickAddDocument={onClickAddReminder}
-        rowsPerPageOptions={[10, 25, 50]}
+        rowsPerPageOptions={[5, 10, 25, 50]}
       />
 
       <CommonModal
         modalTitle={isEdit ? "Edit Document" : "Add New Document"}
         modalOpen={reminderModal}
         setModalOpen={setReminderModal}
-        modalSize={"w-11/12 md:w-3/6"}
+        modalSize="w-11/12 md:w-[500px]"
       >
         <AddDocumentForm
           setReminderModal={setReminderModal}
@@ -95,6 +102,6 @@ export default function DocumetsWrapper({ pageData }) {
           updateReminderData={updateReminderData}
         />
       </CommonModal>
-    </>
+    </div>
   );
 }

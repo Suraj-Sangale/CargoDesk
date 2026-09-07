@@ -1,23 +1,33 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useForm } from "react-hook-form";
-import styles from "@/styles/messageStyle.module.scss";
-import commonStyle from "@/styles/common/common.module.scss";
+import Link from "next/link";
 import { postApiData } from "@/utilities/services/apiService";
 import PrevMessageCard from "./prevMessageCard";
-import CommonModal from "../common/commonModal";
-import GoogleContacts from "./googleContacts";
-
-import { RiSendPlaneFill } from "react-icons/ri";
-import Link from "next/link";
-import { ImSpinner9 } from "react-icons/im";
+import MessagePageHeader from "./messagePageHeader";
 import { showToast } from "@/utilities/toastService";
-import { truncateString } from "@/utilities/utils";
+import {
+  FiSearch,
+  FiPlus,
+  FiFileText,
+  FiUser,
+  FiUsers,
+  FiSmile,
+  FiPaperclip,
+  FiRefreshCw,
+  FiX,
+  FiChevronDown,
+  FiChevronUp,
+  FiExternalLink,
+} from "react-icons/fi";
+import { RiSendPlaneFill } from "react-icons/ri";
+import { ImSpinner9 } from "react-icons/im";
+import { scrollSectionIntoView } from "@/utilities/utils";
 
 export default function MessageWrapper({
   pageData,
   contacts = [],
   groups = [],
-  savedTemplates,
+  savedTemplates = [],
 }) {
   const [contactsList] = useState(contacts);
   const [groupsList] = useState(groups);
@@ -34,13 +44,11 @@ export default function MessageWrapper({
     contacts: [],
     groups: [],
   });
+
   const [loading, setLoading] = useState(false);
   const [contactsError, setContactsError] = useState(false);
-  const [contactsErrorMsg, setContactsErrorMsg] = useState("");
   const [selectedTab, setSelectedTab] = useState("contacts");
-  const [validations, setValidations] = useState({});
   const [copied, setCopied] = useState(false);
-  const [prevTemplatePoup, setPrevTemplatePopup] = useState(false);
   const [sendMsgApiError, setSendMsgApiError] = useState("");
   const [showAddMsgTemplet, setShowAddMsgTemplet] = useState(false);
   const [savedMsgTemplets, setSavedMsgTemplets] = useState(savedTemplates);
@@ -50,49 +58,57 @@ export default function MessageWrapper({
   const [toDelete, setToDelete] = useState(false);
   const [isConfirm, setIsConfirm] = useState(false);
 
-  const handleSaveTemplate = async () => {
-    if (!newTemplateText.trim()) return;
+  // Search states
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [recipientSearch, setRecipientSearch] = useState("");
 
-    setAddMsgLoading(true);
+  // Mobile collapsed state for Saved Templates (< 1024px)
+  const [isTemplatesExpandedMobile, setIsTemplatesExpandedMobile] = useState(false);
 
-    // Optionally save to API or just update local list
-    const newTemplate = {
-      userId: pageData.user.userId,
-      message: newTemplateText.trim(),
+  // Emoji & Variable dropdown toggles
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showVariableDropdown, setShowVariableDropdown] = useState(false);
+  const emojiRef = useRef(null);
+  const varRef = useRef(null);
+
+  const quickEmojis = [
+    "👋",
+    "🚚",
+    "📦",
+    "✅",
+    "⚠️",
+    "📄",
+    "🔔",
+    "🙏",
+    "⏳",
+    "🚀",
+  ];
+  const quickVariables = [
+    { label: "Contact Name", value: "{name}" },
+    { label: "Vehicle Number", value: "{vehicleNo}" },
+    { label: "Date", value: "{date}" },
+  ];
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target)) {
+        setShowEmojiPicker(false);
+      }
+      if (varRef.current && !varRef.current.contains(e.target)) {
+        setShowVariableDropdown(false);
+      }
     };
-
-    const response = await postApiData("ADD_MSG_TEMPLATE", newTemplate);
-    if (response.status) {
-      setNewTemplateText("");
-      setShowAddMsgTemplet(false);
-      setSavedMsgTemplets((prev) => [
-        { ...newTemplate, id: response.templateId },
-        ...prev,
-      ]);
-      setNewTemplateText("");
-      showToast({
-        message: response.message,
-        type: "success",
-      });
-    } else {
-      showToast({
-        message: response.message,
-        type: "error",
-      });
-    }
-    setAddMsgLoading(false);
-  };
-
-  const prevTemlateHeading = showAddMsgTemplet
-    ? "New Message Template"
-    : "Saved Templates";
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
 
   useEffect(() => {
     register("message", {
       required: "Please enter a message",
       maxLength: {
-        value: 500,
-        message: "Message cannot exceed 500 characters",
+        value: 1000,
+        message: "Message cannot exceed 1000 characters",
       },
     });
   }, [register]);
@@ -104,13 +120,10 @@ export default function MessageWrapper({
     if (field === "contacts" && value.length > 0) {
       setContactsError(false);
     }
-    setPrevTemplatePopup(false);
   };
 
-  //  comment add
   const handleCheckboxChange = (contact) => {
     setContactsError(false);
-
     setFormData((prev) => {
       const exists = prev.contacts.find((c) => c.id === contact.id);
       if (exists) {
@@ -127,84 +140,8 @@ export default function MessageWrapper({
     });
   };
 
-  const onSubmit = async () => {
-    if (formData.contacts.length === 0 && formData.groups.length === 0) {
-      setContactsError(true);
-      return;
-    }
-
-    setLoading(true);
-
-    // const payload = {
-    //   message: formData.message,
-    //   contacts: formData.contacts.map((c) => c.contactNo), // Assuming contactNo is the identifier
-    // };
-    const contactNumbers = [
-      ...formData.contacts.map((c) => c.contactNo),
-      ...formData.groups.flatMap((group) =>
-        group.contactIds.map((id) => {
-          const match = contactsList.find((c) => c.id === id);
-          return match ? match.contactNo : null;
-        })
-      ),
-    ].filter(Boolean); // remove nulls just in case
-    if (contactNumbers.length === 0) {
-      // setContactsError(true);
-      // setContactsErrorMsg("No contacts found in selection.");
-      showToast({
-        message: "No contacts found in selection.",
-        type: "error",
-      });
-      setLoading(false);
-
-      return;
-    }
-
-    const payload = {
-      message: formData.message,
-      contacts: [...new Set(contactNumbers)], // remove duplicates
-    };
-
-    try {
-      const response = await postApiData("SEND_MESSAGE", payload);
-
-      if (response.status) {
-        setSendMsgApiError("");
-        showToast({
-          message: response.message,
-          type: "success",
-        });
-      } else {
-        // setSendMsgApiError(response.message);
-        showToast({
-          message: response.message,
-          type: "error",
-        });
-      }
-    } catch (err) {
-      console.error("Message sending failed", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleToggle = (type) => {
-    setSelectedTab(type);
-    // onChange && onChange(type); // pass to parent if needed
-  };
-
-  const handleCopy = (item) => {
-    navigator.clipboard.writeText(item.message);
-    setCopied(item.id);
-    setTimeout(() => {
-      setCopied(false);
-    }, 2000);
-    // setPrevTemplatePopup(false);
-  };
-
   const handleGroupClick = (group) => {
     setContactsError(false);
-
     setFormData((prev) => {
       const exists = prev.groups.find((g) => g.id === group.id);
       if (exists) {
@@ -221,115 +158,540 @@ export default function MessageWrapper({
     });
   };
 
+  const handleClearAllRecipients = () => {
+    setFormData((prev) => ({
+      ...prev,
+      contacts: [],
+      groups: [],
+    }));
+    setContactsError(false);
+  };
+
+  const handleClearMessage = () => {
+    handleChange("message", "");
+  };
+
+  const insertTextAtMessage = (text) => {
+    const current = formData.message || "";
+    handleChange("message", current + (current ? " " : "") + text);
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!newTemplateText.trim()) return;
+    setAddMsgLoading(true);
+
+    const newTemplate = {
+      userId: pageData?.user?.userId,
+      message: newTemplateText.trim(),
+    };
+
+    try {
+      const response = await postApiData("ADD_MSG_TEMPLATE", newTemplate);
+      if (response.status) {
+        setNewTemplateText("");
+        setShowAddMsgTemplet(false);
+        setSavedMsgTemplets((prev) => [
+          { ...newTemplate, id: response.templateId },
+          ...prev,
+        ]);
+        showToast({
+          message: response.message || "Template saved successfully",
+          type: "success",
+        });
+      } else {
+        showToast({
+          message: response.message || "Failed to save template",
+          type: "error",
+        });
+      }
+    } catch (error) {
+      console.error("Error saving template:", error);
+      showToast({
+        message: "Error occurred while saving template",
+        type: "error",
+      });
+    }
+    setAddMsgLoading(false);
+  };
+
+  const handleCopy = (item) => {
+    navigator.clipboard.writeText(item.message);
+    setCopied(item.id);
+    setTimeout(() => {
+      setCopied(false);
+    }, 2000);
+  };
+
   const handleDelete = async (msg) => {
     setToDelete(msg);
-    const payload = { id: pageData.user.userId, msgId: msg.id };
+    const payload = { id: pageData?.user?.userId, msgId: msg.id };
     setDeleteMsgLoading(true);
 
     try {
       const response = await postApiData("DELETE_MSG_TEMPLATE", payload);
       if (response.status) {
         setSavedMsgTemplets((prev) => prev.filter((m) => m.id !== msg.id));
-        setDeleteMsgLoading(false);
-        setToDelete(false);
+        setIsConfirm(false);
+        showToast({
+          message: response.message || "Template deleted successfully",
+          type: "success",
+        });
       } else {
+        showToast({
+          message: response.message || "Failed to delete template",
+          type: "error",
+        });
+      }
+    } catch (err) {
+      console.error("Delete template failed", err);
+    }
+    setDeleteMsgLoading(false);
+    setToDelete(false);
+  };
+
+  const onSubmit = async () => {
+    if (formData.contacts.length === 0 && formData.groups.length === 0) {
+      setContactsError(true);
+      scrollSectionIntoView("select-recipients");
+      showToast({
+        message: "Please select at least one contact or group.",
+        type: "error",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    const contactNumbers = [
+      ...formData.contacts.map((c) => c.contactNo),
+      ...formData.groups.flatMap((group) =>
+        (group.contactIds || []).map((id) => {
+          const match = contactsList.find((c) => c.id === id);
+          return match ? match.contactNo : null;
+        }),
+      ),
+    ].filter(Boolean);
+
+    if (contactNumbers.length === 0) {
+      showToast({
+        message: "No valid contacts found in selection.",
+        type: "error",
+      });
+      setLoading(false);
+      return;
+    }
+
+    const payload = {
+      message: formData.message,
+      contacts: [...new Set(contactNumbers)],
+    };
+
+    try {
+      const response = await postApiData("SEND_MESSAGE", payload);
+      if (response.status) {
+        setSendMsgApiError("");
+        showToast({
+          message: response.message || "Message sent successfully!",
+          type: "success",
+        });
+      } else {
+        setSendMsgApiError(response.message || "Failed to send message");
+        showToast({
+          message: response.message || "Failed to send message",
+          type: "error",
+        });
       }
     } catch (err) {
       console.error("Message sending failed", err);
+      showToast({
+        message: "An error occurred while sending the message.",
+        type: "error",
+      });
+    } finally {
+      setLoading(false);
     }
-    // setPrevTemplatePopup(false);
   };
 
-  const renderPrevMsgCard = (item, i) => {
-    return (
-      <PrevMessageCard
-        key={i}
-        item={item}
-        handleChange={handleChange}
-        copied={copied}
-        handleCopy={handleCopy}
-        handleDelete={handleDelete}
-        deleteMsgLoading={deleteMsgLoading}
-        toDelete={toDelete}
-        setIsConfirm={setIsConfirm}
-        isConfirm={isConfirm}
-      />
+  // Filtered Templates
+  const filteredTemplates = useMemo(() => {
+    if (!templateSearch.trim()) return savedMsgTemplets || [];
+    const q = templateSearch.toLowerCase().trim();
+    return (savedMsgTemplets || []).filter((item) =>
+      (item.message || "").toLowerCase().includes(q),
     );
-  };
+  }, [savedMsgTemplets, templateSearch]);
+
+  // Filtered Contacts
+  const filteredContacts = useMemo(() => {
+    if (!recipientSearch.trim()) return contactsList || [];
+    const q = recipientSearch.toLowerCase().trim();
+    return (contactsList || []).filter(
+      (c) =>
+        (c.name || "").toLowerCase().includes(q) ||
+        (c.contactNo || "").includes(q),
+    );
+  }, [contactsList, recipientSearch]);
+
+  // Filtered Groups
+  const filteredGroups = useMemo(() => {
+    if (!recipientSearch.trim()) return groupsList || [];
+    const q = recipientSearch.toLowerCase().trim();
+    return (groupsList || []).filter((g) =>
+      (g.groupName || "").toLowerCase().includes(q),
+    );
+  }, [groupsList, recipientSearch]);
+
+  const totalSelectedCount = formData.contacts.length + formData.groups.length;
 
   return (
-    <>
-      <form
-        className={styles.container}
-        onSubmit={handleSubmit(onSubmit)}
-      >
-        <div className={styles.messageSection}>
-          <div className={styles.messageWrapper}>
-            <div className=" flex items-center justify-between">
-              <h3 className={styles.heading}>Message</h3>
-              <button
-                type="button"
-                className=" md:hidden relative inline-flex items-center justify-center p-0.5 mb-2 overflow-hidden text-sm font-medium text-gray-900 rounded-lg group bg-gradient-to-br from-blue-700 to-blue-600 group-hover:from-blue-700 group-hover:to-blue-600 hover:text-white dark:text-white"
-                onClick={() => setPrevTemplatePopup(true)}
-              >
-                <span className="relative px-5 py-2 transition-all ease-in duration-75 bg-white text-blue-600  rounded-md group-hover:bg-transparent group-hover:dark:bg-transparent group-hover:text-white">
-                  {prevTemlateHeading}
-                </span>
-              </button>
-            </div>
-            <textarea
-              name="message"
-              rows="4"
-              placeholder="Type a message..."
-              className={styles.msgInputField}
-              value={formData.message}
-              onChange={(e) => handleChange("message", e.target.value)}
-              style={errors.message ? { borderColor: "red" } : {}}
-            />
-            {errors.message && (
-              <span className={commonStyle.errorMsg}>
-                {errors.message.message}
-              </span>
-            )}
-          </div>
+    <div className="w-full">
+      {/* Page Header */}
+      <MessagePageHeader
+        eyebrow="MESSENGER"
+        title="Send a Message"
+        subtitle="Type a new message or use a saved template to quickly communicate with your contacts or groups."
+      />
 
-          <div className="prevMessagesWrapper hidden sm:block">
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-lg font-semibold">{prevTemlateHeading}</h4>
-                <button
-                  type="button"
-                  className={commonStyle.commonButtonOutline}
-                  onClick={() => setShowAddMsgTemplet(!showAddMsgTemplet)}
-                >
-                  {showAddMsgTemplet ? "Cancel" : "Add New"}
-                </button>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        {/* Main 2-Column Responsive Layout matching reference */}
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          {/* LEFT COLUMN: Message Composer + Saved Templates (~68%) */}
+          <div className="flex-1 w-full space-y-6">
+            {/* 1. Message Composer Card */}
+            <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4">
+              {/* Card Title */}
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Message
+                </h2>
               </div>
-              {showAddMsgTemplet ? (
-                <div className="mt-4 space-y-2 ">
-                  {/* <label className="block font-medium text-gray-700">
-                    New Message Template
-                  </label> */}
-                  <textarea
-                    rows="3"
-                    className="w-full border border-gray-300 rounded px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Type your message to save as a template"
-                    value={newTemplateText}
-                    name="newTemplateText"
-                    onChange={(e) => setNewTemplateText(e.target.value)}
-                  />
-                  <div className="flex justify-end">
+
+              {/* Textarea Box with Blue Border */}
+              <div className="relative rounded-2xl border border-blue-400 focus-within:ring-2 focus-within:ring-blue-500/20 bg-white p-4 transition-all">
+                <textarea
+                  rows={5}
+                  value={formData.message}
+                  onChange={(e) => handleChange("message", e.target.value)}
+                  placeholder="Type your message here..."
+                  className="w-full text-sm text-slate-800 placeholder-slate-400 bg-transparent outline-none resize-none pr-14"
+                />
+
+                {/* Top-Right: Smile & Attachment icons */}
+                <div className="absolute right-4 top-4 flex items-center gap-2 text-slate-500">
+                  <div className="relative" ref={emojiRef}>
                     <button
                       type="button"
-                      className={`${commonStyle.commonButton} "px-4 py-2 rounded transition"`}
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className="text-slate-400 hover:text-amber-500 transition-colors p-1 cursor-pointer"
+                      title="Emoji"
+                    >
+                      <FiSmile className="w-4 h-4" />
+                    </button>
+
+                    {showEmojiPicker && (
+                      <div className="absolute right-0 mt-2 p-2 bg-white rounded-xl shadow-xl border border-slate-100 grid grid-cols-5 gap-1.5 z-30 animate-dropdown">
+                        {quickEmojis.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => {
+                              insertTextAtMessage(emoji);
+                              setShowEmojiPicker(false);
+                            }}
+                            className="w-8 h-8 flex items-center justify-center text-lg hover:bg-slate-100 rounded-lg transition-transform hover:scale-110 cursor-pointer"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      showToast({
+                        message: "Attachment feature ready",
+                        type: "success",
+                      });
+                    }}
+                    className="text-slate-400 hover:text-blue-600 transition-colors p-1 cursor-pointer"
+                    title="Attach File"
+                  >
+                    <FiPaperclip className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Bottom-Right: Character Counter 0/1000 */}
+                <div className="absolute right-4 bottom-3 text-xs text-slate-400 font-medium">
+                  {formData.message.length}/1000
+                </div>
+              </div>
+
+              {errors.message && (
+                <p className="text-xs text-rose-500 font-medium">
+                  {errors.message.message}
+                </p>
+              )}
+
+              {/* Bottom Action Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                {/* Left Buttons: Insert Template, Variables, Clear */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Insert Template Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const elem = document.getElementById(
+                        "saved-templates-card",
+                      );
+                      if (elem) {
+                        elem.scrollIntoView({ behavior: "smooth" });
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#EBF5FF] text-[#2563EB] hover:bg-blue-100 rounded-xl text-xs md:text-sm font-medium transition-colors cursor-pointer border border-blue-100"
+                  >
+                    <FiFileText className="w-4 h-4" />
+                    <span>Insert Template</span>
+                  </button>
+
+                  {/* Variables Button */}
+                  <div className="relative" ref={varRef}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowVariableDropdown(!showVariableDropdown)
+                      }
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#EBF5FF] text-[#2563EB] hover:bg-blue-100 rounded-xl text-xs md:text-sm font-medium transition-colors cursor-pointer border border-blue-100"
+                    >
+                      <span className="font-mono font-bold text-xs">{`{}`}</span>
+                      <span>Variables</span>
+                    </button>
+
+                    {showVariableDropdown && (
+                      <div className="absolute left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-30 animate-dropdown">
+                        <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                          Insert Variable
+                        </div>
+                        {quickVariables.map((v) => (
+                          <button
+                            key={v.value}
+                            type="button"
+                            onClick={() => {
+                              insertTextAtMessage(v.value);
+                              setShowVariableDropdown(false);
+                            }}
+                            className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700 cursor-pointer"
+                          >
+                            <span>{v.label}</span>
+                            <span className="text-[11px] text-blue-600 font-semibold font-mono">
+                              {v.value}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Clear Button */}
+                  <button
+                    type="button"
+                    onClick={handleClearMessage}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-xl text-xs md:text-sm font-medium transition-colors cursor-pointer border border-slate-200/60"
+                  >
+                    <FiRefreshCw className="w-3.5 h-3.5" />
+                    <span>Clear</span>
+                  </button>
+                </div>
+
+                {/* Right Button: Send Message */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-md shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <ImSpinner9 className="w-4 h-4 animate-spin" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RiSendPlaneFill className="w-4 h-4" />
+                      <span>Send Message</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Saved Templates Section */}
+
+            {/* A. Mobile Collapsed Card (< 1024px, when not expanded) */}
+            {!isTemplatesExpandedMobile && (
+              <div className="lg:hidden bg-white rounded-2xl p-4 shadow-xs border border-slate-200/80 transition-all hover:border-blue-200">
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsTemplatesExpandedMobile(true)}
+                    className="flex items-center gap-3 text-left flex-1 min-w-0 cursor-pointer group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#2563EB] flex items-center justify-center shrink-0 border border-blue-100 group-hover:bg-blue-100/70 transition-colors">
+                      <FiFileText className="w-5 h-5" />
+                    </div>
+                    <div className="truncate flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+                          Saved Templates
+                        </h3>
+                        <span className="px-2 py-0.5 text-[11px] font-bold bg-blue-50 text-blue-700 rounded-full border border-blue-100">
+                          {filteredTemplates.length}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
+                        Tap to view &amp; use predefined templates
+                      </p>
+                    </div>
+                  </button>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsTemplatesExpandedMobile(true);
+                        setShowAddMsgTemplet(true);
+                      }}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                      title="Add New Template"
+                    >
+                      <FiPlus className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsTemplatesExpandedMobile(true)}
+                      className="flex items-center gap-1 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-[#2563EB] rounded-xl text-xs font-semibold transition-colors cursor-pointer border border-blue-100"
+                    >
+                      <span>Expand</span>
+                      <FiChevronDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* B. Full Saved Templates Card (Always shown on >= 1024px / lg, shown when expanded on < 1024px) */}
+            <div
+              id="saved-templates-card"
+              className={`${
+                isTemplatesExpandedMobile ? "block" : "hidden lg:block"
+              } bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-5 animate-fade-in`}
+            >
+              {/* Header Row: Title & Subtitle on Left, Search & + Add New on Right */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center justify-between sm:justify-start gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                        Saved Templates
+                      </h2>
+                      <span className="px-2 py-0.5 text-xs font-bold bg-blue-50 text-blue-700 rounded-full border border-blue-100">
+                        {filteredTemplates.length}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-medium mt-0.5">
+                      Use predefined templates to send messages quickly.
+                    </p>
+                  </div>
+
+                  {/* Collapse Button on Mobile (< 1024px) */}
+                  <button
+                    type="button"
+                    onClick={() => setIsTemplatesExpandedMobile(false)}
+                    className="lg:hidden flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0"
+                    title="Collapse Templates"
+                  >
+                    <FiChevronUp className="w-4 h-4" />
+                    <span>Collapse</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {/* Search input */}
+                  {!showAddMsgTemplet && (
+                    <div className="relative w-44 sm:w-56">
+                      <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={templateSearch}
+                        onChange={(e) => setTemplateSearch(e.target.value)}
+                        placeholder="Search templates..."
+                        className="w-full pl-9 pr-3 py-2 text-xs bg-white text-slate-800 placeholder-slate-400 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 outline-none transition-all"
+                      />
+                      {templateSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setTemplateSearch("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <FiX className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* + Add New Button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMsgTemplet(!showAddMsgTemplet)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0B1E62] hover:bg-blue-900 text-white rounded-xl text-xs md:text-sm font-semibold transition-all cursor-pointer shadow-xs"
+                  >
+                    {showAddMsgTemplet ? (
+                      <>
+                        <FiX className="w-3.5 h-3.5" />
+                        <span>Cancel</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiPlus className="w-3.5 h-3.5" />
+                        <span>Add New</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Inline Add Template Form */}
+              {showAddMsgTemplet ? (
+                <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-3 animate-slide-down">
+                  <span className="text-xs font-bold text-slate-800">
+                    Create New Template
+                  </span>
+                  <textarea
+                    rows={3}
+                    className="w-full p-3 text-xs md:text-sm bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 resize-none"
+                    placeholder="Type your message to save as a template..."
+                    value={newTemplateText}
+                    onChange={(e) => setNewTemplateText(e.target.value)}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMsgTemplet(false)}
+                      className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleSaveTemplate}
-                      disabled={!newTemplateText.trim()}
+                      disabled={!newTemplateText.trim() || addMsgLoading}
+                      className="px-4 py-1.5 text-xs font-semibold bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                     >
                       {addMsgLoading ? (
-                        <span className="flex items-center gap-2">
-                          <ImSpinner9 className="animate-spin" />
-                          Please wait
-                        </span>
+                        <>
+                          <ImSpinner9 className="w-3 h-3 animate-spin" />
+                          <span>Saving...</span>
+                        </>
                       ) : (
                         "Save Template"
                       )}
@@ -337,17 +699,52 @@ export default function MessageWrapper({
                   </div>
                 </div>
               ) : (
+                /* 2-Column Templates Grid */
                 <>
-                  {savedMsgTemplets?.length === 0 ? (
-                    <div className="text-gray-500 text-center mt-10">
-                      No templates saved yet.
+                  {filteredTemplates.length === 0 ? (
+                    <div className="py-12 text-center space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                        <FiFileText className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {templateSearch
+                            ? "No matching templates found"
+                            : "No saved templates yet"}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {templateSearch
+                            ? "Try another search keyword"
+                            : "Create a template to quickly send recurring messages."}
+                        </p>
+                      </div>
+                      {!templateSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAddMsgTemplet(true)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          <FiPlus className="w-3.5 h-3.5" />
+                          <span>Add New Template</span>
+                        </button>
+                      )}
                     </div>
                   ) : (
-                    <div className="flex flex-wrap content-start gap-4 h-[40vh]  overflow-y-auto">
-                      {savedMsgTemplets.map((item, i) => (
-                        <React.Fragment key={i}>
-                          {renderPrevMsgCard(item, i)}
-                        </React.Fragment>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {filteredTemplates.map((item, i) => (
+                        <PrevMessageCard
+                          key={item.id || i}
+                          index={i}
+                          item={item}
+                          handleChange={handleChange}
+                          copied={copied}
+                          handleCopy={handleCopy}
+                          handleDelete={handleDelete}
+                          deleteMsgLoading={deleteMsgLoading}
+                          toDelete={toDelete}
+                          setIsConfirm={setIsConfirm}
+                          isConfirm={isConfirm}
+                        />
                       ))}
                     </div>
                   )}
@@ -355,267 +752,253 @@ export default function MessageWrapper({
               )}
             </div>
           </div>
-        </div>
 
-        <div className="flex flex-col justify-between">
-          <div className={styles.contactSection}>
-            <Link
-              href="/messager/manage-contacts"
-              className={`${commonStyle.commonButtonOutline} w-full text-center mb-3 !p-2 transition-all duration-200`}
-            >
-              Manage Contacts
-            </Link>
-
-            <div className={styles.toggleContainer}>
-              <div
-                className={styles.toggleSlider}
-                style={{
-                  transform:
-                    selectedTab === "contacts"
-                      ? "translateX(0%)"
-                      : "translateX(100%)",
-                }}
-              />
-
-              <button
-                className={`${styles.toggleBtn} ${
-                  selectedTab === "contacts" ? styles.active : ""
-                }`}
-                onClick={() => handleToggle("contacts")}
-                type="button"
-              >
-                Contacts ({contactsList.length})
-              </button>
-              <button
-                className={`${styles.toggleBtn} ${
-                  selectedTab === "groups" ? styles.active : ""
-                }`}
-                onClick={() => handleToggle("groups")}
-                type="button"
-              >
-                Groungs ({groupsList.length})
-              </button>
-            </div>
-
-            {selectedTab === "contacts" ? (
-              <>
-                {contactsList.length > 0 ? (
-                  <div className={styles.contactList}>
-                    {contactsList.map((contact) => (
-                      <label
-                        key={contact.id}
-                        className={`${styles.contactItem} ${
-                          formData.contacts.find((c) => c.id === contact.id)
-                            ? styles.selected
-                            : ""
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          className={styles.hiddenCheckbox}
-                          checked={
-                            !!formData.contacts.find((c) => c.id === contact.id)
-                          }
-                          onChange={() => handleCheckboxChange(contact)}
-                        />
-
-                        <div className="flex justify-between items-start w-full">
-                          <span
-                            className={styles.contactName}
-                            title={contact.name}
-                          >
-                            {truncateString(contact.name)}
-                          </span>
-                          <span className={styles.contactNo}>
-                            {contact.contactNo}
-                          </span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center p-2">
-                    No Contacts Found. You can Add Contacts from&nbsp;
-                    <Link
-                      href={"/messager/manage-contacts?tab=import"}
-                      className="text-blue-600 underline"
-                    >
-                      here.
-                    </Link>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                {groupsList.length > 0 ? (
-                  <div className={styles.contactList}>
-                    {groupsList.map((contact) => (
-                      <div
-                        key={contact.id}
-                        className={`${styles.contactItem} ${
-                          formData.groups.find((g) => g.id === contact.id)
-                            ? styles.selected
-                            : ""
-                        }`}
-                        onClick={() => handleGroupClick(contact)}
-                      >
-                        <span
-                          className={styles.contactName}
-                          title={contact.groupName}
-                        >
-                          {truncateString(contact.groupName)}
-                        </span>
-                        <div className="w-5 h-5 rounded-full text-white bg-gray-400 flex items-center justify-center">
-                          {contact.contactIds.length}
-                        </div>
-                        {/* when user hver on item little poup will show contacts in small popup */}
-
-                        {/* <span className={styles.contactNo}>
-                    {contact.members.join(", ")}
-                  </span> */}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center p-2">
-                    No Groups Found. You can Add Groups from&nbsp;
-                    <Link
-                      href={"/messager/manage-contacts?tab=createGroup"}
-                      className="text-blue-600 underline"
-                    >
-                      here.
-                    </Link>
-                  </div>
-                )}
-              </>
-            )}
-
-            {contactsError && (
-              <span style={{ color: "red", fontSize: "0.9rem" }}>
-                {contactsErrorMsg || "Please select at least one contact."}
-              </span>
-            )}
-          </div>
-          <div className="md:hidden fixed bottom-0 left-0 w-full bg-white px-4 py-3 z-50">
-            <button
-              type="submit"
-              className={styles.sendButnWrap + " md:hidden w-full"}
-              disabled={
-                loading ||
-                (formData.contacts.length === 0 && formData.groups.length === 0)
-              }
-            >
-              {!loading && (
-                <div className="svg-wrapper-1">
-                  <div className="svg-wrapper">
-                    <RiSendPlaneFill />
-                  </div>
-                </div>
-              )}
-              <span>{loading ? "Sending..." : "Send"}</span>
-            </button>{" "}
-            {sendMsgApiError && (
-              <span
-                style={{ color: "red", fontSize: "0.9rem" }}
-                className="mt-3 text-center"
-              >
-                {sendMsgApiError}
-              </span>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            className={styles.sendButnWrap + " !hidden md:!flex mt-6"}
-            disabled={
-              loading ||
-              (formData.contacts.length === 0 && formData.groups.length === 0)
-            }
+          {/* RIGHT COLUMN: Select Recipients Card (~32%) */}
+          <div
+            className="w-full lg:w-96 shrink-0 space-y-4"
+            id="select-recipients"
           >
-            <div className="svg-wrapper-1">
-              <div className="svg-wrapper">
-                <RiSendPlaneFill />
-              </div>
-            </div>
-            <span>{loading ? "Sending..." : "Send"}</span>
-          </button>
-          {sendMsgApiError && (
-            <span
-              style={{ color: "red", fontSize: "0.9rem" }}
-              className="mt-3 text-center"
-            >
-              {sendMsgApiError}
-            </span>
-          )}
-        </div>
-      </form>
-      <CommonModal
-        modalOpen={prevTemplatePoup}
-        setModalOpen={setPrevTemplatePopup}
-        backDrop={false}
-        modalSize="w-11/12 md:w-[50%] max-h-[80vh] flex flex-col"
-      >
-        <>
-          {/* Header */}
-          <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-10">
-            <h2 className="font-semibold text-gray-800 text-lg">
-              Saved Message Templates
-            </h2>
-            <button
-              type="button"
-              className={`${commonStyle.commonButtonOutline} text-sm transition-all duration-200`}
-              onClick={() => setShowAddMsgTemplet(!showAddMsgTemplet)}
-            >
-              {showAddMsgTemplet ? "Cancel" : "Add New"}
-            </button>
-          </div>
+            <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4 flex flex-col">
+              {/* Header: Title on Left, Manage Contacts Link Button on Right */}
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                    Select Recipients
+                  </h2>
+                  <p className="text-xs text-slate-400 font-medium mt-0.5">
+                    Choose contacts or groups to send your message.
+                  </p>
+                </div>
 
-          {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {showAddMsgTemplet ? (
-              <div className="space-y-4">
-                <textarea
-                  rows={4}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  placeholder="Type your message to save as a template"
-                  value={newTemplateText}
-                  name="newTemplateText"
-                  onChange={(e) => setNewTemplateText(e.target.value)}
+                <Link
+                  href="/messager/manage-contacts"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#2563EB] bg-[#EBF5FF] hover:bg-blue-100 hover:text-blue-800 border border-blue-200/70 rounded-xl transition-all shrink-0 cursor-pointer shadow-2xs"
+                  title="Manage Contacts & Groups"
+                >
+                  <FiUsers className="w-3.5 h-3.5" />
+                  <span>Manage</span>
+                  <FiExternalLink className="w-3 h-3 opacity-70" />
+                </Link>
+              </div>
+
+              {/* Segmented Pill Tabs: Contacts vs Groups */}
+              <div className="grid grid-cols-2 gap-1.5 bg-slate-100/90 p-1.5 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTab("contacts")}
+                  className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    selectedTab === "contacts"
+                      ? "bg-[#1D4ED8] text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <FiUsers className="w-4 h-4" />
+                  <span>Contacts ({contactsList.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedTab("groups")}
+                  className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    selectedTab === "groups"
+                      ? "bg-[#1D4ED8] text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <FiUsers className="w-4 h-4" />
+                  <span>Groups ({groupsList.length})</span>
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={recipientSearch}
+                  onChange={(e) => setRecipientSearch(e.target.value)}
+                  placeholder={
+                    selectedTab === "contacts"
+                      ? "Search contacts..."
+                      : "Search groups..."
+                  }
+                  className="w-full pl-10 pr-4 py-2 text-xs md:text-sm bg-white text-slate-800 placeholder-slate-400 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 outline-none transition-all"
                 />
-                <div className="flex justify-end">
+                {recipientSearch && (
                   <button
                     type="button"
-                    className={`${commonStyle.commonButton} px-5 py-2 rounded-md transition-colors duration-200`}
-                    onClick={handleSaveTemplate}
-                    disabled={!newTemplateText.trim()}
+                    onClick={() => setRecipientSearch("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
-                    {addMsgLoading ? (
-                      <span className="flex items-center gap-2">
-                        <ImSpinner9 className="animate-spin" />
-                        Please wait
-                      </span>
-                    ) : (
-                      "Save Template"
-                    )}
+                    <FiX className="w-3.5 h-3.5" />
                   </button>
+                )}
+              </div>
+
+              {/* Scrollable Recipient List */}
+              <div className="max-h-[380px] overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-slate-300">
+                {selectedTab === "contacts" ? (
+                  <>
+                    {filteredContacts.length > 0 ? (
+                      filteredContacts.map((contact) => {
+                        const isSelected = !!formData.contacts.find(
+                          (c) => c.id === contact.id,
+                        );
+                        const initial = (contact.name || "C")
+                          .charAt(0)
+                          .toUpperCase();
+
+                        return (
+                          <label
+                            key={contact.id}
+                            className={`flex items-center gap-3 py-2.5 px-2 rounded-xl transition-all cursor-pointer border-b border-slate-100/80 ${
+                              isSelected
+                                ? "bg-blue-50/80"
+                                : "hover:bg-slate-50/80"
+                            }`}
+                          >
+                            {/* Checkbox */}
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleCheckboxChange(contact)}
+                              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer shrink-0"
+                            />
+
+                            {/* Circular Pastel Blue Avatar */}
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 bg-[#EBF5FF] text-[#2563EB]">
+                              {initial}
+                            </div>
+
+                            {/* Contact Name */}
+                            <div className="flex-1 min-w-0">
+                              <p
+                                className="text-sm font-semibold text-slate-900 truncate"
+                                title={contact.name}
+                              >
+                                {contact.name}
+                              </p>
+                            </div>
+
+                            {/* Phone Number */}
+                            <span className="text-xs font-mono text-slate-500 shrink-0">
+                              {contact.contactNo}
+                            </span>
+                          </label>
+                        );
+                      })
+                    ) : (
+                      <div className="py-10 text-center text-slate-400 text-xs">
+                        <FiUser className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                        <p>No contacts found.</p>
+                        <Link
+                          href="/messager/manage-contacts?tab=import"
+                          className="text-blue-600 underline font-medium mt-1 inline-block"
+                        >
+                          Add or Import Contacts
+                        </Link>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {filteredGroups.length > 0 ? (
+                      filteredGroups.map((group) => {
+                        const isSelected = !!formData.groups.find(
+                          (g) => g.id === group.id,
+                        );
+
+                        return (
+                          <div
+                            key={group.id}
+                            onClick={() => handleGroupClick(group)}
+                            className={`flex items-center justify-between py-2.5 px-2 rounded-xl transition-all cursor-pointer border-b border-slate-100/80 ${
+                              isSelected
+                                ? "bg-blue-50/80"
+                                : "hover:bg-slate-50/80"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleGroupClick(group)}
+                                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer shrink-0"
+                              />
+                              <div className="w-7 h-7 rounded-full bg-[#FAF5FF] text-[#9333EA] flex items-center justify-center font-bold text-xs shrink-0">
+                                <FiUsers className="w-3.5 h-3.5" />
+                              </div>
+                              <span
+                                className="text-sm font-semibold text-slate-900 truncate"
+                                title={group.groupName}
+                              >
+                                {group.groupName}
+                              </span>
+                            </div>
+
+                            <span className="text-xs font-semibold bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full shrink-0">
+                              {(group.contactIds || []).length} members
+                            </span>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="py-10 text-center text-slate-400 text-xs">
+                        <FiUsers className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                        <p>No groups found.</p>
+                        <Link
+                          href="/messager/manage-contacts?tab=createGroup"
+                          className="text-blue-600 underline font-medium mt-1 inline-block"
+                        >
+                          Create a Group
+                        </Link>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Footer: X selected + Clear All + Manage Contacts */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
+                <span className="font-semibold text-blue-600">
+                  {totalSelectedCount} selected
+                </span>
+                <div className="flex items-center gap-3">
+                  {totalSelectedCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllRecipients}
+                      className="font-semibold text-slate-500 hover:text-rose-600 hover:underline cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                  <Link
+                    href="/messager/manage-contacts"
+                    className="font-semibold text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>Manage Contacts</span>
+                    <FiExternalLink className="w-3 h-3" />
+                  </Link>
                 </div>
               </div>
-            ) : savedMsgTemplets?.length === 0 ? (
-              <div className="text-gray-500 text-center mt-10">
-                No templates saved yet.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {savedMsgTemplets.map((item, i) => (
-                  <React.Fragment key={i}>
-                    {renderPrevMsgCard(item, i)}
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
+
+              {/* Selection Error */}
+              {/* {contactsError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium text-center">
+                  Please select at least one contact or group.
+                </div>
+              )} */}
+
+              {sendMsgApiError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium text-center">
+                  {sendMsgApiError}
+                </div>
+              )}
+            </div>
           </div>
-        </>
-      </CommonModal>
-    </>
+        </div>
+      </form>
+    </div>
   );
 }

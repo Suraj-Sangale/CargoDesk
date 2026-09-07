@@ -1,38 +1,34 @@
 @import "tailwindcss";
 
 :root {
-	--background: #ffffff;
-	--foreground: #171717;
+	--font-sans: 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	--background: #F4F7FC;
+	--foreground: #0F172A;
+	--sidebar-bg: #0B132B;
+	--sidebar-active: #2563EB;
+	--sidebar-text: #94A3B8;
+	--sidebar-text-hover: #FFFFFF;
 }
 
-@theme inline {
-	--color-background: var(--background);
-	--color-foreground: var(--foreground);
-	--font-sans: var(--font-geist-sans);
-	--font-mono: var(--font-geist-mono);
+body {
+	font-family: var(--font-sans);
+	background-color: var(--background);
+	color: var(--foreground);
+	margin: 0;
+	padding: 0;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-	:root {
-		--background: #0a0a0a;
-		--foreground: #ededed;
-	}
-}
-
-body,
 .css-1ygcj2i-MuiTableCell-root,
-td.css-1ex1afd-MuiTableCell-root {
-	font-family: "Rubik", sans-serif !important;
+td.css-1ex1afd-MuiTableCell-root,
+th.css-1ygcj2i-MuiTableCell-root,
+.MuiTableCell-root {
+	font-family: var(--font-sans) !important;
 }
 
 button {
 	cursor: pointer;
-}
-
-.card-header {
-	background: #100452;
-	color: white;
-	border-radius: 16px 16px 0 0;
 }
 
 @keyframes slide-down {

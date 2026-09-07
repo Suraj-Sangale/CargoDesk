@@ -3,9 +3,9 @@ import CommonModal from "./common/commonModal";
 import DocumentsSection from "./layouts/documentsSection";
 import EmiSection from "./layouts/emiSection";
 import { postApiData } from "@/utilities/services/apiService";
-import TabComponent from "./common/tabComponent";
-import dashboardStyle from "@/styles/dashBoard.module.scss";
 import AddDocumentForm from "./common/molecules/addDocumentForm";
+import PageHeader from "./dashboard/pageHeader";
+import DocumentTabs from "./dashboard/documentTabs";
 
 const Dashboard = ({ pageData }) => {
   const [reminderModal, setReminderModal] = useState(false);
@@ -14,18 +14,7 @@ const Dashboard = ({ pageData }) => {
   const [addLoading, setAddLoading] = useState(false);
   const [reminderData, setReminderData] = useState("");
   const [documentTableData, setDocumentTableData] = useState([]);
-
-  const dashboardTabs = [
-    {
-      id: "01",
-      label: "Documents",
-      value: "document",
-      component: <></>,
-    },
-    { id: "02", label: "EMI", value: "emi", component: <></> },
-  ];
-
-  const [selectedTab, setSelectedTab] = useState(dashboardTabs[0].value);
+  const [selectedTab, setSelectedTab] = useState("document");
 
   const addReminderData = async (data) => {
     const payload = {
@@ -74,12 +63,9 @@ const Dashboard = ({ pageData }) => {
     setUpdateLoading(false);
   };
 
-  const onClickDashboardTab = (val) => {
-    setSelectedTab(val);
-  };
-
   const onClickAddReminder = () => {
     setIsEdit(false);
+    setReminderData("");
     setReminderModal(true);
   };
 
@@ -92,7 +78,7 @@ const Dashboard = ({ pageData }) => {
         setDocumentTableData([]);
       }
     } catch (error) {
-      console.error("Error occurred during form submission:", error);
+      console.error("Error occurred during fetching vehicle documents:", error);
     }
   };
 
@@ -101,44 +87,42 @@ const Dashboard = ({ pageData }) => {
   }, []);
 
   return (
-    <div className={dashboardStyle.dashboardContainer}>
-      <div className="my-3 mx-2 md:m-5">
-        <div className="flex flex-col shadow-lg rounded-lg">
-          <div className="card-header flex justify-between items-center p-2">
-            <h2 className="text-white my-1.5">Dashboard</h2>
-          </div>
-          <div className={dashboardStyle["mainTabel"]}>
-            <TabComponent
-              tabsData={dashboardTabs}
-              selectedTab={selectedTab}
-              setSelectedTab={setSelectedTab}
-            />
-          </div>
+    <div className="w-full">
+      {/* Page Header (Eyebrow, Title, Subtitle, Vector Illustration) */}
+      <PageHeader
+        eyebrow="DOCUMENTS"
+        title="Vehicle Documents"
+        subtitle="Track and manage all your vehicle documents in one place."
+      />
 
-          <div className="mb-3">
-            {selectedTab == "document" ? (
-              <DocumentsSection
-                setReminderData={setReminderData}
-                setReminderModal={setReminderModal}
-                setIsEdit={setIsEdit}
-                tableData={documentTableData}
-                setTableData={setDocumentTableData}
-                onClickAddDocument={onClickAddReminder}
-              />
-            ) : selectedTab == "emi" ? (
-              <EmiSection />
-            ) : (
-              <></>
-            )}
-          </div>
-        </div>
+      {/* Tabs (Documents vs EMI) */}
+      <DocumentTabs
+        selectedTab={selectedTab}
+        setSelectedTab={setSelectedTab}
+      />
+
+      {/* Main Tab Content */}
+      <div className="w-full">
+        {selectedTab === "document" ? (
+          <DocumentsSection
+            setReminderData={setReminderData}
+            setReminderModal={setReminderModal}
+            setIsEdit={setIsEdit}
+            tableData={documentTableData}
+            setTableData={setDocumentTableData}
+            onClickAddDocument={onClickAddReminder}
+          />
+        ) : selectedTab === "emi" ? (
+          <EmiSection />
+        ) : null}
       </div>
 
+      {/* Add / Edit Document Modal */}
       <CommonModal
         modalTitle={isEdit ? "Edit Document" : "Add New Document"}
         modalOpen={reminderModal}
         setModalOpen={setReminderModal}
-        modalSize={"w-11/12 md:w-3/6"}
+        modalSize="w-11/12 md:w-[500px]"
       >
         <AddDocumentForm
           setReminderModal={setReminderModal}

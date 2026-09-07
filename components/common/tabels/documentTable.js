@@ -1,20 +1,16 @@
-import * as React from "react";
-import PropTypes from "prop-types";
-import { alpha } from "@mui/material/styles";
-import Box from "@mui/material/Box";
-import TablePagination from "@mui/material/TablePagination";
-import TableSortLabel from "@mui/material/TableSortLabel";
-import Toolbar from "@mui/material/Toolbar";
-import Typography from "@mui/material/Typography";
-// import IconButton from "@mui/material/IconButton";
-// import Tooltip from "@mui/material/Tooltip";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import Switch from "@mui/material/Switch";
-import { visuallyHidden } from "@mui/utils";
-import { useState, useMemo, useEffect } from "react";
-import { FiEdit } from "react-icons/fi";
-import commonStyle from "@/styles/common/common.module.scss";
-
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import {
+  FiEdit,
+  FiCalendar,
+  FiBell,
+  FiMoreVertical,
+  FiTrash2,
+  FiChevronLeft,
+  FiChevronRight,
+  FiArrowUp,
+  FiArrowDown,
+} from "react-icons/fi";
+import StatusBadge from "../statusBadge";
 import {
   convertToUpperCase,
   formatDate,
@@ -24,213 +20,44 @@ import {
   getDateBeforeDays,
   truncateString,
 } from "@/utilities/utils";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Checkbox,
-  Button,
-  Paper,
-} from "@mui/material";
 
-// Utility functions for sorting
-function descendingComparator(a, b, orderBy) {
-  if (b[orderBy] < a[orderBy]) {
-    return -1;
-  }
-  if (b[orderBy] > a[orderBy]) {
-    return 1;
-  }
-  return 0;
-}
-
-function getComparator(order, orderBy) {
-  return order === "desc"
-    ? (a, b) => descendingComparator(a, b, orderBy)
-    : (a, b) => -descendingComparator(a, b, orderBy);
-}
-
-// EnhancedTableHead Component
-function EnhancedTableHead({
-  headCells,
-  onSelectAllClick,
-  order,
-  orderBy,
-  numSelected,
-  rowCount,
-  onRequestSort,
-}) {
-  const createSortHandler = (property) => (event) => {
-    onRequestSort(event, property);
-  };
-
-  return (
-    <TableHead>
-      <TableRow>
-        <TableCell padding="checkbox">
-          <Checkbox
-            color="primary"
-            indeterminate={numSelected > 0 && numSelected < rowCount}
-            checked={rowCount > 0 && numSelected === rowCount}
-            onChange={onSelectAllClick}
-            inputProps={{
-              "aria-label": "select all rows",
-            }}
-          />
-        </TableCell>
-        {headCells.map((headCell) => (
-          <TableCell
-            key={headCell.id}
-            align={headCell.numeric ? "right" : "left"}
-            // align={headCell.numeric ? "right" : "center"}
-            padding={headCell.disablePadding ? "none" : "normal"}
-            sortDirection={orderBy === headCell.id ? order : false}
-          >
-            <TableSortLabel
-              active={orderBy === headCell.id}
-              direction={orderBy === headCell.id ? order : "asc"}
-              onClick={createSortHandler(headCell.id)}
-            >
-              {headCell.label}
-              {orderBy === headCell.id ? (
-                <Box
-                  component="span"
-                  sx={visuallyHidden}
-                >
-                  {order === "desc" ? "sorted descending" : "sorted ascending"}
-                </Box>
-              ) : null}
-            </TableSortLabel>
-          </TableCell>
-        ))}
-      </TableRow>
-    </TableHead>
-  );
-}
-
-// EnhancedTableHead.propTypes = {
-//   headCells: PropTypes.array.isRequired,
-//   onSelectAllClick: PropTypes.func.isRequired,
-//   order: PropTypes.string.isRequired,
-//   orderBy: PropTypes.string.isRequired,
-//   selectedItems: PropTypes.array.isRequired,
-//   rowCount: PropTypes.number.isRequired,
-//   onRequestSort: PropTypes.func.isRequired,
-// };
-
-// EnhancedTableToolbar Component
-function EnhancedTableToolbar({
-  selectedItems,
-  title,
-  onClickDelete,
-  onClickEdit,
-}) {
-  const numSelected = selectedItems.length;
-  return (
-    <Toolbar
-      sx={[
-        {
-          pl: { sm: 2 },
-          pr: { xs: 1, sm: 1 },
-        },
-        numSelected > 0 && {
-          bgcolor: (theme) =>
-            alpha(
-              theme.palette.primary.main,
-              theme.palette.action.activatedOpacity
-            ),
-        },
-      ]}
-    >
-      {numSelected > 0 ? (
-        <>
-          {/* Selected Count */}
-          <Typography
-            sx={{ flex: "1 1 100%" }}
-            color="inherit"
-            variant="subtitle1"
-            component="div"
-          >
-            {numSelected} selected
-          </Typography>
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              padding: "10px",
-            }}
-          >
-            {numSelected == 1 && (
-              <button
-                className={commonStyle.editButton}
-                onClick={() => onClickEdit(selectedItems[0])}
-                style={{ marginRight: "10px" }}
-              >
-                Edit
-              </button>
-            )}
-            <button
-              className={commonStyle.deleteButton}
-              onClick={() => onClickDelete(selectedItems[0])}
-            >
-              Delete
-            </button>
-          </div>
-        </>
-      ) : (
-        title && (
-          // Title Display
-          <Typography
-            sx={{ flex: "1 1 100%" }}
-            variant="h6"
-            id="tableTitle"
-            component="div"
-          >
-            {title}
-          </Typography>
-        )
-      )}
-    </Toolbar>
-  );
-}
-
-// EnhancedTableToolbar.propTypes = {
-//   numSelected: PropTypes.number.isRequired,
-//   title: PropTypes.string.isRequired,
-// };
-
-// Main DocumentTable Component
-const DocumentTable = ({
-  rows,
-  headCells,
+export default function DocumentTable({
+  rows = [],
+  headCells = [],
   title = "",
   onClickDelete,
   onClickEdit,
-  selected,
-  setSelected,
+  selected = [],
+  setSelected = () => {},
   searchTerm = "",
-  rowsPerPageOptions = [],
-}) => {
-  const defaultRowsPerPage = [5, 10, 25];
-  const rowsPerPageOpts =
-    rowsPerPageOptions.length > 0 ? rowsPerPageOptions : defaultRowsPerPage;
-
+  rowsPerPageOptions = [5, 10, 25],
+}) {
   const [order, setOrder] = useState("asc");
-  const [orderBy, setOrderBy] = useState(headCells[0].id);
+  const [orderBy, setOrderBy] = useState(headCells[0]?.id || "id");
   const [page, setPage] = useState(0);
-  const [dense, setDense] = useState(false);
-  const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOpts[0]);
+  const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0] || 5);
+  const [activeMenuId, setActiveMenuId] = useState(null);
+  const actionMenuRef = useRef(null);
 
-  const handleRequestSort = (event, property) => {
+  // Close 3-dots action menu on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target)) {
+        setActiveMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  // Sorting handlers
+  const handleRequestSort = (property) => {
     const isAsc = orderBy === property && order === "asc";
     setOrder(isAsc ? "desc" : "asc");
     setOrderBy(property);
   };
 
+  // Select all handler
   const handleSelectAllClick = (event) => {
     if (event.target.checked) {
       const newSelected = rows.map((n) => n.id);
@@ -240,7 +67,9 @@ const DocumentTable = ({
     setSelected([]);
   };
 
-  const handleClick = (event, id) => {
+  // Single row checkbox toggle
+  const handleClickRow = (event, id) => {
+    event.stopPropagation();
     const selectedIndex = selected.indexOf(id);
     let newSelected = [];
 
@@ -259,200 +88,364 @@ const DocumentTable = ({
     setSelected(newSelected);
   };
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+  // Comparator
+  const comparator = (a, b) => {
+    let aVal = a[orderBy] ?? "";
+    let bVal = b[orderBy] ?? "";
+    if (typeof aVal === "string") aVal = aVal.toLowerCase();
+    if (typeof bVal === "string") bVal = bVal.toLowerCase();
+
+    if (bVal < aVal) {
+      return order === "desc" ? -1 : 1;
+    }
+    if (bVal > aVal) {
+      return order === "desc" ? 1 : -1;
+    }
+    return 0;
   };
 
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  const visibleRows = useMemo(() => {
+    return [...rows]
+      .sort(comparator)
+      .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  }, [rows, order, orderBy, page, rowsPerPage]);
 
-  useEffect(() => {
-    setPage(0);
-  }, [searchTerm]);
+  const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+  const isAllSelected = rows.length > 0 && selected.length === rows.length;
+  const isPartiallySelected = selected.length > 0 && selected.length < rows.length;
 
-  const handleChangeDense = (event) => {
-    setDense(event.target.checked);
-  };
-
-  const emptyRows =
-    page > 0 ? Math.max(0, (1 + page) * rowsPerPage - rows.length) : 0;
-
-  const visibleRows = useMemo(
-    () =>
-      [...rows]
-        .sort(getComparator(order, orderBy))
-        .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
-    [order, orderBy, page, rowsPerPage, rows]
-  );
+  const startRecord = rows.length === 0 ? 0 : page * rowsPerPage + 1;
+  const endRecord = Math.min((page + 1) * rowsPerPage, rows.length);
 
   return (
-    <Box sx={{ width: "100%" }}>
-      <Paper sx={{ width: "100%" }}>
-        {selected.length > 0 && (
-          <EnhancedTableToolbar
-            selectedItems={selected}
-            title={title}
-            onClickDelete={onClickDelete}
-            onClickEdit={onClickEdit}
-          />
-        )}
-        {/* {selected.length > 0 && (
-          <div  className="d-flex justify-content-end" style={{}}>
-            <div style={{ padding: "10px" }}>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={onClickEdit}
-                style={{ marginRight: "10px" }}
+    <div className="w-full">
+      {/* Selected Items Bulk Action Bar */}
+      {selected.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-2.5 mb-3 bg-blue-50/90 border border-blue-200 rounded-xl text-blue-900 transition-all">
+          <div className="text-xs md:text-sm font-semibold">
+            {selected.length} {selected.length === 1 ? "record" : "records"} selected
+          </div>
+          <div className="flex items-center gap-2">
+            {selected.length === 1 && (
+              <button
+                onClick={() => onClickEdit(selected[0])}
+                className="px-3 py-1.5 text-xs font-semibold bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 rounded-lg shadow-2xs transition-colors"
               >
                 Edit
-              </Button>
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={onClickDelete}
-              >
-                Delete
-              </Button>
-            </div>
+              </button>
+            )}
+            <button
+              onClick={() => onClickDelete(selected)}
+              className="px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-2xs transition-colors flex items-center gap-1.5"
+            >
+              <FiTrash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
           </div>
-        )} */}
-        <TableContainer>
-          <Table
-            sx={{ minWidth: 750 }}
-            aria-labelledby="tableTitle"
-            size={dense ? "small" : "medium"}
-          >
-            <EnhancedTableHead
-              headCells={headCells}
-              numSelected={selected.length}
-              order={order}
-              orderBy={orderBy}
-              onSelectAllClick={handleSelectAllClick}
-              onRequestSort={handleRequestSort}
-              rowCount={rows.length}
-            />
-            <TableBody>
-              {visibleRows.map((row, index) => {
-                const isItemSelected = selected.includes(row.id);
-                const labelId = `enhanced-table-checkbox-${index}`;
+        </div>
+      )}
+
+      {/* Table Container */}
+      <div className="overflow-x-auto rounded-xl border border-slate-100 shadow-2xs">
+        <table className="w-full text-left border-collapse min-w-[760px]">
+          {/* Table Header */}
+          <thead>
+            <tr className="bg-slate-50/90 border-b border-slate-200/80 text-[11px] md:text-xs font-bold text-slate-600 uppercase tracking-wider">
+              {/* Checkbox Column */}
+              <th className="py-3.5 px-4 w-12 text-center">
+                <input
+                  type="checkbox"
+                  checked={isAllSelected}
+                  ref={(input) => {
+                    if (input) input.indeterminate = isPartiallySelected;
+                  }}
+                  onChange={handleSelectAllClick}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                  aria-label="Select all rows"
+                />
+              </th>
+
+              {/* Dynamic Columns */}
+              {headCells.map((headCell) => (
+                <th
+                  key={headCell.id}
+                  className={`py-3.5 px-4 select-none ${
+                    headCell.id === "action" ? "text-center w-24" : ""
+                  }`}
+                >
+                  {headCell.id !== "action" ? (
+                    <button
+                      type="button"
+                      onClick={() => handleRequestSort(headCell.id)}
+                      className="inline-flex items-center gap-1 hover:text-slate-900 focus:outline-none font-bold uppercase"
+                    >
+                      <span>{headCell.label}</span>
+                      {orderBy === headCell.id ? (
+                        order === "desc" ? (
+                          <FiArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                        ) : (
+                          <FiArrowUp className="w-3.5 h-3.5 text-blue-600" />
+                        )
+                      ) : null}
+                    </button>
+                  ) : (
+                    <span>{headCell.label}</span>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          {/* Table Body */}
+          <tbody className="divide-y divide-slate-100 text-xs md:text-sm bg-white">
+            {visibleRows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={headCells.length + 1}
+                  className="py-12 text-center text-slate-400 font-medium"
+                >
+                  No records found.
+                </td>
+              </tr>
+            ) : (
+              visibleRows.map((row, index) => {
+                const isSelected = selected.includes(row.id);
 
                 return (
-                  <TableRow
-                    hover
-                    onClick={(event) => handleClick(event, row.id)}
-                    role="checkbox"
-                    aria-checked={isItemSelected}
-                    tabIndex={-1}
-                    key={row.id}
-                    selected={isItemSelected}
-                    sx={{ cursor: "pointer" }}
+                  <tr
+                    key={row.id || index}
+                    onClick={(e) => handleClickRow(e, row.id)}
+                    className={`transition-colors cursor-pointer ${
+                      isSelected
+                        ? "bg-blue-50/50 hover:bg-blue-50/80"
+                        : "hover:bg-slate-50/80"
+                    }`}
                   >
                     {/* Checkbox Cell */}
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        color="primary"
-                        checked={isItemSelected}
-                        inputProps={{ "aria-labelledby": labelId }}
+                    <td className="py-3.5 px-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => handleClickRow(e, row.id)}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                        aria-label={`Select row ${row.id}`}
                       />
-                    </TableCell>
+                    </td>
 
-                    {/* Dynamic Cells Based on headCells */}
+                    {/* Column Cells */}
                     {headCells.map((headCell) => {
-                      let value = row[headCell.id];
+                      let cellValue = row[headCell.id];
 
-                      // Optional formatting logic based on field type
-                      if (headCell.id === "vehicleNo")
-                        value = formatVehicleNumber(value);
-                      if (
-                        headCell.id === "expiryDate" ||
-                        headCell.id.includes("date")
-                      )
-                        value = formatDate(value);
-                      if (headCell.formatPrice) value = formatPrice(value);
-                      if (headCell.upperCase) value = convertToUpperCase(value);
+                      // Vehicle No.
+                      if (headCell.id === "vehicleNo") {
+                        return (
+                          <td
+                            key={headCell.id}
+                            className="py-3.5 px-4 font-semibold text-slate-800 tracking-tight whitespace-nowrap"
+                          >
+                            {formatVehicleNumber(cellValue) || "-"}
+                          </td>
+                        );
+                      }
+
+                      // Note
+                      if (headCell.id === "note") {
+                        return (
+                          <td
+                            key={headCell.id}
+                            className="py-3.5 px-4 text-slate-600 max-w-xs truncate"
+                            title={cellValue}
+                          >
+                            {truncateString(cellValue, 25) || "-"}
+                          </td>
+                        );
+                      }
+
+                      // Document Type Badge
+                      if (headCell.id === "documentType") {
+                        return (
+                          <td key={headCell.id} className="py-3.5 px-4 whitespace-nowrap">
+                            <StatusBadge type={cellValue} />
+                          </td>
+                        );
+                      }
+
+                      // Expiry Date (Calendar Icon)
+                      if (headCell.id === "expiryDate" || headCell.id === "due_date") {
+                        return (
+                          <td
+                            key={headCell.id}
+                            className="py-3.5 px-4 text-slate-700 whitespace-nowrap"
+                          >
+                            <div className="flex items-center gap-2">
+                              <FiCalendar className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{formatDate(cellValue)}</span>
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      // Alert Date (Bell Icon)
                       if (headCell.id === "alertDate") {
-                        value = getDateBeforeDays(
+                        const alertDateVal = getDateBeforeDays(
                           row.expiryDate,
                           getConstant("DAYS_BEFORE_ALERT")
                         );
-                      }
-                      if (headCell.id === "note") {
-                        value = truncateString(value);
-                      }
-
-                      // Handle Action Button
-                      if (headCell.id === "action") {
                         return (
-                          <TableCell
+                          <td
                             key={headCell.id}
-                            align="left"
+                            className="py-3.5 px-4 text-slate-700 whitespace-nowrap"
                           >
-                            <button
-                              className="mx-2 text-yellow-500 hover:text-yellow-600 text-lg "
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onClickEdit(row.id);
-                              }}
-                              title="Edit"
-                            >
-                              <FiEdit className="inline-block cursor-pointer" />
-                            </button>
-                          </TableCell>
+                            <div className="flex items-center gap-2">
+                              <FiBell className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{alertDateVal}</span>
+                            </div>
+                          </td>
                         );
                       }
 
+                      // Price formatting
+                      if (headCell.formatPrice) {
+                        cellValue = formatPrice(cellValue);
+                      }
+
+                      // Uppercase formatting
+                      if (headCell.upperCase && cellValue) {
+                        cellValue = convertToUpperCase(cellValue);
+                      }
+
+                      // Action Column
+                      if (headCell.id === "action") {
+                        const isMenuOpen = activeMenuId === row.id;
+
+                        return (
+                          <td
+                            key={headCell.id}
+                            className="py-3.5 px-4 text-center whitespace-nowrap"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="relative inline-flex items-center justify-center gap-1.5">
+                              {/* Amber Edit Pencil Icon */}
+                              <button
+                                type="button"
+                                onClick={() => onClickEdit(row.id)}
+                                title="Edit Document"
+                                className="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <FiEdit className="w-4 h-4" />
+                              </button>
+
+                              {/* 3-dots Menu Button */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActiveMenuId(isMenuOpen ? null : row.id)
+                                }
+                                title="More options"
+                                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <FiMoreVertical className="w-4 h-4" />
+                              </button>
+
+                              {/* Dropdown Menu Popup */}
+                              {isMenuOpen && (
+                                <div
+                                  ref={actionMenuRef}
+                                  className="absolute right-0 top-8 w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-40 animate-dropdown text-left"
+                                >
+                                  <button
+                                    onClick={() => {
+                                      setActiveMenuId(null);
+                                      onClickEdit(row.id);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                                  >
+                                    <FiEdit className="w-3.5 h-3.5 text-amber-500" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setActiveMenuId(null);
+                                      onClickDelete([row.id]);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50"
+                                  >
+                                    <FiTrash2 className="w-3.5 h-3.5 text-rose-500" />
+                                    <span>Delete</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      // Default Cell Render
                       return (
-                        <TableCell
+                        <td
                           key={headCell.id}
-                          align="left"
-                          title={row[headCell.id]}
+                          className="py-3.5 px-4 text-slate-700 whitespace-nowrap"
                         >
-                          {value || "-"}
-                        </TableCell>
+                          {cellValue || "-"}
+                        </td>
                       );
                     })}
-                  </TableRow>
+                  </tr>
                 );
-              })}
-              {emptyRows > 0 && (
-                <TableRow style={{ height: (dense ? 33 : 53) * emptyRows }}>
-                  <TableCell colSpan={6} />
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          rowsPerPageOptions={rowsPerPageOpts}
-          component="div"
-          count={rows.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
-      </Paper>
-      <FormControlLabel
-        control={
-          <Switch
-            checked={dense}
-            onChange={handleChangeDense}
-          />
-        }
-        label="Dense padding"
-      />
-    </Box>
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination Footer Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-5 text-xs md:text-sm text-slate-500">
+        {/* Left: Records summary */}
+        <div>
+          Showing {startRecord} to {endRecord} of {rows.length} records
+        </div>
+
+        {/* Right: Previous, Page Number Pills, Next */}
+        <div className="flex items-center gap-1.5">
+          {/* Previous Button */}
+          <button
+            onClick={() => setPage(Math.max(0, page - 1))}
+            disabled={page === 0}
+            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+            aria-label="Previous page"
+          >
+            <FiChevronLeft className="w-4 h-4" />
+          </button>
+
+          {/* Page Numbers */}
+          {Array.from({ length: totalPages }, (_, i) => i).map((pgNum) => {
+            const isCurrent = pgNum === page;
+            return (
+              <button
+                key={pgNum}
+                onClick={() => setPage(pgNum)}
+                className={`min-w-[32px] h-8 px-2.5 rounded-lg text-xs font-bold transition-all ${
+                  isCurrent
+                    ? "bg-blue-100 text-blue-700 shadow-2xs"
+                    : "border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {pgNum + 1}
+              </button>
+            );
+          })}
+
+          {/* Next Button */}
+          <button
+            onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+            disabled={page >= totalPages - 1}
+            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+            aria-label="Next page"
+          >
+            <FiChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
   );
-};
-
-// DocumentTable.propTypes = {
-//   rows: PropTypes.array.isRequired,
-//   headCells: PropTypes.array.isRequired,
-//   title: PropTypes.string,
-// };
-
-export default DocumentTable;
+}

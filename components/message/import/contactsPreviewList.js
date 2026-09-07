@@ -1,12 +1,12 @@
+import React, { useState } from "react";
+import { FiCheck, FiTrash2, FiUserCheck, FiUsers } from "react-icons/fi";
+import { ImSpinner9 } from "react-icons/im";
 import { postApiData } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
-import { getConstant } from "@/utilities/utils";
-import React, { useState } from "react";
-import { ImBin } from "react-icons/im";
 
 export default function ContactsPreviewList({
   pageData,
-  contacts,
+  contacts = [],
   setContacts,
   apiSuccess,
   setApiSuccess,
@@ -14,16 +14,16 @@ export default function ContactsPreviewList({
 }) {
   const [confirmIndex, setConfirmIndex] = useState(null);
   const [apiLoading, setApiLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
+
+  if (!contacts || contacts.length === 0) return null;
 
   const handleDelete = (index) => {
     showToast({
-      message: "Contact successfully removed from preview list.",
+      message: "Contact removed from preview list.",
       type: "success",
     });
     setContacts(contacts.filter((_, i) => i !== index));
-    setConfirmIndex(null); // Hide confirmation
+    setConfirmIndex(null);
   };
 
   const saveAllContacts = async () => {
@@ -31,7 +31,7 @@ export default function ContactsPreviewList({
 
     try {
       const payload = {
-        id: pageData.user.userId,
+        id: pageData?.user?.userId,
         contacts: contacts.map((c) => ({
           name: c.name,
           contactNo: c.contactNo,
@@ -40,99 +40,134 @@ export default function ContactsPreviewList({
       };
       const response = await postApiData("IMPORT_CONTACTS_IN_BLUK", payload);
       if (response.status) {
-        setContactsList((prev) => [...prev, ...contacts]);
-        setSuccessMsg("Contacts saved successfully!!");
+        if (setContactsList) {
+          setContactsList((prev) => [...prev, ...contacts]);
+        }
+        showToast({
+          message: `${contacts.length} contacts saved successfully!`,
+          type: "success",
+        });
         setContacts([]);
-        setApiSuccess(true);
-        setTimeout(() => {
-          setSuccessMsg("");
-          setApiSuccess(false);
-        }, 5000);
+        if (setApiSuccess) setApiSuccess(true);
       } else {
-        setErrorMsg(response.message);
+        showToast({
+          message: response.message || "Failed to import contacts",
+          type: "error",
+        });
       }
     } catch (err) {
-      console.error("Message sending failed", err);
+      console.error("Import contacts failed", err);
+      showToast({
+        message: "Error saving contacts. Please try again.",
+        type: "error",
+      });
+    } finally {
+      setApiLoading(false);
     }
-    setApiLoading(false);
   };
 
   return (
-    <div className="mt-6">
-      {contacts.length > 0 && (
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-gray-800">
-            Imported Contacts - {contacts.length}
-          </h3>
+    <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-2xs space-y-4 animate-fade-in">
+      {/* Header with Title and Save All Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#2563EB] flex items-center justify-center font-bold text-xs">
+            <FiUserCheck className="w-4 h-4" />
+          </div>
           <div>
-            <button
-              onClick={saveAllContacts}
-              className="px-6 py-2 bg-violet-700 text-white rounded hover:bg-violet-950 transition duration-300"
-              disabled={apiLoading}
-            >
-              {apiLoading ? getConstant("LOADING_TEXT") : "Save All"}
-            </button>
+            <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+              Imported Contacts Preview
+            </h3>
+            <p className="text-xs text-slate-400 font-medium">
+              Review contacts before saving them to CargoDesk.
+            </p>
           </div>
         </div>
-      )}
 
-      {successMsg && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
-          <span className="block sm:inline">{successMsg}</span>
+        <div className="flex items-center gap-3">
+          <span className="px-3 py-1 bg-blue-50 text-[#2563EB] font-bold text-xs rounded-full border border-blue-100">
+            {contacts.length} Contact{contacts.length > 1 ? "s" : ""}
+          </span>
+
+          <button
+            type="button"
+            onClick={saveAllContacts}
+            disabled={apiLoading}
+            className="inline-flex items-center gap-2 px-5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+          >
+            {apiLoading ? (
+              <>
+                <ImSpinner9 className="w-3.5 h-3.5 animate-spin" />
+                <span>Saving All...</span>
+              </>
+            ) : (
+              <>
+                <FiCheck className="w-4 h-4" />
+                <span>Save All Contacts</span>
+              </>
+            )}
+          </button>
         </div>
-      )}
+      </div>
 
-      {errorMsg && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
-          <span className="block sm:inline">{errorMsg}</span>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Grid of Preview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-72 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-300">
         {contacts.map((c, i) => {
           const isConfirm = confirmIndex === i;
+          const initial = (c.name || "C").charAt(0).toUpperCase();
+
           return (
             <div
               key={i}
-              className={`contact-card relative overflow-hidden border  border-gray-300 rounded-md shadow-sm transition-all duration-300 ${
-                isConfirm ? "confirmContactDelete p-3" : "bg-white flex h-14"
-              }`}
+              className="relative bg-slate-50/70 border border-slate-200/80 rounded-xl p-3 flex items-center justify-between gap-2 hover:bg-white hover:border-slate-300 transition-all"
             >
-              {!isConfirm ? (
-                <>
-                  <div className="w-[85%] lg:w-[90%] p-5 md:p-2 lg:p-5 bg-white text-gray-600 flex items-center justify-between">
-                    <div className="text-md font-[450]">{c.name}</div>
-                    <div className="text-md font-[450]">{c.contactNo}</div>
-                  </div>
-                  {!isConfirm && (
-                    <button
-                      className="w-[15%] lg:w-[10%] bg-red-600 text-white flex items-center justify-center rounded-r-md border border-red-600 text-sm hover:bg-red-700"
-                      onClick={() => setConfirmIndex(i)}
-                    >
-                      <ImBin />
-                    </button>
-                  )}
-                </>
-              ) : (
-                <div className="flex justify-between items-center relative z-10 text-white">
-                  <span className="font-semibold text-sm">
-                    Are you sure want delete this contact?
+              {isConfirm ? (
+                <div className="w-full flex items-center justify-between gap-2 bg-rose-50 p-1.5 rounded-lg border border-rose-200 animate-fade-in">
+                  <span className="text-[11px] font-bold text-rose-800">
+                    Delete?
                   </span>
-                  <div className="flex gap-2 ml-4">
+                  <div className="flex items-center gap-1.5">
                     <button
-                      className="bg-white text-red-600 px-3 py-1 rounded text-sm font-semibold"
-                      onClick={() => handleDelete(i)}
-                    >
-                      Yes
-                    </button>
-                    <button
-                      className="bg-white text-gray-600 px-3 py-1 rounded text-sm font-semibold"
+                      type="button"
                       onClick={() => setConfirmIndex(null)}
+                      className="px-2 py-0.5 text-[11px] font-semibold bg-white text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 cursor-pointer"
                     >
                       No
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(i)}
+                      className="px-2 py-0.5 text-[11px] font-semibold bg-rose-600 text-white rounded-md hover:bg-rose-700 cursor-pointer"
+                    >
+                      Yes
+                    </button>
                   </div>
                 </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0">
+                      {initial}
+                    </div>
+                    <div className="truncate">
+                      <p className="text-xs font-bold text-slate-900 truncate" title={c.name}>
+                        {c.name}
+                      </p>
+                      <p className="text-[11px] font-mono text-slate-500 truncate">
+                        {c.contactNo}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setConfirmIndex(i)}
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                    title="Remove Contact"
+                  >
+                    <FiTrash2 className="w-3.5 h-3.5" />
+                  </button>
+                </>
               )}
             </div>
           );

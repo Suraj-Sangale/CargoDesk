@@ -227,3 +227,18 @@ export function convertToUpperCase(text) {
   }
   return text.toUpperCase();
 }
+
+export const scrollSectionIntoView = (id) => {
+  const element = document.getElementById(id);
+
+  if (element) {
+    element.style.scrollMarginTop = "100px";
+
+    setTimeout(() => {
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+  }
+};

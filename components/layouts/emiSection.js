@@ -5,12 +5,9 @@ import CommonModal from "../common/commonModal";
 import { postApiData } from "@/utilities/services/apiService";
 import { emiTableHeadCells } from "@/utilities/masterData";
 import DocumentTable from "../common/tabels/documentTable";
-import modalStyle from "@/styles/modal.module.scss";
-import commonStyle from "@/styles/common/common.module.scss";
 import { getConstant } from "@/utilities/utils";
 import { showToast } from "@/utilities/toastService";
-import { FaPlusCircle } from "react-icons/fa";
-import emiSecStyle from "@/styles/emiSec.module.scss";
+import { FiPlus } from "react-icons/fi";
 
 export default function EmiSection() {
   const [emiModal, setEmiModal] = useState(false);
@@ -24,6 +21,7 @@ export default function EmiSection() {
 
   const onClickAddDocument = () => {
     setIsEdit(false);
+    setModalData({});
     setEmiModal(true);
   };
 
@@ -39,27 +37,29 @@ export default function EmiSection() {
       console.error("Error fetching EMI list:", error);
     }
   };
+
   useEffect(() => {
     fetchEmiList();
   }, []);
 
   const onClickEdit = (id) => {
     const selectedItem = emiList.find((item) => item.id == id);
-    setModalData(selectedItem);
-    setIsEdit(true);
-    setEmiModal(true);
+    if (selectedItem) {
+      setModalData(selectedItem);
+      setIsEdit(true);
+      setEmiModal(true);
+    }
   };
 
   const onClickDelete = async (ids) => {
-    const payload = {
-      ids: ids,
-    };
+    const targetIds = Array.isArray(ids) ? ids : [ids];
+    const payload = { ids: targetIds };
     setDeleteLoad(true);
     setDeleteError("");
     try {
       const response = await postApiData("DELETE_EMI_RECORD", payload);
       if (response.status) {
-        const updatedEmiList = emiList.filter((item) => !ids.includes(item.id));
+        const updatedEmiList = emiList.filter((item) => !targetIds.includes(item.id));
         setEmiList(updatedEmiList);
         setDeletePopup(false);
         setSelected([]);
@@ -71,34 +71,34 @@ export default function EmiSection() {
         );
       }
     } catch (error) {
-      console.error("Error occurred during form submission:", error);
+      console.error("Error occurred during EMI deletion:", error);
       setDeleteError(
-        "Error occurred while deleting record, Please try again later"
+        "Error occurred while deleting record. Please try again later."
       );
     }
     setDeleteLoad(false);
   };
 
   return (
-    <>
-      {/* <h1 className="text-2xl font-bold mb-4">dd</h1> */}
-      {/* <button
-        className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        onClick={() => setEmiModal(true)}
-      >
-        Add New EMI
-      </button> */}
-      <div className={` my-3 ml-5`}>
-        <div className="flex justify-between items-center">
-          <h5>EMI Records</h5>
-          <button
-            onClick={onClickAddDocument}
-            className={"flex items-center " + emiSecStyle.addButton}
-          >
-            <FaPlusCircle className="mr-3 text-[12px] md:text-[16px]" />
-            Add EMI
-          </button>
+    <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-5 md:p-6 space-y-5">
+      {/* Header Row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg md:text-xl font-bold text-slate-900 tracking-tight">
+            EMI Records
+          </h2>
+          <span className="inline-flex items-center justify-center bg-blue-100 text-blue-600 text-xs font-bold px-2.5 py-0.5 rounded-full">
+            {emiList.length}
+          </span>
         </div>
+
+        <button
+          onClick={onClickAddDocument}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-semibold rounded-xl shadow-sm shadow-blue-600/20 hover:shadow-md transition-all cursor-pointer"
+        >
+          <FiPlus className="w-4 h-4" />
+          <span>Add EMI</span>
+        </button>
       </div>
 
       <DocumentTable
@@ -107,61 +107,17 @@ export default function EmiSection() {
         onClickEdit={onClickEdit}
         selected={selected}
         setSelected={setSelected}
-        onClickDelete={() => {
+        onClickDelete={(ids) => {
+          setSelected(Array.isArray(ids) ? ids : [ids]);
           setDeletePopup(true);
         }}
       />
-      {/* <div className="mt-6 overflow-x-auto">
-        <table className="min-w-full bg-white border">
-
-          <thead>
-            <tr>
-              <th className="py-2 px-4 border-b">Loan/Item Name</th>
-              <th className="py-2 px-4 border-b">Loan Amount</th>
-              <th className="py-2 px-4 border-b">EMI Amount</th>
-              <th className="py-2 px-4 border-b">Tenure (Months)</th>
-              <th className="py-2 px-4 border-b">Start Date</th>
-              <th className="py-2 px-4 border-b">Payment Mode</th>
-              <th className="py-2 px-4 border-b">Due Date</th>
-              <th className="py-2 px-4 border-b">Status</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {emiList.length === 0 ? (
-              <tr>
-                <td colSpan="8" className="text-center py-4">
-                  No EMI records found.
-                </td>
-              </tr>
-            ) : (
-              emiList.map((emi, index) => (
-                <tr key={index} className={index % 2 === 0 ? "bg-gray-50" : "bg-white"}>
-                  <td className="py-2 px-4 border-b">{emi.loanName}</td>
-                  <td className="py-2 px-4 border-b">{emi.loanAmount}</td>
-                  <td className="py-2 px-4 border-b">{emi.emiAmount}</td>
-                  <td className="py-2 px-4 border-b">{emi.tenure}</td>
-                  <td className="py-2 px-4 border-b">
-                    {emi.startDate ? moment(emi.startDate).format("DD-MM-YYYY") : ""}
-                  </td>
-                  <td className="py-2 px-4 border-b">{emi.paymentMode}</td>
-                  <td className="py-2 px-4 border-b">
-                    {emi.dueDate ? moment(emi.dueDate).format("DD-MM-YYYY") : ""}
-                  </td>
-                  <td className="py-2 px-4 border-b">{emi.status}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-
-      </div> */}
 
       <CommonModal
         modalTitle={isEdit ? "Edit EMI Data" : "Add New EMI Data"}
         modalOpen={emiModal}
         setModalOpen={setEmiModal}
-        modalSize={"w-11/12 md:w-3/6"}
+        modalSize="w-11/12 md:w-3/6"
       >
         <EmiForm
           setEmiList={setEmiList}
@@ -172,31 +128,34 @@ export default function EmiSection() {
       </CommonModal>
 
       <CommonModal
-        modalTitle={"Delete EMI Record"}
+        modalTitle="Delete EMI Record"
         modalOpen={deletePopup}
         setModalOpen={setDeletePopup}
-        modalSize={"w-11/12 md:w-3/8"}
+        modalSize="w-11/12 md:w-96"
       >
-        <div className={modalStyle.deleteModal}>
-          <p className={modalStyle.conformationMsg}>
-            Are you sure you want to delete this?
+        <div className="p-5 text-center space-y-4">
+          <p className="text-sm font-medium text-slate-700">
+            Are you sure you want to delete {selected.length > 1 ? `these ${selected.length} records` : "this EMI record"}?
           </p>
-          <div className={modalStyle.buttonsWrapper}>
+          <div className="flex items-center justify-center gap-3 pt-2">
             <button
-              className={`${modalStyle.btn} ${modalStyle.cancel}`}
+              className="px-4 py-2 text-xs md:text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
               onClick={() => setDeletePopup(false)}
             >
-              No
+              Cancel
             </button>
             <button
-              className={`${modalStyle.btn} ${modalStyle.delete}`}
+              className="px-4 py-2 text-xs md:text-sm font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-colors"
               onClick={() => onClickDelete(selected)}
             >
-              {deleteLoad ? getConstant("LOADING_TEXT") : "Yes"}
+              {deleteLoad ? getConstant("LOADING_TEXT") : "Yes, Delete"}
             </button>
           </div>
+          {deleteError && (
+            <p className="text-xs text-rose-600 font-medium">{deleteError}</p>
+          )}
         </div>
       </CommonModal>
-    </>
+    </div>
   );
 }

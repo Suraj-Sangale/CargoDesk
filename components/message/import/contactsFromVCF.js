@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { parseVCF } from "@/utilities/vcfParser";
+import { BsPersonVcard } from "react-icons/bs";
 
 export default function ContactsFromVCF({ contacts, setContacts, apiSuccess }) {
   const fileInputRef = useRef(null);
@@ -14,57 +15,74 @@ export default function ContactsFromVCF({ contacts, setContacts, apiSuccess }) {
     const file = e.target.files[0];
     if (!file) return;
 
-    const text = await file.text();
-    const rawContacts = parseVCF(text); // expected output: [{ name, contactNo }, ...]
+    try {
+      const text = await file.text();
+      const rawContacts = parseVCF(text);
 
-    const seen = new Set();
+      const seen = new Set();
 
-    const cleanedContacts = rawContacts
-      .map((contact) => {
-        const name = contact.name?.trim() || "";
-        let contactNo = contact.contactNo?.replace(/\D/g, "") || "";
+      const cleanedContacts = (rawContacts || [])
+        .map((contact) => {
+          const name = contact.name?.trim() || "";
+          let contactNo = contact.contactNo?.replace(/\D/g, "") || "";
 
-        if (contactNo.length > 10) {
-          contactNo = contactNo.slice(-10);
-        }
+          if (contactNo.length > 10) {
+            contactNo = contactNo.slice(-10);
+          }
 
-        if (contactNo.length === 10 && !seen.has(contactNo)) {
-          seen.add(contactNo);
-          return { name, contactNo };
-        }
+          if (contactNo.length === 10 && !seen.has(contactNo)) {
+            seen.add(contactNo);
+            return { name, contactNo };
+          }
 
-        return null;
-      })
-      .filter(Boolean); // remove nulls
+          return null;
+        })
+        .filter(Boolean);
 
-    setContacts(cleanedContacts);
+      setContacts(cleanedContacts);
+    } catch (err) {
+      console.warn("vCard import parse error", err);
+    }
   };
 
   return (
-    <div className="w-full  bg-white border border-gray-200 rounded-xl shadow p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-          Upload vCard (.vcf) File
-        </h3>
+    <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-2xs space-y-4">
+      {/* Header Row */}
+      <div className="flex items-center gap-3.5">
+        <div className="w-12 h-12 rounded-2xl bg-[#EBF5FF] border border-blue-100 text-[#2563EB] flex items-center justify-center shrink-0 shadow-2xs">
+          <BsPersonVcard className="w-6 h-6" />
+        </div>
+
+        <div>
+          <h3 className="text-base font-bold text-slate-900 tracking-tight">
+            Import Contacts (vCard)
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium">
+            Upload a .vcf file to import contacts into CargoDesk.
+          </p>
+        </div>
       </div>
 
-      <div className="bg-gray-10 md:p-4 rounded-md mb-4">
+      {/* Styled File Input Box */}
+      <div className="relative border border-slate-200 rounded-xl p-3 bg-slate-50/50 hover:bg-slate-50 transition-colors">
         <input
           type="file"
           accept=".vcf"
           ref={fileInputRef}
           onChange={handleVCFImport}
-          className="block w-full text-sm file:mr-4 file:py-2 file:px-4
-            file:rounded-l-md file:border file:border-gray-300
-            file:text-sm file:font-semibold
-            file:bg-blue-100 file:text-blue-900 
-            hover:file:bg-blue-100 border border-gray-300 rounded-md file:cursor-pointer cursor-pointer"
+          className="block w-full text-xs sm:text-sm text-slate-600
+            file:mr-4 file:py-2 file:px-4
+            file:rounded-xl file:border file:border-blue-100
+            file:text-xs file:font-bold
+            file:bg-[#EBF5FF] file:text-[#2563EB]
+            hover:file:bg-blue-100
+            file:cursor-pointer cursor-pointer"
         />
       </div>
 
-      <p className="text-xs text-gray-500">
-        Accepted format: <code>.vcf</code> only. Must contain <code>name</code>{" "}
-        and <code>contactNo</code> columns.
+      {/* Helper Footer Note */}
+      <p className="text-xs text-slate-400 font-medium">
+        Accepted format: <code className="text-slate-600 font-bold">.vcf</code> only. Must contain <code className="text-slate-600 font-bold">name</code> and <code className="text-slate-600 font-bold">contactNo</code> information.
       </p>
     </div>
   );

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import formStyle from "@/styles/formStyles.module.scss";
+import { FiUsers, FiPlus, FiCheck } from "react-icons/fi";
+import { ImSpinner9 } from "react-icons/im";
 import { postApiData } from "@/utilities/services/apiService";
 import { getConstant } from "@/utilities/utils";
-import commonStyle from "@/styles/common/common.module.scss";
 import GroupMemberSelection from "./groupMemberSelection";
 import { showToast } from "@/utilities/toastService";
 
@@ -19,28 +19,24 @@ export default function GroupForm({
   const initialFormData = isEdit ? modalData : defaultFormData;
   const [formData, setFormData] = useState(initialFormData);
   const [loading, setLoading] = useState(false);
-  const [apiError, setApiError] = useState(null);
-  const [successMsg, setSuccessMsg] = useState(null);
-  // const [idsToAdd, setIdsToAdd] = useState([]);
-  // const [idsToRemove, setIdsToRemove] = useState([]);
 
   const {
     register,
     handleSubmit,
-    setError,
     clearErrors,
     reset,
     formState: { errors },
   } = useForm();
 
+  // test
   const validations = {
     groupName: {
       required: "Group Name is required",
-      maxLength: { value: 50, message: "Group Name too long" },
+      maxLength: { value: 50, message: "Group Name too long (max 50 chars)" },
     },
     description: {
       maxLength: {
-        value: getConstant("LEN_MAX_NOTE"),
+        value: getConstant("LEN_MAX_NOTE") || 200,
         message: `Max ${getConstant("LEN_MAX_NOTE") || 200} characters`,
       },
     },
@@ -51,19 +47,9 @@ export default function GroupForm({
     if (errors[field]) clearErrors(field);
   };
 
-  const handleMemberToggle = (contactId) => {
-    setFormData((prev) => {
-      const exists = prev.contactIds.includes(contactId);
-      const contactIds = exists
-        ? prev.contactIds.filter((id) => id !== contactId)
-        : [...prev.contactIds, contactId];
-      return { ...prev, contactIds };
-    });
-  };
-
   const handleCreateGroup = async () => {
     const addNewPayload = {
-      userId: pageData.user.userId,
+      userId: pageData?.user?.userId,
       groupName: formData.groupName,
       description: formData.description,
       contactIds: formData.contactIds,
@@ -76,29 +62,27 @@ export default function GroupForm({
       );
 
       if (response.status) {
-        // setSuccessMsg(response.message);
         showToast({
-          message: response.message,
+          message: response.message || "Group created successfully!",
           type: "success",
         });
-        // setTimeout(() => setSuccessMsg(""), 3000);
         reset();
         setFormData(defaultFormData);
 
-        setGroupsList((prev) => [
-          ...prev,
-          { ...addNewPayload, id: response.id },
-        ]);
+        if (setGroupsList) {
+          setGroupsList((prev) => [
+            ...prev,
+            { ...addNewPayload, id: response.id || Date.now() },
+          ]);
+        }
       } else {
-        // setApiError(response.message);
         showToast({
-          message: response.message,
+          message: response.message || "Failed to create group",
           type: "error",
         });
       }
     } catch (error) {
       console.error("Create group error:", error);
-      // setApiError("Something went wrong. Please try again.");
       showToast({
         message: "Something went wrong. Please try again.",
         type: "error",
@@ -110,15 +94,15 @@ export default function GroupForm({
 
   const handleUpdateGroup = async () => {
     const idsToAdd = formData.contactIds.filter(
-      (id) => !modalData.contactIds.includes(id)
+      (id) => !(modalData?.contactIds || []).includes(id)
     );
-    const idsToRemove = modalData.contactIds.filter(
+    const idsToRemove = (modalData?.contactIds || []).filter(
       (id) => !formData.contactIds.includes(id)
     );
 
     const updatePayload = {
       groupId: modalData.id,
-      userId: pageData.user.userId,
+      userId: pageData?.user?.userId,
       groupName: formData.groupName,
       description: formData.description,
       idsToAdd,
@@ -132,33 +116,31 @@ export default function GroupForm({
       );
 
       if (response.status) {
-        // setSuccessMsg(response.message);
-        // setTimeout(() => setSuccessMsg(""), 3000);
         showToast({
-          message: response.message,
+          message: response.message || "Group updated successfully!",
           type: "success",
         });
         reset();
         setFormData(defaultFormData);
 
-        setGroupsList((prev) =>
-          prev.map((g) =>
-            g.id === modalData.id
-              ? { ...g, ...updatePayload, contactIds: formData.contactIds }
-              : g
-          )
-        );
-        setGroupModal(false);
+        if (setGroupsList) {
+          setGroupsList((prev) =>
+            prev.map((g) =>
+              g.id === modalData.id
+                ? { ...g, ...updatePayload, contactIds: formData.contactIds }
+                : g
+            )
+          );
+        }
+        if (setGroupModal) setGroupModal(false);
       } else {
-        // setApiError(response.message);
         showToast({
-          message: response.message,
+          message: response.message || "Failed to update group",
           type: "error",
         });
       }
     } catch (error) {
       console.error("Update group error:", error);
-      // setApiError("Something went wrong. Please try again.");
       showToast({
         message: "Something went wrong. Please try again.",
         type: "error",
@@ -168,7 +150,7 @@ export default function GroupForm({
     }
   };
 
-  const submitGroup = () => {
+  const onSubmit = () => {
     setLoading(true);
     if (isEdit) {
       handleUpdateGroup();
@@ -177,39 +159,54 @@ export default function GroupForm({
     }
   };
 
-  const onSubmit = () => {
-    setLoading(true);
-    // setApiError(null);
-    // setSuccessMsg(null);
-    submitGroup();
-  };
-
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className={`w-full bg-white p-2 md:p-5 ${
-        !isEdit ? "border-b border-gray-200 rounded-xl shadow" : "rounded-b-2xl"
+      className={`w-full bg-white space-y-4 ${
+        !isEdit
+          ? "rounded-2xl p-6 border border-slate-200/80 shadow-2xs"
+          : "p-4 md:p-6"
       }`}
     >
+      {/* Header if not in modal */}
+      {!isEdit && (
+        <div className="flex items-center gap-3.5 pb-2">
+          <div className="w-12 h-12 rounded-2xl bg-[#FAF5FF] border border-purple-100 text-[#9333EA] flex items-center justify-center shrink-0 shadow-2xs">
+            <FiUsers className="w-6 h-6" />
+          </div>
+
+          <div>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight">
+              Create Contact Group
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium">
+              Group contacts together for one-click broadcast messages.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Inputs Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Group Name */}
         <div>
-          <label className="block mb-2 font-medium text-gray-700">
-            Group Name <span className="text-red-500">*</span>
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            Group Name <span className="text-rose-500">*</span>
           </label>
           <input
             type="text"
             value={formData.groupName}
             {...register("groupName", validations.groupName)}
             onChange={(e) => handleChange("groupName", e.target.value)}
-            className={`w-full px-4 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-              formStyle.inputField
-            } ${errors.groupName ? formStyle.error : ""}`}
-            placeholder="Enter Group Name"
-            name="groupName"
+            className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
+              errors.groupName
+                ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
+                : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
+            } outline-none focus:ring-2 transition-all shadow-2xs placeholder-slate-400`}
+            placeholder="e.g. Mumbai Drivers, Dispatch Team"
           />
           {errors.groupName && (
-            <p className="text-red-500 text-sm mt-1">
+            <p className="text-rose-500 text-xs font-medium mt-1">
               {errors.groupName.message}
             </p>
           )}
@@ -217,67 +214,50 @@ export default function GroupForm({
 
         {/* Group Description */}
         <div>
-          <label className="block mb-2 font-medium text-gray-700">
-            Group Description
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            Group Description <span className="text-slate-400 font-normal">(Optional)</span>
           </label>
-          <textarea
-            rows={1}
+          <input
+            type="text"
             value={formData.description}
             {...register("description", validations.description)}
             onChange={(e) => handleChange("description", e.target.value)}
-            className={`w-full px-4 py-2 border rounded-md shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-              formStyle.inputField
-            } ${errors.description ? formStyle.error : ""}`}
-            placeholder="Optional Description"
-            name="description"
+            className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs placeholder-slate-400"
+            placeholder="Brief note about this group"
           />
           {errors.description && (
-            <p className="text-red-500 text-sm mt-1">
+            <p className="text-rose-500 text-xs font-medium mt-1">
               {errors.description.message}
             </p>
           )}
         </div>
       </div>
 
+      {/* Member Selection Section */}
       <GroupMemberSelection
         contactsList={contactsList}
         formData={formData}
         setFormData={setFormData}
       />
-      {/* <label className="block mt-4 mb-2 font-medium">Select Members</label>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-        {contactsList.map((contact) => (
-          <label
-            key={contact.id}
-            className="flex items-center space-x-2 text-sm"
-          >
-            <input
-              type="checkbox"
-              checked={formData.contactIds.includes(contact.id)}
-              onChange={() => handleMemberToggle(contact.id)}
-              className="accent-blue-600"
-            />
-            <span>
-              {contact.name} - {contact.contactNo}
-            </span>
-          </label>
-        ))}
-      </div> */}
 
+      {/* Full-width Submit Button */}
       <button
         type="submit"
         disabled={loading}
-        className={`w-full font-semibold mt-6 py-2 rounded hover:bg-blue-700 transition cursor-pointer i ${
-          isEdit ? commonStyle.editButton : commonStyle.commonButton
-        }`}
+        className="w-full py-2.5 px-4 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
       >
-        {loading ? "Submitting..." : isEdit ? "Update Group" : "Create Group"}
+        {loading ? (
+          <>
+            <ImSpinner9 className="w-4 h-4 animate-spin" />
+            <span>{isEdit ? "Updating Group..." : "Creating Group..."}</span>
+          </>
+        ) : (
+          <>
+            <FiPlus className="w-4 h-4" />
+            <span>{isEdit ? "Update Group" : "Create Group"}</span>
+          </>
+        )}
       </button>
-
-      {apiError && <p className="text-red-500 mt-3 text-center">{apiError}</p>}
-      {successMsg && (
-        <p className="text-green-600 mt-3 text-center">{successMsg}</p>
-      )}
     </form>
   );
 }
