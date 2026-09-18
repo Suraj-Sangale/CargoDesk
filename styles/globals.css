@@ -180,3 +180,111 @@ input[type="number"] {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
 	background: rgba(148, 163, 184, 1);
 }
+
+/* ==========================================================================
+   Responsive Modal & Mobile Bottom Sheet Keyframe Animations
+   ========================================================================== */
+
+@keyframes backdrop-fade-in {
+	0% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 1;
+	}
+}
+
+@keyframes backdrop-fade-out {
+	0% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+
+/* Mobile: Bottom-to-Top Slide Up */
+@keyframes sheet-slide-up {
+	0% {
+		transform: translateY(100%);
+		opacity: 0.8;
+	}
+	100% {
+		transform: translateY(0%);
+		opacity: 1;
+	}
+}
+
+/* Mobile: Top-to-Bottom Slide Down */
+@keyframes sheet-slide-down {
+	0% {
+		transform: translateY(0%);
+		opacity: 1;
+	}
+	100% {
+		transform: translateY(100%);
+		opacity: 0;
+	}
+}
+
+/* Desktop: Smooth Scale & Fade In */
+@keyframes desktop-modal-scale-in {
+	0% {
+		transform: scale(0.94) translateY(14px);
+		opacity: 0;
+	}
+	100% {
+		transform: scale(1) translateY(0);
+		opacity: 1;
+	}
+}
+
+/* Desktop: Smooth Scale & Fade Out */
+@keyframes desktop-modal-scale-out {
+	0% {
+		transform: scale(1) translateY(0);
+		opacity: 1;
+	}
+	100% {
+		transform: scale(0.95) translateY(10px);
+		opacity: 0;
+	}
+}
+
+.animate-backdrop-in {
+	animation: backdrop-fade-in 350ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-backdrop-out {
+	animation: backdrop-fade-out 450ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Mobile default: Bottom Sheet Slide */
+.animate-modal-in {
+	animation: sheet-slide-up 1000ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-modal-out {
+	animation: sheet-slide-down 800ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Desktop override (>= 640px) */
+@media (min-width: 640px) {
+	.animate-modal-in {
+		animation: desktop-modal-scale-in 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	}
+
+	.animate-modal-out {
+		animation: desktop-modal-scale-out 400ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.animate-backdrop-in,
+	.animate-backdrop-out,
+	.animate-modal-in,
+	.animate-modal-out {
+		animation: none !important;
+		transition: none !important;
+	}
+}

@@ -115,6 +115,194 @@ export const emiTableHeadCells = [
   },
   { id: "action", numeric: false, disablePadding: false, label: "Action" },
 ];
+
+export const fleetTableHeadCells = [
+  {
+    id: "id",
+    numeric: false,
+    disablePadding: false,
+    label: "Sr. No.",
+  },
+  {
+    id: "vehicle_number",
+    numeric: false,
+    disablePadding: false,
+    label: "Vehicle No.",
+  },
+  {
+    id: "vehicle_model",
+    numeric: false,
+    disablePadding: false,
+    label: "Model & Make",
+  },
+  {
+    id: "vehicle_type",
+    numeric: false,
+    disablePadding: false,
+    label: "Type",
+  },
+  {
+    id: "capacity",
+    numeric: false,
+    disablePadding: false,
+    label: "Capacity",
+  },
+  {
+    id: "driver_name",
+    numeric: false,
+    disablePadding: false,
+    label: "Assigned Driver",
+  },
+  {
+    id: "fuel_type",
+    numeric: false,
+    disablePadding: false,
+    label: "Fuel",
+  },
+  {
+    id: "ownership_type",
+    numeric: false,
+    disablePadding: false,
+    label: "Ownership",
+  },
+  {
+    id: "status",
+    numeric: false,
+    disablePadding: false,
+    label: "Status",
+  },
+  { id: "action", numeric: false, disablePadding: false, label: "Action" },
+];
+
+export const FLEET_VEHICLE_TYPES = [
+  "Heavy Truck (16-25T)",
+  "Multi-Axle Trailer (28-40T)",
+  "Container Body (20-32 FT)",
+  "Tanker (Chemical/Oil)",
+  "Tipper / Dumper",
+  "Flatbed Trailer",
+  "Medium Goods Vehicle (7-12T)",
+  "Light Commercial Vehicle (Pickup)",
+];
+
+export const FLEET_FUEL_TYPES = [
+  "Diesel",
+  "CNG",
+  "Electric (EV)",
+  "LNG",
+  "Petrol",
+];
+
+export const FLEET_OWNERSHIP_TYPES = [
+  "Owned",
+  "Leased / Financed",
+  "Attached / Vendor",
+];
+
+export const FLEET_STATUS_OPTIONS = [
+  "Active",
+  "In Transit",
+  "Maintenance",
+  "Inactive",
+];
+
+export const driverTableHeadCells = [
+  {
+    id: "id",
+    numeric: false,
+    disablePadding: false,
+    label: "Sr. No.",
+  },
+  {
+    id: "profile_photo",
+    numeric: false,
+    disablePadding: false,
+    label: "Photo",
+  },
+  {
+    id: "driver_name",
+    numeric: false,
+    disablePadding: false,
+    label: "Driver Name",
+  },
+  {
+    id: "contact_number",
+    numeric: false,
+    disablePadding: false,
+    label: "Contact No.",
+  },
+  {
+    id: "license_number",
+    numeric: false,
+    disablePadding: false,
+    label: "License No.",
+  },
+  {
+    id: "license_type",
+    numeric: false,
+    disablePadding: false,
+    label: "License Category",
+  },
+  {
+    id: "assigned_vehicle",
+    numeric: false,
+    disablePadding: false,
+    label: "Assigned Vehicle",
+  },
+  {
+    id: "experience_years",
+    numeric: false,
+    disablePadding: false,
+    label: "Experience",
+  },
+  {
+    id: "license_expiry",
+    numeric: false,
+    disablePadding: false,
+    label: "License Expiry",
+  },
+  {
+    id: "supporting_documents",
+    numeric: false,
+    disablePadding: false,
+    label: "Documents",
+  },
+  {
+    id: "status",
+    numeric: false,
+    disablePadding: false,
+    label: "Status",
+  },
+  { id: "action", numeric: false, disablePadding: false, label: "Action" },
+];
+
+export const DRIVER_LICENSE_TYPES = [
+  "Heavy Transport Vehicle (HTV)",
+  "Hazardous & Container Certified",
+  "Chemical & Tanker Certified",
+  "Heavy Commercial (HMV/LMV)",
+  "Light Commercial Vehicle (LCV)",
+  "Multi-Axle Specialized Trailer",
+];
+
+export const DRIVER_STATUS_OPTIONS = [
+  "Active",
+  "On Duty",
+  "On Leave",
+  "Inactive",
+];
+
+export const DRIVER_BLOOD_GROUPS = [
+  "A+",
+  "A-",
+  "B+",
+  "B-",
+  "AB+",
+  "AB-",
+  "O+",
+  "O-",
+];
+
 export const menuItems = [
   {
     title: "Dashboard",

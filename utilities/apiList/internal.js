@@ -40,4 +40,21 @@ export const internalList = {
   GET_ALL_EMI: "/api/emi/get-all",
   UPDATE_EMI_DETAILS: "/api/emi/update-emi-details",
   DELETE_EMI_RECORD: "/api/emi/delete",
+
+  // fleets
+  GET_ALL_FLEETS: "/api/fleet/get-all",
+  ADD_NEW_FLEET: "/api/fleet/add-new",
+  UPDATE_FLEET: "/api/fleet/update",
+  DELETE_FLEETS: "/api/fleet/delete",
+
+  // drivers
+  GET_ALL_DRIVERS: "/api/driver/get-all",
+  ADD_NEW_DRIVER: "/api/driver/add-new",
+  UPDATE_DRIVER: "/api/driver/update",
+  DELETE_DRIVERS: "/api/driver/delete",
+
+  // fleet-driver assignment
+  ASSIGN_FLEET_DRIVER: "/api/fleet-driver/assign",
+  REMOVE_FLEET_DRIVER: "/api/fleet-driver/remove",
 };
+

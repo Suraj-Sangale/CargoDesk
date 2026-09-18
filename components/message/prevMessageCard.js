@@ -75,17 +75,20 @@ export default function PrevMessageCard({
   }, []);
 
   const handleUse = () => {
+    if (isCurrentlyConfirming || isDeletingThis || deleteMsgLoading) return;
     handleChange("message", item.message);
     scrollSectionIntoView("messageInput");
     if (setIsConfirm) setIsConfirm(false);
   };
 
   const onConfirmDelete = () => {
+    if (deleteMsgLoading) return;
     if (setIsConfirm) setIsConfirm(item);
     setMenuOpen(false);
   };
 
   const cancelDelete = () => {
+    if (deleteMsgLoading) return;
     if (setIsConfirm) setIsConfirm(false);
   };
 
@@ -94,13 +97,16 @@ export default function PrevMessageCard({
       onClick={handleUse}
       className={`contact-card group relative overflow-hidden bg-white rounded-2xl p-4 border shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer min-h-[135px] ${
         isCurrentlyConfirming
-          ? "confirmContactDelete border-red-600"
+          ? "confirmContactDelete border-red-600 cursor-default"
           : `border-slate-200/70 ${theme.hoverBorder}`
       }`}
     >
       {/* Delete Confirmation Overlay with expanding red circle background */}
       {isCurrentlyConfirming ? (
-        <div className="relative z-10 flex flex-col justify-between h-full min-h-[105px] text-white p-1">
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="relative z-10 flex flex-col justify-between h-full min-h-[105px] text-white p-1"
+        >
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white shrink-0">
@@ -118,17 +124,23 @@ export default function PrevMessageCard({
           <div className="flex items-center justify-end gap-2.5 pt-3">
             <button
               type="button"
-              onClick={cancelDelete}
+              onClick={(e) => {
+                e.stopPropagation();
+                cancelDelete();
+              }}
               disabled={isDeletingThis}
-              className="px-3.5 py-1.5 text-xs font-semibold bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-xl shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+              className="px-3.5 py-1.5 text-xs font-semibold bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-xl shadow-2xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={() => handleDelete(item)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(item);
+              }}
               disabled={isDeletingThis}
-              className="px-4 py-1.5 text-xs font-bold bg-white text-red-600 hover:bg-red-50 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-4 py-1.5 text-xs font-bold bg-white text-red-600 hover:bg-red-50 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isDeletingThis ? (
                 <>
@@ -144,6 +156,7 @@ export default function PrevMessageCard({
             </button>
           </div>
         </div>
+
       ) : (
         <>
           {/* Top Row: Icon + Title + 3-dots */}

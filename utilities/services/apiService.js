@@ -58,13 +58,26 @@ export function postApiData(action, payload = {}) {
   return new Promise((resolve, reject) => {
     if (typeof apiList[action] != "undefined") {
       const apiCall = callFetchMethod(apiList[action], payload);
-      //   const apiCall = callFetchMethod(
-      //     publicRuntimeConfig.basePath + apiList[action],
-      //     payload
-      //   );
 
       apiCall
-        .then((response) => {
+        .then(async (response) => {
+          if (!response.ok) {
+            if (response.status === 413) {
+              return resolve({
+                status: false,
+                message: "Payload too large. Please upload smaller documents or compress images.",
+              });
+            }
+            try {
+              const errJson = await response.json();
+              return resolve(errJson);
+            } catch (_) {
+              return resolve({
+                status: false,
+                message: `Server returned error (${response.status})`,
+              });
+            }
+          }
           resolve(response.json());
         })
         .catch((error) => {

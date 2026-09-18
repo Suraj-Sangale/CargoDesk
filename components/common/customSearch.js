@@ -1,54 +1,121 @@
-import { useEffect, useState, forwardRef } from "react";
-import Select from "react-select";
+import React, { forwardRef } from "react";
 import customSearchStyle from "@/styles/common/customSearch.module.scss";
-import { getUniqueKey } from "@/utilities/utils";
 
 const CustomSearch = forwardRef(
-  ({ selectedValue, options = [], onChange, className, ...props }, ref) => {
-    const instanceId = getUniqueKey();
-
-    const mergedOptions = {
+  (
+    {
+      selectedValue,
+      value,
+      options = [],
+      onChange,
+      placeholder = "Select Option",
+      className = "",
+      disabled = false,
+      name,
+      id,
+      isSearchable,
       instanceId,
-      placeholder: "Select Option",
-      isSearchable: true,
-      menuPosition: "fixed",
-      ...props,
-      className: customSearchStyle["form_search"] + " " + className,
-    };
+      menuPosition,
+      ...props
+    },
+    ref
+  ) => {
+    // Resolve current value from either selectedValue or value prop
+    const resolvedValue = selectedValue !== undefined ? selectedValue : value;
+    let currentValue = "";
+    if (resolvedValue && typeof resolvedValue === "object") {
+      currentValue = resolvedValue.value !== undefined ? resolvedValue.value : "";
+    } else if (resolvedValue !== undefined && resolvedValue !== null) {
+      currentValue = resolvedValue;
+    }
 
-    const colorStyles = {
-      control: (styles) => ({
-        ...styles,
-        backgroundColor: "white",
-        border: "1px solid #9AB7BC",
-        boxShadow: "none",
-        padding: "0px",
-        margin: "0px",
-        "&:hover": {
-          border: "1px solid #9AB7BC",
-        },
-      }),
-      option: (styles, { isDisabled, isSelected }) => ({
-        ...styles,
-        color: isDisabled ? "#ccc" : isSelected ? "black" : "#333",
-        backgroundColor: isSelected ? "#f0f0f0" : "white",
-        borderBottom: "1px solid #F3F3F3",
-        cursor: isDisabled ? "not-allowed" : "pointer",
-        padding: "10px",
-      }),
+    const handleChange = (e) => {
+      const selectedVal = e.target.value;
+      const selectedOption = options.find(
+        (opt) =>
+          String(typeof opt === "object" && opt !== null ? opt.value : opt) ===
+          String(selectedVal)
+      );
+
+      // Construct a response object compatible with both react-select consumers and native event consumers
+      const result =
+        selectedOption !== undefined
+          ? typeof selectedOption === "object" && selectedOption !== null
+            ? {
+                ...selectedOption,
+                target: { name: name || props.name, value: selectedVal },
+              }
+            : {
+                value: selectedVal,
+                label: selectedVal,
+                target: { name: name || props.name, value: selectedVal },
+              }
+          : selectedVal
+          ? {
+              value: selectedVal,
+              label: selectedVal,
+              target: { name: name || props.name, value: selectedVal },
+            }
+          : null;
+
+      if (onChange) {
+        onChange(result);
+      }
     };
 
     return (
-      <Select
-        ref={ref}
-        {...mergedOptions}
-        options={options}
-        value={
-          options.find((opt) => opt.value === selectedValue?.value) || null
-        }
-        onChange={onChange}
-        styles={colorStyles}
-      />
+      <div
+        className={`${customSearchStyle.selectContainer} ${
+          disabled ? customSearchStyle.disabled : ""
+        }`}
+      >
+        <select
+          ref={ref}
+          name={name}
+          id={id}
+          disabled={disabled}
+          value={currentValue}
+          onChange={handleChange}
+          className={`${customSearchStyle.selectControl} ${
+            !currentValue ? customSearchStyle.placeholder : ""
+          } ${className || ""}`}
+          {...props}
+        >
+          {placeholder && (
+            <option value="" disabled hidden={Boolean(currentValue)}>
+              {placeholder}
+            </option>
+          )}
+          {options.map((option, index) => {
+            const isObj = typeof option === "object" && option !== null;
+            const optVal = isObj ? option.value : option;
+            const optLabel = isObj ? (option.label ?? option.value) : option;
+            const isDisabled = isObj ? Boolean(option.isDisabled) : false;
+
+            return (
+              <option
+                key={isObj && option.id ? option.id : `${optVal}-${index}`}
+                value={optVal}
+                disabled={isDisabled}
+              >
+                {optLabel}
+              </option>
+            );
+          })}
+        </select>
+        <div className={customSearchStyle.arrowWrapper}>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
+      </div>
     );
   }
 );
@@ -57,3 +124,4 @@ const CustomSearch = forwardRef(
 CustomSearch.displayName = "CustomSearch";
 
 export default CustomSearch;
+

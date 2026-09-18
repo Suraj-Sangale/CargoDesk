@@ -1,6 +1,7 @@
 import "../styles/globals.css";
 import CommonLayout from "@/layout/commonLayout";
 import LoginLayout from "@/layout/loginLayout";
+import { FleetDriverProvider } from "@/context/fleetDriverContext";
 import {
   checkBotUserAgent,
   checkUserDeviceTypeByUserAgent,
@@ -19,22 +20,20 @@ export default function MyApp({ Component, pageProps, isBotAgent, isMobile }) {
   };
 
   return (
-    <>
-      {/* <Head>
-				<FontLoad />
-			</Head> */}
-      <>
-        {selectLayout(
-          <Component
-            isMobile={isMobile}
-            isBotAgent={isBotAgent}
-            {...pageProps}
-          />
-        )}
+    <FleetDriverProvider
+      initialFleets={pageProps?.pageData?.fleets || []}
+      initialDrivers={pageProps?.pageData?.drivers || []}
+    >
+      {selectLayout(
+        <Component
+          isMobile={isMobile}
+          isBotAgent={isBotAgent}
+          {...pageProps}
+        />
+      )}
 
-        <Toaster />
-      </>
-    </>
+      <Toaster />
+    </FleetDriverProvider>
   );
 }
 

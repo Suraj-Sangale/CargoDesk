@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import Link from "next/link";
 import { postApiData } from "@/utilities/services/apiService";
 import PrevMessageCard from "./prevMessageCard";
-import MessagePageHeader from "./messagePageHeader";
+import PageHeader from "@/components/common/pageHeader";
 import { showToast } from "@/utilities/toastService";
 import {
   FiSearch,
@@ -65,7 +65,8 @@ export default function MessageWrapper({
   const [recipientSearch, setRecipientSearch] = useState("");
 
   // Mobile collapsed state for Saved Templates (< 1024px)
-  const [isTemplatesExpandedMobile, setIsTemplatesExpandedMobile] = useState(false);
+  const [isTemplatesExpandedMobile, setIsTemplatesExpandedMobile] =
+    useState(false);
 
   // Emoji & Variable dropdown toggles
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -225,13 +226,14 @@ export default function MessageWrapper({
   };
 
   const handleDelete = async (msg) => {
+    if (!msg || !msg.id || deleteMsgLoading) return;
     setToDelete(msg);
-    const payload = { id: pageData?.user?.userId, msgId: msg.id };
     setDeleteMsgLoading(true);
+    const payload = { id: pageData?.user?.userId, msgId: msg.id };
 
     try {
       const response = await postApiData("DELETE_MSG_TEMPLATE", payload);
-      if (response.status) {
+      if (response?.status) {
         setSavedMsgTemplets((prev) => prev.filter((m) => m.id !== msg.id));
         setIsConfirm(false);
         showToast({
@@ -240,15 +242,20 @@ export default function MessageWrapper({
         });
       } else {
         showToast({
-          message: response.message || "Failed to delete template",
+          message: response?.message || "Failed to delete template",
           type: "error",
         });
       }
     } catch (err) {
       console.error("Delete template failed", err);
+      showToast({
+        message: "An unexpected error occurred while deleting template",
+        type: "error",
+      });
+    } finally {
+      setDeleteMsgLoading(false);
+      setToDelete(false);
     }
-    setDeleteMsgLoading(false);
-    setToDelete(false);
   };
 
   const CLIENT_BATCH_SIZE = 50; // Configurable client-side batch size for chunked sending
@@ -429,10 +436,11 @@ export default function MessageWrapper({
   return (
     <div className="w-full">
       {/* Page Header */}
-      <MessagePageHeader
-        eyebrow="MESSENGER"
+      <PageHeader
+        eyebrow=""
         title="Send a Message"
         subtitle="Type a new message or use a saved template to quickly communicate with your contacts or groups."
+        imageSrc="/imges/layouts/newdDshboard.png"
       />
 
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -1041,9 +1049,9 @@ export default function MessageWrapper({
                         const isSelected = !!formData.contacts.find(
                           (c) => c.id === contact.id,
                         );
-                        const initial = (contact.name || "C")
-                          .charAt(0)
-                          .toUpperCase();
+                        const initial = Array.from(
+                          contact.name || "C",
+                        )[0].toUpperCase();
 
                         return (
                           <label

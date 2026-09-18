@@ -4,8 +4,8 @@ import DocumentsSection from "./layouts/documentsSection";
 import EmiSection from "./layouts/emiSection";
 import { postApiData } from "@/utilities/services/apiService";
 import AddDocumentForm from "./common/molecules/addDocumentForm";
-import PageHeader from "./dashboard/pageHeader";
 import DocumentTabs from "./dashboard/documentTabs";
+import PageHeader from "./common/pageHeader";
 
 const Dashboard = ({ pageData }) => {
   const [reminderModal, setReminderModal] = useState(false);
@@ -94,8 +94,8 @@ const Dashboard = ({ pageData }) => {
     <div className="w-full">
       {/* Page Header (Eyebrow, Title, Subtitle, Vector Illustration) */}
       <PageHeader
-        eyebrow="DOCUMENTS"
-        title="Vehicle Documents"
+        eyebrow=""
+        title="Dashboard"
         subtitle="Track and manage all your vehicle documents in one place."
       />
 

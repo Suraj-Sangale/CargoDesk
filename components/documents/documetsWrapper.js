@@ -3,7 +3,7 @@ import CommonModal from "../common/commonModal";
 import { postApiData } from "@/utilities/services/apiService";
 import DocumentsSection from "../layouts/documentsSection";
 import AddDocumentForm from "../common/molecules/addDocumentForm";
-import PageHeader from "../dashboard/pageHeader";
+import PageHeader from "../common/pageHeader";
 
 export default function DocumetsWrapper({ pageData }) {
   const [reminderModal, setReminderModal] = useState(false);
@@ -71,7 +71,7 @@ export default function DocumetsWrapper({ pageData }) {
   return (
     <div className="w-full">
       <PageHeader
-        eyebrow="DOCUMENTS"
+        eyebrow=""
         title="Vehicle Documents"
         subtitle="Track and manage all your vehicle documents in one place."
       />

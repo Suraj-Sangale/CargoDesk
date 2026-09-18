@@ -8,7 +8,7 @@ import {
   FiSearch,
   FiX,
 } from "react-icons/fi";
-import ManageContactsHeader from "../manageContacts/manageContactsHeader";
+import PageHeader from "@/components/common/pageHeader";
 import AllContactsTab from "../manageContacts/allContactsTab";
 import ImportContactsTab from "../manageContacts/importContactsTab";
 import AllGroupsSection from "../manageContacts/allGroupsSection";
@@ -77,7 +77,12 @@ export default function ManageContactsWrapper({
   return (
     <div className="w-full space-y-6 animate-fade-in">
       {/* 1. Page Header with Title, Subtitle, and Illustration */}
-      <ManageContactsHeader />
+      <PageHeader
+        eyebrow="CONTACTS"
+        title="Manage Contacts"
+        subtitle="Add, import, and organize your contacts and groups in one place."
+        imageSrc="/imges/layouts/newdDshboard.png"
+      />
 
       {/* 2. Main Navigation Bar & Content Card */}
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-5 md:p-6 space-y-6">

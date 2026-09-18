@@ -16,6 +16,7 @@ import {
   FiChevronRight,
 } from "react-icons/fi";
 import { HiOutlineTruck } from "react-icons/hi";
+import { HiOutlineUserGroup } from "react-icons/hi";
 
 export default function Sidebar({
   isMobileOpen,
@@ -40,21 +41,11 @@ export default function Sidebar({
       icon: FiFileText,
       path: "/documents",
     },
-    {
-      name: "Vehicle Documents",
-      icon: FiFileText,
-      path: "/vehicledocuments",
-    },
-    {
-      name: "Drivers Documents",
-      icon: FiFileText,
-      path: "/driverdocuments",
-    },
-    {
-      name: "Expenses",
-      icon: FiFileText,
-      path: "/expenses",
-    },
+    // {
+    //   name: "",
+    //   icon: FiFileText,
+    //   path: "/expenses",
+    // },
     {
       name: "Messenger",
       icon: FiMessageSquare,
@@ -74,6 +65,16 @@ export default function Sidebar({
       name: "Daily Orders",
       icon: FiTruck,
       path: "/dailyorders",
+    },
+    {
+      name: "Fleets",
+      icon: HiOutlineTruck,
+      path: "/fleets",
+    },
+    {
+      name: "Drivers",
+      icon: HiOutlineUserGroup,
+      path: "/drivers",
     },
     {
       name: "Apps",

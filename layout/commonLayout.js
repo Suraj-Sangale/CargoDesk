@@ -73,7 +73,7 @@ export default function CommonLayout({ children, pageProps = {} }) {
           isCollapsed={isCollapsed}
           isMobileOpen={isMobileOpen}
         />
-        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 px-4 sm:px-6 md:px-8 max-w-7xl w-full mx-auto">
           {children}
         </main>
       </div>
