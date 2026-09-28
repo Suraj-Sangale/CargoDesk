@@ -28,6 +28,7 @@ export default function FleetsWrapper({ pageData }) {
   const [fleetModal, setFleetModal] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [modalData, setModalData] = useState(null);
+  const [focusField, setFocusField] = useState(null);
   const [selected, setSelected] = useState([]);
   const [deletePopup, setDeletePopup] = useState(false);
   const [deleteLoad, setDeleteLoad] = useState(false);
@@ -127,15 +128,20 @@ export default function FleetsWrapper({ pageData }) {
   const onClickAddFleet = () => {
     setIsEdit(false);
     setModalData(null);
+    setFocusField(null);
     setFleetModal(true);
   };
 
   // Handle Edit Fleet
-  const onClickEdit = (id) => {
-    const selectedItem = fleetList.find((item) => item.id == id);
+  const onClickEdit = (id, row, field) => {
+    const targetId = id ?? row?.id;
+    const selectedItem =
+      (typeof row === "object" && row !== null && row.id ? row : null) ||
+      fleetList.find((item) => item.id == targetId);
     if (selectedItem) {
       setModalData(selectedItem);
       setIsEdit(true);
+      setFocusField(field || null);
       setFleetModal(true);
     }
   };
@@ -459,6 +465,7 @@ export default function FleetsWrapper({ pageData }) {
           setFleetList={setFleetList}
           modalData={modalData}
           isEdit={isEdit}
+          focusField={focusField}
           toggleModal={() => setFleetModal(false)}
           onClose={() => setFleetModal(false)}
         />
@@ -471,7 +478,7 @@ export default function FleetsWrapper({ pageData }) {
         setModalOpen={setDeletePopup}
         modalSize="w-11/12 sm:w-96"
       >
-        <div className="p-5 text-center space-y-4">
+        <div className="px-5 text-center space-y-4">
           <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100">
             <FiAlertCircle className="w-6 h-6" />
           </div>

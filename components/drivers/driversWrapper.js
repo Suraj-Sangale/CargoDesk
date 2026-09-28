@@ -38,6 +38,7 @@ export default function DriversWrapper({ pageData }) {
   const [isLoading, setIsLoading] = useState(!pageData?.drivers && !contextDrivers.length);
   const [docsModalOpen, setDocsModalOpen] = useState(false);
   const [selectedDriverForDocs, setSelectedDriverForDocs] = useState(null);
+  const [focusField, setFocusField] = useState(null);
 
   // Sync with context drivers whenever updated
   useEffect(() => {
@@ -156,11 +157,15 @@ export default function DriversWrapper({ pageData }) {
   };
 
   // Handle Edit Driver
-  const onClickEdit = (id) => {
-    const selectedItem = driverList.find((item) => item.id == id);
+  const onClickEdit = (id, row, field) => {
+    const targetId = id ?? row?.id;
+    const selectedItem =
+      (typeof row === "object" && row !== null && row.id ? row : null) ||
+      driverList.find((item) => item.id == targetId);
     if (selectedItem) {
       setModalData(selectedItem);
       setIsEdit(true);
+      setFocusField(field || null);
       setDriverModal(true);
     }
   };
@@ -479,6 +484,11 @@ export default function DriversWrapper({ pageData }) {
           searchTerm={searchTerm}
           rowsPerPageOptions={[5, 10, 25, 50]}
           isLoading={isLoading}
+          tableName="drivers"
+          // pageSize={pageSize}
+          // setPageSize={setPageSize}
+          // currentPage={currentPage}
+          // setCurrentPage={setCurrentPage}
         />
       </div>
 
@@ -500,13 +510,17 @@ export default function DriversWrapper({ pageData }) {
       <CommonModal
         modalTitle={isEdit ? "Edit Driver Details" : "Add New Driver"}
         modalOpen={driverModal}
-        setModalOpen={setDriverModal}
+        setModalOpen={(open) => {
+          setDriverModal(open);
+          if (!open) setFocusField(null);
+        }}
         modalSize="w-11/12 md:w-[680px]"
       >
         <DriverForm
           setDriverList={setDriverList}
           modalData={modalData}
           isEdit={isEdit}
+          focusField={focusField}
           toggleModal={() => setDriverModal(false)}
           onClose={() => setDriverModal(false)}
         />
@@ -519,7 +533,7 @@ export default function DriversWrapper({ pageData }) {
         setModalOpen={setDeletePopup}
         modalSize="w-11/12 sm:w-96"
       >
-        <div className="p-5 text-center space-y-4">
+        <div className="px-5 text-center space-y-4">
           <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100">
             <FiAlertCircle className="w-6 h-6" />
           </div>

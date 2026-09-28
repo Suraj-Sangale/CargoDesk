@@ -118,7 +118,7 @@ export default function AllContactsTab({
         setModalOpen={setDeletePopup}
         modalSize="w-11/12 sm:w-96"
       >
-        <div className="p-5 text-center space-y-4">
+        <div className="px-5 text-center space-y-4">
           <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100">
             <FiAlertCircle className="w-6 h-6" />
           </div>

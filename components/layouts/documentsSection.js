@@ -12,6 +12,7 @@ export default function DocumentsSection({
   setReminderData,
   setReminderModal,
   setIsEdit,
+  setFocusField,
   tableData = [],
   setTableData,
   onClickAddDocument = () => {},
@@ -26,10 +27,15 @@ export default function DocumentsSection({
   const [appliedFilter, setAppliedFilter] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const onClickEdit = (id) => {
-    const selectedItem = tableData.find((item) => item.id == id);
+  const onClickEdit = (id, row, targetField) => {
+    const selectedItem =
+      (typeof row === "object" && row !== null && row.id ? row : null) ||
+      tableData.find((item) => item.id == id);
     if (selectedItem) {
       setReminderData(selectedItem);
+      if (setFocusField) {
+        setFocusField(targetField || null);
+      }
       setIsEdit(true);
       setReminderModal(true);
     }
@@ -158,7 +164,7 @@ export default function DocumentsSection({
         setModalOpen={setDeletePopup}
         modalSize="w-11/12 md:w-96"
       >
-        <div className="p-5 text-center space-y-4">
+        <div className="px-5 text-center space-y-4">
           <p className="text-sm font-medium text-slate-700">
             Are you sure you want to delete {selected.length > 1 ? `these ${selected.length} records` : "this document"}?
           </p>

@@ -5,16 +5,21 @@ export default async function handler(req, res) {
     secure: process.env.NODE_ENV === "production",
   });
 
-  // Log cookies before deleting
-
-  // Delete the auth_token cookie
+  // Delete the auth_token cookie with immediate expiration
   cookies.set("auth_token", "", {
-    httpOnly: true, // Prevent client-side access to the cookie
-    secure: process.env.NODE_ENV === "production", // Only send cookies over HTTPS in production
-    maxAge: 30 * 24 * 60 * 60 * 1000, // Cookie expiration (30 days)
-    path: "/", // Accessible site-wide
-    sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax", // Allow lax during development
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    expires: new Date(0),
+    maxAge: 0,
+    path: "/",
+    sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
   });
+
+  // Also set header explicitly as a fallback
+  res.setHeader(
+    "Set-Cookie",
+    "auth_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly; SameSite=Lax"
+  );
 
   res.status(200).json({ status: true, message: "Logged out successfully" });
 }

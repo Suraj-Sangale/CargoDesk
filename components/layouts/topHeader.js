@@ -54,14 +54,11 @@ export default function TopHeader({
 
   const handleLogout = async () => {
     try {
-      const response = await postApiData("LOGOUT_USER");
-      if (response.status) {
-        setTimeout(() => {
-          router.reload();
-        }, 200);
-      }
+      await postApiData("LOGOUT_USER");
     } catch (error) {
-      console.error("Logout failed:", error);
+      console.error("Logout error:", error);
+    } finally {
+      window.location.href = "/login";
     }
   };
 

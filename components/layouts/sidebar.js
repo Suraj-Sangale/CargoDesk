@@ -28,6 +28,7 @@ export default function Sidebar({
   const router = useRouter();
   const currentPath = router.pathname;
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const mainNavItems = [
     {
@@ -100,6 +101,9 @@ export default function Sidebar({
     if (item.exact) {
       return currentPath === item.path;
     }
+    if (item.path === "/fleets" && (currentPath.startsWith("/fleet/") || currentPath.startsWith("/fleets"))) {
+      return true;
+    }
     return currentPath === item.path || currentPath.startsWith(item.path + "/");
   };
 
@@ -108,7 +112,7 @@ export default function Sidebar({
   };
 
   const renderSidebarContent = (isMobile = false) => {
-    const collapsed = !isMobile && isCollapsed;
+    const collapsed = !isMobile && isCollapsed && !isHovered;
 
     return (
       <div className="flex flex-col h-full w-full bg-[#0B132B] text-slate-300 select-none overflow-x-hidden">
@@ -318,8 +322,17 @@ export default function Sidebar({
       {/* Desktop Sidebar (Fixed Left) */}
       <aside
         ref={sidebarRef}
-        className={`hidden md:flex flex-col fixed inset-y-0 left-0 z-40 shadow-xl border-r border-slate-800/40 overflow-hidden transition-all duration-300 ease-in-out ${
-          isCollapsed ? "w-20" : "w-64"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          setInvoiceOpen(false);
+        }}
+        className={`hidden md:flex flex-col fixed inset-y-0 left-0 z-40 border-r border-slate-800/40 overflow-hidden transition-all duration-300 ease-in-out ${
+          isCollapsed
+            ? isHovered
+              ? "w-64 shadow-2xl ring-1 ring-slate-700/40"
+              : "w-20 shadow-xl"
+            : "w-64 shadow-xl"
         }`}
       >
         {renderSidebarContent(false)}

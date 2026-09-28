@@ -3,6 +3,26 @@ import getConfig from "next/config";
 
 const { publicRuntimeConfig } = getConfig();
 
+let isRedirectingUnauthorized = false;
+
+function handleUnauthorizedClient() {
+  if (typeof window === "undefined" || isRedirectingUnauthorized) return;
+
+  const currentPathname = window.location.pathname;
+  if (currentPathname === "/login" || currentPathname === "/sign-up") {
+    return;
+  }
+
+  isRedirectingUnauthorized = true;
+  const currentPath = window.location.pathname + window.location.search;
+  const redirectQuery =
+    currentPath && currentPath !== "/"
+      ? `?redirect=${encodeURIComponent(currentPath)}`
+      : "";
+
+  window.location.href = `/login${redirectQuery}`;
+}
+
 const callFetchMethod = (
   apiEndpoint,
   payload = {},
@@ -22,29 +42,12 @@ const callFetchMethod = (
       },
     };
 
-    // Tata Neu check if it is auto login
-    // if (
-    //   typeof payload.is_auto_login != "undefined" &&
-    //   (payload.is_auto_login == "true" || payload.is_auto_login == "1")
-    // ) {
-    //   delete payload.is_auto_login;
-    //   apiParams["headers"]["Platform"] = process.env.NEU_PLATFORM_NAME;
-    // }
-
     if (method == "POST" || method == "PUT") {
       apiParams["body"] = JSON.stringify(payload);
     }
 
-    // if (authToken && authToken.trim() != "Bearer") {
-    //   apiParams["headers"]["Authorization"] = authToken;
-    // }
-
-    //  console.log("apiEndpoint", apiEndpoint);
-    //  console.log("apiParams", apiParams);
-
     fetch(apiEndpoint, apiParams)
       .then((response) => {
-        // console.log("response", response);
         resolve(response);
       })
       .catch((error) => {
@@ -62,12 +65,22 @@ export function postApiData(action, payload = {}) {
       apiCall
         .then(async (response) => {
           if (!response.ok) {
+            // Handle 401 Unauthorized globally for authenticated API calls
+            if (response.status === 401 && action !== "VERIFY_USER_LOGIN") {
+              handleUnauthorizedClient();
+              return resolve({
+                status: false,
+                message: "Session expired. Redirecting to login...",
+              });
+            }
+
             if (response.status === 413) {
               return resolve({
                 status: false,
                 message: "Payload too large. Please upload smaller documents or compress images.",
               });
             }
+
             try {
               const errJson = await response.json();
               return resolve(errJson);
@@ -83,10 +96,14 @@ export function postApiData(action, payload = {}) {
         .catch((error) => {
           reject(error);
         });
+    } else {
+      resolve({
+        status: false,
+        message: `API action ${action} not found`,
+      });
     }
   });
 }
-
 
 // POST API call to NodeJs API
 export function postSiteApiData(
@@ -106,15 +123,22 @@ export function postSiteApiData(
       );
 
       apiCall
-        .then((response) => {
-          const responseData = response.json();
-          // console.log("response", responseData);
+        .then(async (response) => {
+          if (response.status === 401 && action !== "VERIFY_USER_LOGIN") {
+            handleUnauthorizedClient();
+          }
+          const responseData = await response.json();
           resolve(responseData);
         })
         .catch((error) => {
-          console.log("error", error);
+          console.error("Site API error:", error);
           reject(error);
         });
+    } else {
+      resolve({
+        status: false,
+        message: `Site API action ${action} not found`,
+      });
     }
   });
 }

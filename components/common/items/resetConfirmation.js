@@ -8,7 +8,7 @@ const ResetConfirmation = ({
   title = "",
 }) => {
   return (
-    <div className="p-4">
+    <div className="px-4">
       {title !== "" && <p className="text-black m-5">{title}</p>}
 
       <div className="flex justify-end">

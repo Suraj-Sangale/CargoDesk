@@ -1,10 +1,16 @@
+"use client";
+
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { FiUser, FiUserPlus, FiPhone, FiFileText, FiPlus, FiCheck } from "react-icons/fi";
+import { FiUser, FiPlus, FiCheck } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 import { getConstant } from "@/utilities/utils";
 import { postApiData } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
+import {
+  FloatingInput,
+  FloatingTextarea,
+} from "@/components/common/floatingInput";
 
 export default function ManualAddForm({
   pageData,
@@ -19,7 +25,6 @@ export default function ManualAddForm({
 
   const [validations, setValidations] = useState({});
   const [loading, setLoading] = useState(false);
-  const [apiError, setApiError] = useState(null);
 
   const {
     register,
@@ -85,6 +90,7 @@ export default function ManualAddForm({
         }
         reset();
         setFormData(defaultFormData);
+        if (setContactModal) setContactModal(false);
       } else {
         showToast({
           message: response.message || "Failed to add contact",
@@ -156,10 +162,10 @@ export default function ManualAddForm({
 
   return (
     <form
-      className={`w-full bg-white space-y-4 ${
+      className={`w-full space-y-4 ${
         !isEdit
-          ? "rounded-2xl p-6 border border-slate-200/80 shadow-2xs"
-          : "p-4 md:p-6"
+          ? "rounded-2xl p-6 bg-white border border-slate-200/80 shadow-2xs"
+          : "px-4 sm:px-6 py-4 bg-slate-50"
       }`}
       onSubmit={handleSubmit(onSubmit)}
     >
@@ -184,98 +190,102 @@ export default function ManualAddForm({
       {/* Inputs Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Name Field */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
-            Name <span className="text-rose-500">*</span>
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              value={formData.name}
-              {...register("name", validations.name)}
-              onChange={(e) => handleChange("name", e.target.value)}
-              className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
-                errors.name
-                  ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                  : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-              } outline-none focus:ring-2 transition-all shadow-2xs placeholder-slate-400`}
-              placeholder="Enter Name"
-            />
-          </div>
-          {errors.name && (
-            <p className="text-rose-500 text-xs font-medium mt-1">
-              {errors.name.message}
-            </p>
-          )}
+        <div data-field-container data-field="name">
+          <FloatingInput
+            id="contact_name"
+            label="Name"
+            required
+            placeholder="Enter Name"
+            value={formData.name}
+            error={errors.name}
+            {...register("name", validations.name)}
+            onChange={(e) => handleChange("name", e.target.value)}
+          />
         </div>
 
         {/* Phone Number Field */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
-            Phone Number <span className="text-rose-500">*</span>
-          </label>
-          <div className="relative">
-            <input
-              type="tel"
-              value={formData.phone}
-              minLength={getConstant("LEN_MIN_PHONE_NO") || 10}
-              maxLength={getConstant("LEN_MAX_PHONE_NO") || 15}
-              {...register("phone", validations.phone)}
-              onChange={(e) => handleChange("phone", e.target.value)}
-              className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
-                errors.phone
-                  ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                  : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-              } outline-none focus:ring-2 transition-all shadow-2xs placeholder-slate-400`}
-              placeholder="Enter Phone No"
-            />
-          </div>
-          {errors.phone && (
-            <p className="text-rose-500 text-xs font-medium mt-1">
-              {errors.phone.message}
-            </p>
-          )}
+        <div data-field-container data-field="phone">
+          <FloatingInput
+            id="contact_phone"
+            label="Phone Number"
+            required
+            type="tel"
+            placeholder="Enter Phone No"
+            value={formData.phone}
+            minLength={getConstant("LEN_MIN_PHONE_NO") || 10}
+            maxLength={getConstant("LEN_MAX_PHONE_NO") || 15}
+            error={errors.phone}
+            {...register("phone", validations.phone)}
+            onChange={(e) => handleChange("phone", e.target.value)}
+          />
         </div>
       </div>
 
       {/* Note Field */}
-      <div>
-        <label className="block text-xs font-bold text-slate-700 mb-1.5">
-          Note <span className="text-slate-400 font-normal">(Optional)</span>
-        </label>
-        <textarea
+      <div data-field-container data-field="note">
+        <FloatingTextarea
+          id="contact_note"
+          label="Note (Optional)"
           rows={3}
+          placeholder="Enter Note"
           value={formData.note}
+          error={errors.note}
           {...register("note", validations.note)}
           onChange={(e) => handleChange("note", e.target.value)}
-          className="w-full p-3 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs placeholder-slate-400 resize-none"
-          placeholder="Enter Note"
         />
-        {errors.note && (
-          <p className="text-rose-500 text-xs font-medium mt-1">
-            {errors.note.message}
-          </p>
-        )}
       </div>
 
-      {/* Full-width Blue Submit Button */}
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full py-2.5 px-4 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
-      >
-        {loading ? (
-          <>
-            <ImSpinner9 className="w-4 h-4 animate-spin" />
-            <span>{isEdit ? "Updating Contact..." : "Adding Contact..."}</span>
-          </>
-        ) : (
-          <>
-            <FiPlus className="w-4 h-4" />
-            <span>{isEdit ? "Update Contact" : "Submit"}</span>
-          </>
-        )}
-      </button>
+      {/* Action Footer */}
+      {isEdit ? (
+        <div className="pt-2 flex items-center justify-end gap-2">
+          {setContactModal && (
+            <button
+              type="button"
+              onClick={() => setContactModal(false)}
+              disabled={loading}
+              className="px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm shadow-blue-600/25 hover:shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <>
+                <ImSpinner9 className="w-4 h-4 animate-spin" />
+                <span>Updating Contact...</span>
+              </>
+            ) : (
+              <>
+                <FiCheck className="w-4 h-4" />
+                <span>Update Contact</span>
+              </>
+            )}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-2.5 px-4 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+        >
+          {loading ? (
+            <>
+              <ImSpinner9 className="w-4 h-4 animate-spin" />
+              <span>Adding Contact...</span>
+            </>
+          ) : (
+            <>
+              <FiPlus className="w-4 h-4" />
+              <span>Add Contact</span>
+            </>
+          )}
+        </button>
+      )}
     </form>
   );
 }

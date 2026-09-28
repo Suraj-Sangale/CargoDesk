@@ -1,4 +1,5 @@
 import executeQuery from "@/helpers/dbConnection";
+import { logFleetActivity } from "./fleetActivityModel";
 
 const response = {
   status: false,
@@ -41,11 +42,29 @@ async function ensureEmiTableColumns() {
 export function addNewEmiModel(data) {
   return new Promise(async (resolve, reject) => {
     try {
-      // await ensureEmiTableColumns();
+      let fleetId = data.fleet_id || data.fleetId || null;
+      let vehicle_number = data.vehicle_number || null;
+
+      // Fallback lookup if only one identifier is provided
+      if (fleetId && !vehicle_number) {
+        const fleetRows = await executeQuery(`SELECT vehicle_number FROM fleets WHERE id = ? LIMIT 1`, [fleetId]);
+        if (fleetRows?.[0]?.vehicle_number) {
+          vehicle_number = fleetRows[0].vehicle_number;
+        }
+      } else if (!fleetId && vehicle_number) {
+        const clean = String(vehicle_number).replace(/[^a-zA-Z0-9]/g, "");
+        const fleetRows = await executeQuery(
+          `SELECT id, vehicle_number FROM fleets WHERE REPLACE(REPLACE(vehicle_number, ' ', ''), '-', '') COLLATE utf8mb4_general_ci = ? LIMIT 1`,
+          [clean]
+        );
+        if (fleetRows?.[0]) {
+          fleetId = fleetRows[0].id;
+          vehicle_number = fleetRows[0].vehicle_number;
+        }
+      }
 
       const insertQuery = `INSERT INTO emi_master SET ?`;
       const {
-        vehicle_number,
         loan_name,
         bank_name,
         loan_account_no,
@@ -62,6 +81,7 @@ export function addNewEmiModel(data) {
       } = data;
 
       const payload = {
+        fleet_id: fleetId ? Number(fleetId) : null,
         vehicle_number: vehicle_number || null,
         loan_name: loan_name || null,
         bank_name: bank_name || null,
@@ -81,9 +101,30 @@ export function addNewEmiModel(data) {
 
       const result = await executeQuery(insertQuery, payload);
       if (result && result.affectedRows > 0) {
+        const emiId = result.insertId;
+        // Centralized Fleet Activity Logging for EMI addition
+        await logFleetActivity({
+          fleetId: fleetId || null,
+          vehicleNo: vehicle_number,
+          operationType: "EMI",
+          entityType: "FINANCE_EMI",
+          entityId: String(emiId),
+          action: "CREATE",
+          title: "EMI record added",
+          description: `Loan ${loan_name || bank_name || "Facility"} added (₹${emi_amount || 0}/mo for vehicle ${vehicle_number || `Fleet #${fleetId}`})`,
+          oldValue: null,
+          newValue: payload,
+          changedFields: Object.keys(payload),
+          performedByName: data.performedByName || "Admin User",
+          source: "emi",
+          metadata: { fleet_id: fleetId, vehicle_number, loan_account_no, bank_name },
+        });
+
         resolve({
           status: true,
           id: result.insertId,
+          fleet_id: fleetId,
+          vehicle_number,
           message: "EMI details added successfully",
         });
       } else {
@@ -112,8 +153,25 @@ export function addNewEmiModel(data) {
 export function getAllEmisModel() {
   return new Promise(async (resolve, reject) => {
     try {
-      // await ensureEmiTableColumns();
-      const selectQuery = `SELECT * FROM emi_master ORDER BY created_at DESC`;
+      const selectQuery = `
+        SELECT 
+          e.*,
+          COALESCE(e.fleet_id, f.id) AS fleet_id,
+          COALESCE(f.vehicle_number, e.vehicle_number) AS vehicle_number,
+          f.vehicle_model,
+          f.vehicle_type,
+          f.status AS vehicle_status
+        FROM emi_master e
+        LEFT JOIN fleets f ON (
+          (e.fleet_id IS NOT NULL AND e.fleet_id = f.id)
+          OR (
+            e.fleet_id IS NULL 
+            AND REPLACE(REPLACE(e.vehicle_number, ' ', ''), '-', '') COLLATE utf8mb4_general_ci = 
+                REPLACE(REPLACE(f.vehicle_number, ' ', ''), '-', '') COLLATE utf8mb4_general_ci
+          )
+        )
+        ORDER BY e.created_at DESC
+      `;
       const rows = await executeQuery(selectQuery);
       resolve({
         status: true,
@@ -134,10 +192,16 @@ export function getAllEmisModel() {
 export function updateEmiModel(id, data) {
   return new Promise(async (resolve, reject) => {
     try {
-      // await ensureEmiTableColumns();
+      // Fetch old record before update for diffing
+      const oldRows = await executeQuery(`SELECT * FROM emi_master WHERE id = ?`, [id]);
+      const oldEmi = Array.isArray(oldRows) && oldRows.length > 0 ? oldRows[0] : null;
+
+      const fleetId = data.fleet_id || data.fleetId || oldEmi?.fleet_id || null;
+      const vehicle_number = data.vehicle_number || oldEmi?.vehicle_number || null;
 
       const updateData = {
-        vehicle_number: data.vehicle_number || null,
+        fleet_id: fleetId ? Number(fleetId) : null,
+        vehicle_number: vehicle_number || null,
         loan_name: data.loan_name || null,
         bank_name: data.bank_name || null,
         loan_account_no: data.loan_account_no || null,
@@ -161,6 +225,29 @@ export function updateEmiModel(id, data) {
       const result = await executeQuery(updateQuery, [updateData, id]);
 
       if (result.affectedRows > 0) {
+        if (oldEmi) {
+          let description = `EMI details updated for ${updateData.bank_name || oldEmi.bank_name || "loan"}`;
+          if (updateData.due_date && oldEmi.due_date !== updateData.due_date) {
+            description = `Next EMI date changed from ${oldEmi.due_date || "N/A"} → ${updateData.due_date}`;
+          }
+
+          await logFleetActivity({
+            fleetId: data.fleetId || null,
+            vehicleNo: updateData.vehicle_number || oldEmi.vehicle_number,
+            operationType: "EMI",
+            entityType: "FINANCE_EMI",
+            entityId: String(id),
+            action: "UPDATE",
+            title: "EMI details updated",
+            description,
+            oldValue: oldEmi,
+            newValue: { ...oldEmi, ...updateData },
+            performedByName: data.performedByName || "Admin User",
+            source: "emi",
+            metadata: { vehicle_number: updateData.vehicle_number || oldEmi.vehicle_number },
+          });
+        }
+
         resolve({ status: true, message: "EMI entry updated successfully" });
       } else {
         resolve({ status: false, message: "EMI not found or unchanged" });
@@ -174,35 +261,57 @@ export function updateEmiModel(id, data) {
 
 // ✅ Delete EMI entry
 export function deleteEmiModel(ids) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     if (!Array.isArray(ids) || ids.length === 0) {
       return reject({ status: false, message: "No IDs provided for deletion" });
     }
 
-    const deleteQuery = `DELETE FROM emi_master WHERE id IN (?)`;
+    try {
+      const placeholders = ids.map(() => "?").join(",");
+      const oldRecords = await executeQuery(`SELECT * FROM emi_master WHERE id IN (${placeholders})`, ids);
 
-    executeQuery(deleteQuery, [ids])
-      .then((result) => {
-        if (result.affectedRows > 0) {
-          resolve({
-            status: true,
-            message: `${result.affectedRows} EMI entr${
-              result.affectedRows > 1 ? "ies" : "y"
-            } deleted successfully`,
-          });
-        } else {
-          resolve({
-            status: false,
-            message: "No EMI entries found for given IDs",
-          });
+      const deleteQuery = `DELETE FROM emi_master WHERE id IN (${placeholders})`;
+      const result = await executeQuery(deleteQuery, ids);
+
+      if (result.affectedRows > 0) {
+        if (Array.isArray(oldRecords)) {
+          for (const emi of oldRecords) {
+            await logFleetActivity({
+              fleetId: emi.fleetId || null,
+              vehicleNo: emi.vehicle_number,
+              operationType: "EMI",
+              entityType: "FINANCE_EMI",
+              entityId: String(emi.id),
+              action: "DELETE",
+              title: "EMI record removed",
+              description: `EMI record for ${emi.bank_name || emi.loan_name || "loan"} deleted for vehicle ${emi.vehicle_number || "fleet"}`,
+              oldValue: emi,
+              newValue: null,
+              changedFields: ["deleted"],
+              performedByName: "Admin User",
+              source: "emi",
+            });
+          }
         }
-      })
-      .catch((error) => {
-        console.error("Error deleting EMIs:", error);
-        reject({
-          status: false,
-          message: "Database error while deleting EMIs",
+
+        resolve({
+          status: true,
+          message: `${result.affectedRows} EMI entr${
+            result.affectedRows > 1 ? "ies" : "y"
+          } deleted successfully`,
         });
+      } else {
+        resolve({
+          status: false,
+          message: "No EMI entries found for given IDs",
+        });
+      }
+    } catch (error) {
+      console.error("Error deleting EMIs:", error);
+      reject({
+        status: false,
+        message: "Database error while deleting EMIs",
       });
+    }
   });
 }

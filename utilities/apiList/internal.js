@@ -43,6 +43,7 @@ export const internalList = {
 
   // fleets
   GET_ALL_FLEETS: "/api/fleet/get-all",
+  GET_FLEET_BY_ID: "/api/fleet/get-by-id",
   ADD_NEW_FLEET: "/api/fleet/add-new",
   UPDATE_FLEET: "/api/fleet/update",
   DELETE_FLEETS: "/api/fleet/delete",
@@ -56,5 +57,9 @@ export const internalList = {
   // fleet-driver assignment
   ASSIGN_FLEET_DRIVER: "/api/fleet-driver/assign",
   REMOVE_FLEET_DRIVER: "/api/fleet-driver/remove",
+
+  // fleet activity history
+  GET_FLEET_HISTORY: "/api/fleet/history",
+  LOG_FLEET_ACTIVITY: "/api/fleet/history",
 };
 

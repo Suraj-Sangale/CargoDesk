@@ -93,13 +93,13 @@ export default function CommonModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Mobile Drag Indicator Handle */}
-        <div className="sm:hidden pt-2.5 pb-0.5 flex justify-center shrink-0">
+        <div className="sm:hidden pt-2.5 pb-0.5 flex justify-center shrink-0 bg-slate-50">
           <div className="w-10 h-1 rounded-full bg-slate-300" />
         </div>
 
         {/* Modal Header */}
         {modalTitle && (
-          <div className="flex justify-between items-center px-5 sm:px-6 pt-3 sm:pt-4 pb-2 shrink-0 border-b border-slate-100">
+          <div className="flex justify-between items-center px-5 sm:px-6 pt-3 sm:pt-4 pb-2 shrink-0 bg-slate-50">
             <div className="text-base sm:text-lg font-bold text-slate-900 tracking-tight truncate pr-2">
               {modalTitle}
             </div>

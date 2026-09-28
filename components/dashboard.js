@@ -14,12 +14,15 @@ const Dashboard = ({ pageData }) => {
   const [addLoading, setAddLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState(true);
   const [reminderData, setReminderData] = useState("");
+  const [focusField, setFocusField] = useState(null);
   const [documentTableData, setDocumentTableData] = useState([]);
   const [selectedTab, setSelectedTab] = useState("document");
 
   const addReminderData = async (data) => {
     const payload = {
-      vehicleNo: data.vehicleNo,
+      fleet_id: data.fleet_id || data.fleetId || null,
+      fleetId: data.fleet_id || data.fleetId || null,
+      vehicleNo: data.vehicleNo || null,
       documentType: data.documentType,
       expiryDate: data.expiryDate,
       note: data.note,
@@ -27,8 +30,17 @@ const Dashboard = ({ pageData }) => {
     setAddLoading(true);
     try {
       const response = await postApiData("ADD_NEW_VEHICALE_DOCUMENTS", payload);
-      if (response.status) {
-        const LatestData = [...documentTableData, { id: response.id, ...data }];
+      if (response.status || response.success) {
+        const docId = response.id || response.data?.id;
+        const LatestData = [
+          ...documentTableData,
+          {
+            ...data,
+            id: docId,
+            fleet_id: response.fleet_id || data.fleet_id || data.fleetId,
+            vehicleNo: response.vehicleNo || data.vehicleNo,
+          },
+        ];
         setDocumentTableData(LatestData);
         setReminderModal(false);
       }
@@ -41,7 +53,9 @@ const Dashboard = ({ pageData }) => {
   const updateReminderData = async (updatedData) => {
     const payload = {
       id: updatedData.id,
-      vehicleNo: updatedData.vehicleNo,
+      fleet_id: updatedData.fleet_id || updatedData.fleetId || null,
+      fleetId: updatedData.fleet_id || updatedData.fleetId || null,
+      vehicleNo: updatedData.vehicleNo || null,
       documentType: updatedData.documentType,
       expiryDate: updatedData.expiryDate,
       note: updatedData.note,
@@ -49,7 +63,7 @@ const Dashboard = ({ pageData }) => {
     setUpdateLoading(true);
     try {
       const response = await postApiData("UPDATE_VEHICALE_DOCUMENTS", payload);
-      if (response.status) {
+      if (response.status || response.success) {
         setDocumentTableData((prevData) =>
           prevData.map((item) =>
             item.id === updatedData.id ? { ...item, ...updatedData } : item
@@ -67,6 +81,7 @@ const Dashboard = ({ pageData }) => {
   const onClickAddReminder = () => {
     setIsEdit(false);
     setReminderData("");
+    setFocusField(null);
     setReminderModal(true);
   };
 
@@ -112,6 +127,7 @@ const Dashboard = ({ pageData }) => {
             setReminderData={setReminderData}
             setReminderModal={setReminderModal}
             setIsEdit={setIsEdit}
+            setFocusField={setFocusField}
             tableData={documentTableData}
             setTableData={setDocumentTableData}
             onClickAddDocument={onClickAddReminder}
@@ -135,6 +151,7 @@ const Dashboard = ({ pageData }) => {
           reminderData={reminderData}
           isEdit={isEdit}
           setIsEdit={setIsEdit}
+          focusField={focusField}
           isLoading={isEdit ? updateLoading : addLoading}
           updateReminderData={updateReminderData}
         />

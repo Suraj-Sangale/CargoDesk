@@ -242,3 +242,31 @@ export const scrollSectionIntoView = (id) => {
     }, 100);
   }
 };
+
+export const logQuery = (query, params = []) => {
+  let index = 0;
+
+  const actualQuery = query.replace(/\?/g, () => {
+    const value = params[index++];
+
+    if (value === null || value === undefined) {
+      return "NULL";
+    }
+
+    if (typeof value === "string") {
+      return `'${value.replace(/'/g, "''")}'`;
+    }
+
+    if (typeof value === "boolean") {
+      return value ? "TRUE" : "FALSE";
+    }
+
+    return value;
+  });
+
+  console.log("\n========== SQL QUERY ==========");
+  console.log(actualQuery);
+  console.log("================================\n");
+
+  return actualQuery;
+};

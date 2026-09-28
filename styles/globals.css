@@ -288,3 +288,54 @@ input[type="number"] {
 		transition: none !important;
 	}
 }
+
+/* Floating label notched outline & transparent support */
+.notched-outline {
+	position: absolute;
+	inset: 0;
+	border-width: 1px;
+	border-style: solid;
+	border-radius: 0.75rem;
+	pointer-events: none;
+	margin: 0;
+	padding: 0 0.625rem;
+	box-sizing: border-box;
+	transition: border-color 200ms cubic-bezier(0, 0, 0.2, 1), box-shadow 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.notched-outline legend {
+	float: unset;
+	width: auto;
+	overflow: hidden;
+	display: block;
+	padding: 0;
+	height: 11px;
+	font-size: 0.75rem;
+	line-height: 11px;
+	font-weight: 600;
+	visibility: hidden;
+	max-width: 0.01px;
+	white-space: nowrap;
+	box-sizing: border-box;
+	transition: max-width 150ms cubic-bezier(0, 0, 0.2, 1), padding 150ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.floating-group:focus-within .notched-outline legend,
+.floating-group.is-floated .notched-outline legend,
+.peer:focus ~ .notched-outline legend,
+.peer:not(:placeholder-shown) ~ .notched-outline legend,
+.peer:-webkit-autofill ~ .notched-outline legend {
+	max-width: 1000px;
+	padding: 0 0.375rem;
+}
+
+input:-webkit-autofill ~ label,
+input:-webkit-autofill + label {
+	top: -0.625rem !important;
+	left: 0.875rem !important;
+	font-size: 0.75rem !important;
+	font-weight: 600 !important;
+	background-color: transparent !important;
+}
+
+

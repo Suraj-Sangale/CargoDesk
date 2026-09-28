@@ -19,10 +19,12 @@ export default function EmiSection() {
   const [deleteLoad, setDeleteLoad] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [modalData, setModalData] = useState({});
+  const [focusField, setFocusField] = useState(null);
 
   const onClickAddDocument = () => {
     setIsEdit(false);
     setModalData({});
+    setFocusField(null);
     setEmiModal(true);
   };
 
@@ -46,11 +48,15 @@ export default function EmiSection() {
     fetchEmiList();
   }, []);
 
-  const onClickEdit = (id) => {
-    const selectedItem = emiList.find((item) => item.id == id);
+  const onClickEdit = (id, row, field) => {
+    const targetId = id ?? row?.id;
+    const selectedItem =
+      (typeof row === "object" && row !== null && row.id ? row : null) ||
+      emiList.find((item) => item.id == targetId);
     if (selectedItem) {
       setModalData(selectedItem);
       setIsEdit(true);
+      setFocusField(field || null);
       setEmiModal(true);
     }
   };
@@ -232,6 +238,8 @@ export default function EmiSection() {
             setEmiList={setEmiList}
             modalData={modalData}
             isEdit={isEdit}
+            focusField={focusField}
+            toggleModal={() => setEmiModal(false)}
             onClose={() => setEmiModal(false)}
           />
         </CommonModal>
@@ -243,7 +251,7 @@ export default function EmiSection() {
         setModalOpen={setDeletePopup}
         modalSize="w-11/12 md:w-96"
       >
-        <div className="p-5 text-center space-y-4">
+        <div className="px-5 text-center space-y-4">
           <p className="text-sm font-medium text-slate-700">
             Are you sure you want to delete {selected.length > 1 ? `these ${selected.length} records` : "this EMI record"}?
           </p>

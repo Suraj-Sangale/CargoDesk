@@ -1,4 +1,5 @@
 import executeQuery, { executeTransaction } from "@/helpers/dbConnection";
+import { logFleetActivity } from "./fleetActivityModel";
 
 let isTableInitialized = false;
 
@@ -118,6 +119,7 @@ const defaultSeedDrivers = [
 
 export async function ensureDriverTable() {
   if (isTableInitialized) return;
+  isTableInitialized = true;
   try {
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS drivers (
@@ -144,26 +146,6 @@ export async function ensureDriverTable() {
     `;
     await executeQuery(createTableQuery);
 
-    // Ensure columns exist if table was previously created with older schema
-    try {
-      const existingCols = await executeQuery(`SHOW COLUMNS FROM drivers`);
-      const colNames = Array.isArray(existingCols)
-        ? existingCols.map((c) => c.Field || c.field)
-        : [];
-
-      if (!colNames.includes("profile_photo")) {
-        await executeQuery(`ALTER TABLE drivers ADD COLUMN profile_photo LONGTEXT NULL`);
-      }
-      if (!colNames.includes("supporting_documents")) {
-        await executeQuery(`ALTER TABLE drivers ADD COLUMN supporting_documents LONGTEXT NULL`);
-      }
-      if (!colNames.includes("fleet_id")) {
-        await executeQuery(`ALTER TABLE drivers ADD COLUMN fleet_id INT NULL`);
-      }
-    } catch (colErr) {
-      console.warn("Could not check/alter driver table columns:", colErr?.message);
-    }
-
     // Check count, seed default records if table is brand new/empty
     const countRes = await executeQuery(`SELECT COUNT(*) as total FROM drivers`);
     const count = countRes?.[0]?.total || 0;
@@ -176,8 +158,8 @@ export async function ensureDriverTable() {
         }
       }
     }
-    isTableInitialized = true;
   } catch (error) {
+    isTableInitialized = false;
     console.error("Error inspecting/initializing drivers table:", error);
   }
 }
@@ -279,6 +261,26 @@ export function addNewDriverModel(data) {
       });
 
       if (result && result.insertId) {
+        const newDriverId = result.insertId;
+        // Log fleet activity if driver is assigned to a fleet on creation
+        if (parsedFleetId) {
+          await logFleetActivity({
+            fleetId: parsedFleetId,
+            operationType: "DRIVER",
+            entityType: "DRIVER_ALLOCATION",
+            entityId: String(newDriverId),
+            action: "ASSIGN",
+            title: "Driver assigned",
+            description: `Driver: ${driver_name || "New Driver"}`,
+            oldValue: null,
+            newValue: { driver_id: newDriverId, driver_name },
+            changedFields: ["driver_id", "driver_name"],
+            performedByName: data.performedByName || "Admin User",
+            source: "driver",
+            metadata: { driver_name, contact_number },
+          });
+        }
+
         resolve({
           status: true,
           id: result.insertId,
@@ -347,6 +349,10 @@ export function updateDriverModel(id, data) {
         (key) => updateData[key] === undefined && delete updateData[key]
       );
 
+      // Fetch previous driver details for diffing
+      const oldDriverRows = await executeQuery(`SELECT id, driver_name, fleet_id FROM drivers WHERE id = ?`, [id]);
+      const oldDriver = Array.isArray(oldDriverRows) && oldDriverRows.length > 0 ? oldDriverRows[0] : null;
+
       // Perform transaction to maintain 1-to-1 relationship
       await executeTransaction(async (queryFn) => {
         if (parsedFleetId !== undefined) {
@@ -361,6 +367,52 @@ export function updateDriverModel(id, data) {
 
         await queryFn(`UPDATE drivers SET ? WHERE id = ?`, [updateData, id]);
       });
+
+      // Centralized Activity Logging for driver fleet change
+      if (oldDriver && parsedFleetId !== undefined) {
+        const prevFleetId = oldDriver.fleet_id ? Number(oldDriver.fleet_id) : null;
+        const newFleetId = parsedFleetId ? Number(parsedFleetId) : null;
+
+        if (prevFleetId !== newFleetId) {
+          const currentDriverName = updateData.driver_name || oldDriver.driver_name || "Driver";
+
+          // 1. If previously assigned to another fleet, log unassignment
+          if (prevFleetId) {
+            await logFleetActivity({
+              fleetId: prevFleetId,
+              operationType: "DRIVER",
+              entityType: "DRIVER_ALLOCATION",
+              entityId: String(id),
+              action: "UNASSIGN",
+              title: "Driver removed",
+              description: `${currentDriverName} unassigned from fleet vehicle`,
+              oldValue: { driver_id: id, driver_name: currentDriverName },
+              newValue: null,
+              changedFields: ["driver_id"],
+              performedByName: data.performedByName || "Admin User",
+              source: "driver",
+            });
+          }
+
+          // 2. If assigned to a new fleet, log assignment
+          if (newFleetId) {
+            await logFleetActivity({
+              fleetId: newFleetId,
+              operationType: "DRIVER",
+              entityType: "DRIVER_ALLOCATION",
+              entityId: String(id),
+              action: "ASSIGN",
+              title: "Driver assigned",
+              description: `Driver: ${currentDriverName}`,
+              oldValue: null,
+              newValue: { driver_id: id, driver_name: currentDriverName },
+              changedFields: ["driver_id", "driver_name"],
+              performedByName: data.performedByName || "Admin User",
+              source: "driver",
+            });
+          }
+        }
+      }
 
       resolve({ status: true, message: "Driver updated successfully" });
     } catch (error) {

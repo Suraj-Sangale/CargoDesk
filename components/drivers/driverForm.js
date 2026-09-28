@@ -1,11 +1,19 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
+import moment from "moment";
 import CustomSearch from "../common/customSearch";
+import {
+  FloatingInput,
+  FloatingSelect,
+  FloatingDatePicker,
+  FloatingTextarea,
+} from "../common/floatingInput";
 import { useFleetDriver } from "@/context/fleetDriverContext";
 import { postApiData } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
+import useAutoFocusField from "@/hooks/useAutoFocusField";
 import {
   DRIVER_LICENSE_TYPES,
   DRIVER_STATUS_OPTIONS,
@@ -27,10 +35,26 @@ import {
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 
+const DEFAULT_DRIVER_VALUES = {
+  driver_name: "",
+  contact_number: "",
+  alt_contact_number: "",
+  license_number: "",
+  license_type: DRIVER_LICENSE_TYPES[0] || "Heavy Transport Vehicle (HTV)",
+  license_expiry: "",
+  experience_years: "5 Years",
+  blood_group: "B+",
+  emergency_contact: "",
+  status: "Active",
+  address: "",
+  notes: "",
+};
+
 export default function DriverForm({
   setDriverList,
   modalData,
   isEdit,
+  focusField,
   onClose,
   toggleModal,
 }) {
@@ -50,23 +74,11 @@ export default function DriverForm({
     register,
     handleSubmit,
     setValue,
+    control,
     formState: { errors },
     reset,
   } = useForm({
-    defaultValues: {
-      driver_name: "",
-      contact_number: "",
-      alt_contact_number: "",
-      license_number: "",
-      license_type: DRIVER_LICENSE_TYPES[0] || "Heavy Transport Vehicle (HTV)",
-      license_expiry: "",
-      experience_years: "5 Years",
-      blood_group: "B+",
-      emergency_contact: "",
-      status: "Active",
-      address: "",
-      notes: "",
-    },
+    defaultValues: DEFAULT_DRIVER_VALUES,
   });
 
   // Populate data when editing
@@ -78,7 +90,9 @@ export default function DriverForm({
         alt_contact_number: modalData.alt_contact_number || "",
         license_number: modalData.license_number || "",
         license_type: modalData.license_type || DRIVER_LICENSE_TYPES[0],
-        license_expiry: modalData.license_expiry || "",
+        license_expiry: modalData.license_expiry
+          ? moment(modalData.license_expiry).format("YYYY-MM-DD")
+          : "",
         experience_years: modalData.experience_years || "5 Years",
         blood_group: modalData.blood_group || "B+",
         emergency_contact: modalData.emergency_contact || "",
@@ -124,25 +138,15 @@ export default function DriverForm({
         setSupportingDocs([]);
       }
     } else {
-      reset({
-        driver_name: "",
-        contact_number: "",
-        alt_contact_number: "",
-        license_number: "",
-        license_type: DRIVER_LICENSE_TYPES[0] || "Heavy Transport Vehicle (HTV)",
-        license_expiry: "",
-        experience_years: "5 Years",
-        blood_group: "B+",
-        emergency_contact: "",
-        status: "Active",
-        address: "",
-        notes: "",
-      });
+      reset(DEFAULT_DRIVER_VALUES);
       setSelectedFleetId("");
       setProfilePhoto("");
       setSupportingDocs([]);
     }
   }, [isEdit, modalData, reset, fleets]);
+
+  // Reusable platform-wide auto-scroll and highlight target field
+  useAutoFocusField(focusField, Boolean(focusField), [modalData, isEdit]);
 
   // Construct options for CustomSearch dropdown
   const fleetOptions = useMemo(() => {
@@ -184,7 +188,7 @@ export default function DriverForm({
   // Check if selected fleet is currently assigned to another driver
   const isFleetReassigned = useMemo(() => {
     if (!selectedFleet || !selectedFleet.driver_id) return false;
-    if (!modalData?.id) return true; // Adding new driver and fleet is already assigned
+    if (!modalData?.id) return true;
     return Number(selectedFleet.driver_id) !== Number(modalData.id);
   }, [selectedFleet, modalData]);
 
@@ -248,45 +252,41 @@ export default function DriverForm({
     reader.readAsDataURL(file);
   };
 
-  // Handle Supporting Documents upload
+  // Handle Supporting Documents batch upload
   const handleSupportingDocsUpload = (files) => {
     if (!files || files.length === 0) return;
 
     const newDocs = [];
-    let count = 0;
+    const maxFileSize = 15 * 1024 * 1024;
 
     Array.from(files).forEach((file) => {
-      if (file.size > 15 * 1024 * 1024) {
-        showToast(`${file.name} exceeds 15MB limit`, "error");
+      if (file.size > maxFileSize) {
+        showToast(`File ${file.name} is larger than 15MB limit`, "error");
         return;
       }
 
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const docObj = {
-          id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      reader.onload = (e) => {
+        const docItem = {
+          id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
           name: file.name,
           size: file.size,
           type: file.type,
-          dataUrl: event.target.result,
+          dataUrl: e.target.result,
           uploadedAt: new Date().toISOString(),
         };
 
-        newDocs.push(docObj);
-        count++;
-
-        if (count === files.length) {
-          setSupportingDocs((prev) => [...prev, ...newDocs]);
-          showToast(`${newDocs.length} document(s) added successfully`, "success");
-        }
+        setSupportingDocs((prev) => [...prev, docItem]);
       };
       reader.readAsDataURL(file);
     });
+
+    showToast(`${files.length} document(s) uploaded successfully`, "success");
   };
 
-  // Remove a document
-  const handleRemoveDoc = (id) => {
-    setSupportingDocs((prev) => prev.filter((doc) => doc.id !== id));
+  const handleRemoveDoc = (docId) => {
+    setSupportingDocs((prev) => prev.filter((d) => d.id !== docId));
+    showToast("Document removed", "info");
   };
 
   const onSubmit = async (data) => {
@@ -297,25 +297,35 @@ export default function DriverForm({
         ? Number(selectedFleetId)
         : null;
 
+    const formattedLicenseExpiry = data.license_expiry
+      ? moment(data.license_expiry).format("YYYY-MM-DD")
+      : null;
+
     const payload = {
       driver_name: data.driver_name ? data.driver_name.trim() : "",
       contact_number: data.contact_number ? data.contact_number.trim() : "",
-      alt_contact_number: data.alt_contact_number ? data.alt_contact_number.trim() : "",
+      alt_contact_number: data.alt_contact_number
+        ? data.alt_contact_number.trim()
+        : "",
       license_number: data.license_number
         ? data.license_number.toUpperCase().trim()
         : "",
       license_type: data.license_type || "",
-      license_expiry: data.license_expiry || "",
-      assigned_vehicle: selectedFleet?.vehicle_number || "",
-      fleet_id: parsedFleetId,
-      experience_years: data.experience_years ? data.experience_years.trim() : "",
-      blood_group: data.blood_group || "",
-      emergency_contact: data.emergency_contact ? data.emergency_contact.trim() : "",
+      license_expiry: formattedLicenseExpiry,
+      experience_years: data.experience_years
+        ? data.experience_years.trim()
+        : "",
+      blood_group: data.blood_group || "B+",
+      emergency_contact: data.emergency_contact
+        ? data.emergency_contact.trim()
+        : "",
       status: data.status || "Active",
-      profile_photo: profilePhoto || null,
-      supporting_documents: supportingDocs.length > 0 ? JSON.stringify(supportingDocs) : null,
       address: data.address ? data.address.trim() : "",
       notes: data.notes ? data.notes.trim() : "",
+      profile_photo: profilePhoto || null,
+      supporting_documents:
+        supportingDocs.length > 0 ? JSON.stringify(supportingDocs) : null,
+      fleet_id: parsedFleetId,
     };
 
     let response;
@@ -328,7 +338,10 @@ export default function DriverForm({
 
     if (response && response.status) {
       showToast(
-        response.message || (isEdit ? "Driver updated successfully" : "Driver added successfully"),
+        response.message ||
+          (isEdit
+            ? "Driver updated successfully"
+            : "Driver added successfully"),
         "success"
       );
 
@@ -379,10 +392,15 @@ export default function DriverForm({
     <>
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="p-5 md:p-6 space-y-5 max-h-[82vh] overflow-y-auto"
+        className="px-4 sm:px-6 py-4 space-y-4 bg-slate-50"
       >
         {/* 1. Profile Photo Header Banner */}
-        <div className="bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-slate-50 border border-blue-100 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-5 shadow-2xs">
+        <div
+          data-field-container
+          data-field="profile_photo"
+          id="profile_photo"
+          className="bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-slate-50 border border-blue-100 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-5 shadow-2xs transition-all"
+        >
           {/* Avatar / Photo preview */}
           <div className="relative group shrink-0">
             <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-2xl overflow-hidden bg-white border-2 border-white shadow-md flex items-center justify-center text-slate-400 relative">
@@ -402,6 +420,7 @@ export default function DriverForm({
             {/* Quick Camera Overlay Button */}
             <button
               type="button"
+              tabIndex={-1}
               onClick={() => profileInputRef.current?.click()}
               className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-xl bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-md border-2 border-white transition-transform group-hover:scale-110 cursor-pointer"
               title="Upload profile photo"
@@ -433,6 +452,7 @@ export default function DriverForm({
               />
               <button
                 type="button"
+                tabIndex={-1}
                 onClick={() => profileInputRef.current?.click()}
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer"
               >
@@ -441,6 +461,7 @@ export default function DriverForm({
               {profilePhoto && (
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={() => setProfilePhoto("")}
                   className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors cursor-pointer"
                 >
@@ -469,82 +490,55 @@ export default function DriverForm({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Driver Full Name */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Driver Full Name <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
+            <div data-field-container data-field="driver_name">
+              <FloatingInput
+                id="driver_name"
+                label="Driver Full Name"
+                required
                 placeholder="e.g. Ramesh Sharma"
+                error={errors.driver_name}
                 {...register("driver_name", {
                   required: "Driver name is required",
                 })}
-                className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
-                  errors.driver_name
-                    ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                    : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-                } outline-none focus:ring-2 transition-all shadow-2xs font-semibold placeholder-slate-400`}
               />
-              {errors.driver_name && (
-                <p className="text-rose-500 text-xs font-medium mt-1">
-                  {errors.driver_name.message}
-                </p>
-              )}
             </div>
 
             {/* Primary Mobile Contact */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Primary Mobile Number <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
+            <div data-field-container data-field="contact_number">
+              <FloatingInput
+                id="contact_number"
+                label="Primary Mobile Number"
+                required
+                type="tel"
                 placeholder="e.g. +91 98201 44552"
+                error={errors.contact_number}
                 {...register("contact_number", {
                   required: "Primary mobile number is required",
                 })}
-                className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
-                  errors.contact_number
-                    ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                    : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-                } outline-none focus:ring-2 transition-all shadow-2xs font-semibold placeholder-slate-400`}
               />
-              {errors.contact_number && (
-                <p className="text-rose-500 text-xs font-medium mt-1">
-                  {errors.contact_number.message}
-                </p>
-              )}
             </div>
 
             {/* Alternate Mobile Contact */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Alternate Contact{" "}
-                <span className="text-slate-400 font-normal">(Optional)</span>
-              </label>
-              <input
-                type="text"
+            <div data-field-container data-field="alt_contact_number">
+              <FloatingInput
+                id="alt_contact_number"
+                label="Alternate Contact (Optional)"
+                type="tel"
                 placeholder="e.g. +91 98201 44550"
+                error={errors.alt_contact_number}
                 {...register("alt_contact_number")}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium placeholder-slate-400"
               />
             </div>
 
             {/* Blood Group */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Blood Group
-              </label>
-              <select
+            <div data-field-container data-field="blood_group">
+              <FloatingSelect
+                id="driver_blood_group"
+                label="Blood Group"
+                options={DRIVER_BLOOD_GROUPS}
+                error={errors.blood_group}
                 {...register("blood_group")}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium cursor-pointer"
-              >
-                {DRIVER_BLOOD_GROUPS.map((bg) => (
-                  <option key={bg} value={bg}>
-                    {bg}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
           </div>
         </div>
@@ -567,79 +561,82 @@ export default function DriverForm({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* License Number */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Driving License No. <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
+            <div data-field-container data-field="license_number">
+              <FloatingInput
+                id="driver_license_number"
+                label="Driving License No."
+                required
                 placeholder="e.g. MH04 20150012345"
+                className="uppercase font-mono font-semibold"
+                error={errors.license_number}
                 {...register("license_number", {
                   required: "Driving License number is required",
                   onChange: (e) =>
                     setValue("license_number", e.target.value.toUpperCase()),
                 })}
-                className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
-                  errors.license_number
-                    ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                    : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-                } outline-none focus:ring-2 transition-all shadow-2xs uppercase placeholder:normal-case font-mono font-semibold`}
               />
-              {errors.license_number && (
-                <p className="text-rose-500 text-xs font-medium mt-1">
-                  {errors.license_number.message}
-                </p>
-              )}
             </div>
 
             {/* License Type */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                License Category <span className="text-rose-500">*</span>
-              </label>
-              <select
+            <div data-field-container data-field="license_type">
+              <FloatingSelect
+                id="driver_license_type"
+                label="License Category"
+                required
+                options={DRIVER_LICENSE_TYPES}
+                error={errors.license_type}
                 {...register("license_type", {
                   required: "License Category is required",
                 })}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium cursor-pointer"
-              >
-                {DRIVER_LICENSE_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             {/* License Expiry Date */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                License Expiry Date
-              </label>
-              <input
-                type="date"
-                {...register("license_expiry")}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium"
+            <div data-field-container data-field="license_expiry">
+              <Controller
+                name="license_expiry"
+                control={control}
+                render={({ field }) => (
+                  <FloatingDatePicker
+                    id="driver_license_expiry"
+                    name="license_expiry"
+                    label="License Expiry Date"
+                    format="DD/MM/YYYY"
+                    error={errors.license_expiry}
+                    value={field.value}
+                    onChange={(val) => {
+                      const formatted =
+                        val && moment(val).isValid()
+                          ? moment(val).format("YYYY-MM-DD")
+                          : val;
+                      field.onChange(formatted || "");
+                    }}
+                    onBlur={field.onBlur}
+                  />
+                )}
               />
             </div>
 
             {/* Driving Experience */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Total Driving Experience
-              </label>
-              <input
-                type="text"
+            <div data-field-container data-field="experience_years">
+              <FloatingInput
+                id="driver_experience_years"
+                label="Total Driving Experience"
                 placeholder="e.g. 8 Years / 12 Years"
+                error={errors.experience_years}
                 {...register("experience_years")}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium placeholder-slate-400"
               />
             </div>
           </div>
         </div>
 
         {/* 4. Supporting Documents Upload Section */}
-        <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4 shadow-2xs">
+        <div
+          data-field-container
+          data-field="supporting_documents"
+          id="supporting_documents"
+          className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4 shadow-2xs transition-all"
+        >
           <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-sm shadow-2xs">
@@ -707,8 +704,11 @@ export default function DriverForm({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {supportingDocs.map((doc) => {
-                  const isImage = doc.type?.startsWith("image/") || doc.dataUrl?.startsWith("data:image/");
-                  const isPdf = doc.type === "application/pdf" || doc.name?.endsWith(".pdf");
+                  const isImage =
+                    doc.type?.startsWith("image/") ||
+                    doc.dataUrl?.startsWith("data:image/");
+                  const isPdf =
+                    doc.type === "application/pdf" || doc.name?.endsWith(".pdf");
 
                   return (
                     <div
@@ -725,14 +725,21 @@ export default function DriverForm({
                             />
                           </div>
                         ) : (
-                          <div className={`w-8 h-8 rounded-lg shrink-0 flex items-center justify-center font-bold text-xs ${
-                            isPdf ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"
-                          }`}>
+                          <div
+                            className={`w-8 h-8 rounded-lg shrink-0 flex items-center justify-center font-bold text-xs ${
+                              isPdf
+                                ? "bg-rose-50 text-rose-600"
+                                : "bg-blue-50 text-blue-600"
+                            }`}
+                          >
                             <FiFile className="w-4 h-4" />
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-slate-800 truncate" title={doc.name}>
+                          <p
+                            className="text-xs font-semibold text-slate-800 truncate"
+                            title={doc.name}
+                          >
                             {doc.name}
                           </p>
                           <p className="text-[10px] text-slate-400 font-medium">
@@ -746,6 +753,7 @@ export default function DriverForm({
                         {doc.dataUrl && (
                           <button
                             type="button"
+                            tabIndex={-1}
                             onClick={() => setPreviewDoc(doc)}
                             className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                             title="Preview Document"
@@ -755,6 +763,7 @@ export default function DriverForm({
                         )}
                         <button
                           type="button"
+                          tabIndex={-1}
                           onClick={() => handleRemoveDoc(doc.id)}
                           className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                           title="Remove Document"
@@ -788,7 +797,12 @@ export default function DriverForm({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Assigned Vehicle Custom Search */}
-            <div className="md:col-span-2 space-y-2">
+            <div
+              data-field-container
+              data-field="assigned_vehicle"
+              id="assigned_vehicle"
+              className="md:col-span-2 space-y-2 transition-all p-1"
+            >
               <label className="block text-xs font-bold text-slate-700">
                 Assigned Fleet Vehicle{" "}
                 <span className="text-slate-400 font-normal">
@@ -856,6 +870,7 @@ export default function DriverForm({
                   </div>
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => setSelectedFleetId("")}
                     className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100/80 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
                   >
@@ -866,70 +881,59 @@ export default function DriverForm({
             </div>
 
             {/* Operational Status */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Operational Status
-              </label>
-              <select
+            <div data-field-container data-field="status">
+              <FloatingSelect
+                id="driver_status"
+                label="Operational Status"
+                options={DRIVER_STATUS_OPTIONS}
+                error={errors.status}
                 {...register("status")}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium cursor-pointer"
-              >
-                {DRIVER_STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             {/* Emergency Contact */}
-            <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Emergency Contact & Relation
-              </label>
-              <input
-                type="text"
+            <div data-field-container data-field="emergency_contact" className="md:col-span-1">
+              <FloatingInput
+                id="driver_emergency_contact"
+                label="Emergency Contact & Relation"
                 placeholder="e.g. Sunita Sharma (Wife) - +91 98201 11223"
+                error={errors.emergency_contact}
                 {...register("emergency_contact")}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium placeholder-slate-400"
               />
             </div>
 
             {/* Residential Address */}
-            <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Residential Address
-              </label>
-              <input
-                type="text"
+            <div data-field-container data-field="address" className="md:col-span-2">
+              <FloatingInput
+                id="driver_address"
+                label="Residential Address"
                 placeholder="e.g. Flat 302, Sai Krupa Heights, Thane West, Maharashtra - 400601"
+                error={errors.address}
                 {...register("address")}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium placeholder-slate-400"
               />
             </div>
 
             {/* Notes */}
-            <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Notes & Special Instructions
-              </label>
-              <textarea
+            <div data-field-container data-field="notes" className="md:col-span-2">
+              <FloatingTextarea
+                id="driver_notes"
+                label="Notes & Special Instructions"
                 rows={2}
                 placeholder="e.g. Certified for handling hazardous freight and multi-axle trailers..."
+                error={errors.notes}
                 {...register("notes")}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium placeholder-slate-400 resize-none"
               />
             </div>
           </div>
         </div>
 
         {/* Form Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 sticky bottom-0 bg-white py-2">
+        <div className="pt-2 flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={handleClose}
             disabled={apiLoading}
-            className="px-5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
+            className="px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
           >
             Cancel
           </button>
@@ -970,6 +974,7 @@ export default function DriverForm({
               </h4>
               <button
                 type="button"
+                tabIndex={-1}
                 onClick={() => setPreviewDoc(null)}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
@@ -978,13 +983,15 @@ export default function DriverForm({
             </div>
 
             <div className="max-h-[60vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-xl p-2">
-              {previewDoc.type?.startsWith("image/") || previewDoc.dataUrl?.startsWith("data:image/") ? (
+              {previewDoc.type?.startsWith("image/") ||
+              previewDoc.dataUrl?.startsWith("data:image/") ? (
                 <img
                   src={previewDoc.dataUrl}
                   alt={previewDoc.name}
                   className="max-h-[55vh] object-contain rounded-lg"
                 />
-              ) : previewDoc.type === "application/pdf" || previewDoc.name?.endsWith(".pdf") ? (
+              ) : previewDoc.type === "application/pdf" ||
+                previewDoc.name?.endsWith(".pdf") ? (
                 <iframe
                   src={previewDoc.dataUrl}
                   title={previewDoc.name}
@@ -993,7 +1000,9 @@ export default function DriverForm({
               ) : (
                 <div className="text-center py-12 text-slate-500">
                   <FiFile className="w-12 h-12 mx-auto mb-2 text-slate-400" />
-                  <p className="text-xs font-semibold">Preview not supported for this file format.</p>
+                  <p className="text-xs font-semibold">
+                    Preview not supported for this file format.
+                  </p>
                 </div>
               )}
             </div>

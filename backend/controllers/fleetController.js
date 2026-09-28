@@ -2,12 +2,25 @@ import {
   addNewFleetModel,
   deleteFleetModel,
   getAllFleetsModel,
+  getFleetByIdModel,
   updateFleetModel,
 } from "../models/fleetModel";
 
 export function getAllFleetsController() {
   return new Promise((resolve, reject) => {
     getAllFleetsModel()
+      .then((result) => {
+        resolve(result);
+      })
+      .catch((error) => {
+        reject(error);
+      });
+  });
+}
+
+export function getFleetByIdController(id) {
+  return new Promise((resolve, reject) => {
+    getFleetByIdModel(id)
       .then((result) => {
         resolve(result);
       })

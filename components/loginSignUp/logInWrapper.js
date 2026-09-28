@@ -5,6 +5,7 @@ import { loginValidation } from "@/utilities/validations/auth";
 import { postApiData } from "@/utilities/services/apiService";
 import { useRouter } from "next/router";
 import { showToast } from "@/utilities/toastService";
+import { getSafeRedirectUrl } from "@/utilities/authConfig";
 
 export default function LoginWrapper() {
   const {
@@ -45,6 +46,10 @@ export default function LoginWrapper() {
     }));
   };
 
+  const getDestinationUrl = () => {
+    return getSafeRedirectUrl(router.query.redirect, "/");
+  };
+
   const onSubmit = async () => {
     setLoading(true);
     setApiError("");
@@ -55,23 +60,21 @@ export default function LoginWrapper() {
         password: formData.password.trim(),
       };
       const response = await postApiData("VERIFY_USER_LOGIN", payload);
-      // handle auth token or redirect
       if (response.status) {
-        // setSuccessMsg(response.message);
         showToast({
-          message: response.message,
+          message: response.message || "Login successful",
           type: "success",
         });
-        router.push("/"); // Redirect to home page after successful login
+        const destination = getDestinationUrl();
+        // Use full navigation to ensure fresh cookie propagation and SSR hydration
+        window.location.href = destination;
       } else {
-        // setApiError(response.message);
         showToast({
-          message: response.message,
+          message: response.message || "Invalid credentials",
           type: "error",
         });
       }
     } catch (err) {
-      // setApiError("Invalid email_id or password");
       showToast({
         message: "Invalid email_id or password",
         type: "error",
@@ -80,6 +83,7 @@ export default function LoginWrapper() {
       setLoading(false);
     }
   };
+
   const tempLogIn = async () => {
     setLoading(true);
     setApiError("");
@@ -90,23 +94,20 @@ export default function LoginWrapper() {
         password: "Agnibyte@2025",
       };
       const response = await postApiData("VERIFY_USER_LOGIN", payload);
-      // handle auth token or redirect
       if (response.status) {
-        // setSuccessMsg(response.message);
         showToast({
-          message: response.message,
+          message: response.message || "Login successful",
           type: "success",
         });
-        router.push("/"); // Redirect to home page after successful login
+        const destination = getDestinationUrl();
+        window.location.href = destination;
       } else {
-        // setApiError(response.message);
         showToast({
-          message: response.message,
+          message: response.message || "Invalid credentials",
           type: "error",
         });
       }
     } catch (err) {
-      // setApiError("Invalid email_id or password");
       showToast({
         message: "Invalid email_id or password",
         type: "error",

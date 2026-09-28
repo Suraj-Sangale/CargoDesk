@@ -1,11 +1,18 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import React, { useEffect, useState, useMemo } from "react";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import moment from "moment";
 import { postApiData } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
-import { vehicleNoListArr } from "@/utilities/dummyData";
+import { useFleetDriver } from "@/context/fleetDriverContext";
+import useAutoFocusField from "@/hooks/useAutoFocusField";
+import {
+  FloatingInput,
+  FloatingSelect,
+  FloatingDatePicker,
+  FloatingTextarea,
+} from "../common/floatingInput";
 import {
   FiTruck,
   FiDollarSign,
@@ -40,26 +47,65 @@ const PAYMENT_MODES = [
   "Cash",
 ];
 
-export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggleModal }) {
-  const defaultFormData = {
-    vehicle_number: "",
-    loan_name: "",
-    bank_name: "",
-    loan_account_no: "",
-    loan_amount: "",
-    down_payment: "",
-    emi_amount: "",
-    interest_rate: "",
-    tenure_months: "",
-    emis_paid: "0",
-    start_date: "",
-    due_date: "",
-    payment_mode: "NACH / Auto-Debit",
-    status: "Active",
-    notes: "",
-  };
+const DEFAULT_EMI_DATA = {
+  vehicle_number: "",
+  loan_name: "",
+  bank_name: "",
+  loan_account_no: "",
+  loan_amount: "",
+  down_payment: "",
+  emi_amount: "",
+  interest_rate: "",
+  tenure_months: "",
+  emis_paid: "0",
+  start_date: "",
+  due_date: "",
+  payment_mode: "NACH / Auto-Debit",
+  status: "Active",
+  notes: "",
+};
 
+export default function EmiForm({
+  setEmiList,
+  modalData,
+  isEdit,
+  focusField,
+  onClose,
+  toggleModal,
+}) {
+  const { fleets = [], refreshFleets } = useFleetDriver() || {};
   const [apiLoading, setApiLoading] = useState(false);
+
+  useEffect(() => {
+    if (Array.isArray(fleets) && fleets.length === 0 && refreshFleets) {
+      refreshFleets();
+    }
+  }, [fleets, refreshFleets]);
+
+  const vehicleOptions = useMemo(() => {
+    const list = [{ value: "", label: "Select Vehicle Number (Optional)" }];
+    const seen = new Set();
+    if (Array.isArray(fleets)) {
+      fleets.forEach((f) => {
+        const vNum = f.vehicle_number?.trim();
+        if (vNum && !seen.has(vNum.toUpperCase())) {
+          seen.add(vNum.toUpperCase());
+          const labelSuffix = f.vehicle_model
+            ? ` (${f.vehicle_model})`
+            : f.vehicle_type
+            ? ` (${f.vehicle_type})`
+            : "";
+          list.push({
+            value: vNum,
+            label: `${vNum}${labelSuffix}`,
+            id: f.id,
+            fleet: f,
+          });
+        }
+      });
+    }
+    return list;
+  }, [fleets]);
 
   const {
     register,
@@ -69,7 +115,7 @@ export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggle
     formState: { errors },
     reset,
   } = useForm({
-    defaultValues: defaultFormData,
+    defaultValues: DEFAULT_EMI_DATA,
   });
 
   // Real-time financial calculations
@@ -93,9 +139,9 @@ export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggle
       ? moment(watchedStartDate).add(tenure, "months").format("DD MMM YYYY")
       : null;
 
-  // Populate data when editing
+  // Populate data when editing or prefilling
   useEffect(() => {
-    if (isEdit && modalData) {
+    if (modalData) {
       reset({
         vehicle_number: modalData.vehicle_number || modalData.vehicleNo || "",
         loan_name: modalData.loan_name || "",
@@ -123,8 +169,13 @@ export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggle
             : "Closed",
         notes: modalData.notes || modalData.note || "",
       });
+    } else {
+      reset(DEFAULT_EMI_DATA);
     }
   }, [isEdit, modalData, reset]);
+
+  // Reusable platform-wide auto-scroll and highlight target field
+  useAutoFocusField(focusField, Boolean(focusField), [modalData, isEdit]);
 
   const handleClose = () => {
     if (onClose) onClose();
@@ -178,7 +229,7 @@ export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggle
         ]);
       }
 
-      reset(defaultFormData);
+      reset(DEFAULT_EMI_DATA);
       handleClose();
     } else {
       showToast(response?.message || "Failed to save EMI record", "error");
@@ -190,7 +241,7 @@ export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggle
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="p-5 md:p-6 space-y-6 max-h-[82vh] overflow-y-auto"
+      className="px-4 sm:px-6 py-4 space-y-4 bg-slate-50"
     >
       {/* 1. Vehicle & Lender Details Section */}
       <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4 shadow-2xs">
@@ -209,80 +260,74 @@ export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggle
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Vehicle Number */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Vehicle Number{" "}
-              <span className="text-slate-400 font-normal">(Optional)</span>
-            </label>
-            <input
-              type="text"
-              list="vehicleSuggestionsList"
-              placeholder="e.g. MH 04 EF 9101"
-              {...register("vehicle_number", {
-                onChange: (e) =>
-                  setValue("vehicle_number", e.target.value.toUpperCase()),
-              })}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs uppercase placeholder:normal-case font-medium"
+          {/* Vehicle Number using dynamic fleets */}
+          <div data-field-container data-field="vehicle_number">
+            <Controller
+              name="vehicle_number"
+              control={control}
+              render={({ field }) => (
+                <FloatingSelect
+                  id="emi_vehicle_number"
+                  name="vehicle_number"
+                  label="Vehicle Number (Optional)"
+                  options={vehicleOptions}
+                  error={errors.vehicle_number}
+                  value={field.value || ""}
+                  selectedValue={field.value || ""}
+                  onChange={(val) => {
+                    const actualVal =
+                      val && typeof val === "object"
+                        ? val.value !== undefined
+                          ? val.value
+                          : val.target?.value
+                        : val;
+                    field.onChange(actualVal || "");
+                  }}
+                  onBlur={field.onBlur}
+                />
+              )}
             />
-            <datalist id="vehicleSuggestionsList">
-              {vehicleNoListArr.map((item) => (
-                <option key={item.id} value={item.label} />
-              ))}
-            </datalist>
           </div>
 
           {/* Loan / Item Name */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Loan / Item Name <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
+          <div data-field-container data-field="loan_name">
+            <FloatingInput
+              id="emi_loan_name"
+              label="Loan / Item Name"
+              required
               placeholder="e.g. Truck Chassis Loan, Vehicle EMI"
+              error={errors.loan_name}
               {...register("loan_name", { required: "Loan Name is required" })}
-              className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
-                errors.loan_name
-                  ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                  : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-              } outline-none focus:ring-2 transition-all shadow-2xs font-medium placeholder-slate-400`}
             />
-            {errors.loan_name && (
-              <p className="text-rose-500 text-xs font-medium mt-1">
-                {errors.loan_name.message}
-              </p>
-            )}
           </div>
 
           {/* Financier / Bank Name */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Financier / Bank Name
-            </label>
-            <input
-              type="text"
+          <div data-field-container data-field="bank_name">
+            <FloatingInput
+              id="emi_bank_name"
+              label="Financier / Bank Name"
               list="bankOptionsList"
               placeholder="e.g. HDFC Bank, Tata Capital, Cholamandalam"
+              error={errors.bank_name}
               {...register("bank_name")}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium placeholder-slate-400"
-            />
-            <datalist id="bankOptionsList">
-              {FINANCIER_OPTIONS.map((bank) => (
-                <option key={bank} value={bank} />
-              ))}
-            </datalist>
+            >
+              <datalist id="bankOptionsList">
+                {FINANCIER_OPTIONS.map((bank) => (
+                  <option key={bank} value={bank} />
+                ))}
+              </datalist>
+            </FloatingInput>
           </div>
 
           {/* Loan Agreement / Account Number */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Loan Agreement / A/C No.
-            </label>
-            <input
-              type="text"
+          <div data-field-container data-field="loan_account_no">
+            <FloatingInput
+              id="emi_loan_account_no"
+              label="Loan Agreement / A/C No."
               placeholder="e.g. LN-9842109"
+              className="font-mono"
+              error={errors.loan_account_no}
               {...register("loan_account_no")}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-mono font-medium placeholder-slate-400"
             />
           </div>
         </div>
@@ -306,84 +351,64 @@ export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggle
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Loan Principal Amount */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Loan Principal Amount (₹) <span className="text-rose-500">*</span>
-            </label>
-            <input
+          <div data-field-container data-field="loan_amount">
+            <FloatingInput
+              id="emi_loan_amount"
+              label="Loan Principal Amount (₹)"
+              required
               type="number"
               step="any"
               placeholder="e.g. 1500000"
+              className="font-semibold"
+              error={errors.loan_amount}
               {...register("loan_amount", {
                 required: "Loan Amount is required",
                 min: { value: 1, message: "Must be greater than 0" },
               })}
-              className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
-                errors.loan_amount
-                  ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                  : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-              } outline-none focus:ring-2 transition-all shadow-2xs font-semibold placeholder-slate-400`}
             />
-            {errors.loan_amount && (
-              <p className="text-rose-500 text-xs font-medium mt-1">
-                {errors.loan_amount.message}
-              </p>
-            )}
           </div>
 
           {/* Monthly EMI Amount */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Monthly EMI Amount (₹) <span className="text-rose-500">*</span>
-            </label>
-            <input
+          <div data-field-container data-field="emi_amount">
+            <FloatingInput
+              id="emi_amount"
+              label="Monthly EMI Amount (₹)"
+              required
               type="number"
               step="any"
               placeholder="e.g. 42500"
+              className="font-bold text-blue-600"
+              error={errors.emi_amount}
               {...register("emi_amount", {
                 required: "EMI Amount is required",
                 min: { value: 1, message: "Must be greater than 0" },
               })}
-              className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-blue-600 rounded-xl border ${
-                errors.emi_amount
-                  ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                  : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-              } outline-none focus:ring-2 transition-all shadow-2xs font-bold placeholder-slate-400`}
             />
-            {errors.emi_amount && (
-              <p className="text-rose-500 text-xs font-medium mt-1">
-                {errors.emi_amount.message}
-              </p>
-            )}
           </div>
 
           {/* Down Payment */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Down Payment Paid (₹){" "}
-              <span className="text-slate-400 font-normal">(Optional)</span>
-            </label>
-            <input
+          <div data-field-container data-field="down_payment">
+            <FloatingInput
+              id="emi_down_payment"
+              label="Down Payment Paid (₹) (Optional)"
               type="number"
               step="any"
               placeholder="e.g. 250000"
+              error={errors.down_payment}
               {...register("down_payment")}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium placeholder-slate-400"
             />
           </div>
 
           {/* Interest Rate */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Interest Rate (% p.a.){" "}
-              <span className="text-slate-400 font-normal">(Optional)</span>
-            </label>
-            <input
+          <div data-field-container data-field="interest_rate">
+            <FloatingInput
+              id="emi_interest_rate"
+              label="Interest Rate (% p.a.) (Optional)"
               type="number"
               step="0.01"
               placeholder="e.g. 9.5"
+              error={errors.interest_rate}
               {...register("interest_rate")}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium placeholder-slate-400"
             />
           </div>
         </div>
@@ -407,117 +432,110 @@ export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggle
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Total Tenure (Months) */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Total Tenure (Months) <span className="text-rose-500">*</span>
-            </label>
-            <input
+          <div data-field-container data-field="tenure_months">
+            <FloatingInput
+              id="emi_tenure_months"
+              label="Total Tenure (Months)"
+              required
               type="number"
               placeholder="e.g. 36"
+              error={errors.tenure_months}
               {...register("tenure_months", {
                 required: "Tenure is required",
                 min: { value: 1, message: "Must be at least 1 month" },
               })}
-              className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
-                errors.tenure_months
-                  ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                  : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-              } outline-none focus:ring-2 transition-all shadow-2xs font-medium placeholder-slate-400`}
             />
-            {errors.tenure_months && (
-              <p className="text-rose-500 text-xs font-medium mt-1">
-                {errors.tenure_months.message}
-              </p>
-            )}
           </div>
 
           {/* EMIs Paid */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              EMIs Paid So Far (Installments)
-            </label>
-            <input
+          <div data-field-container data-field="emis_paid">
+            <FloatingInput
+              id="emi_emis_paid"
+              label="EMIs Paid So Far (Installments)"
               type="number"
               min="0"
               placeholder="e.g. 12"
+              error={errors.emis_paid}
               {...register("emis_paid")}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium placeholder-slate-400"
             />
           </div>
 
-          {/* Start Date */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Loan Start Date <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="date"
-              {...register("start_date", {
-                required: "Start Date is required",
-              })}
-              className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
-                errors.start_date
-                  ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                  : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-              } outline-none focus:ring-2 transition-all shadow-2xs font-medium`}
+          {/* Start Date using FloatingDatePicker */}
+          <div data-field-container data-field="start_date">
+            <Controller
+              name="start_date"
+              control={control}
+              rules={{ required: "Start Date is required" }}
+              render={({ field }) => (
+                <FloatingDatePicker
+                  id="emi_start_date"
+                  name="start_date"
+                  label="Loan Start Date"
+                  required
+                  format="DD/MM/YYYY"
+                  error={errors.start_date}
+                  value={field.value}
+                  onChange={(val) => {
+                    const formatted =
+                      val && moment(val).isValid()
+                        ? moment(val).format("YYYY-MM-DD")
+                        : val;
+                    field.onChange(formatted || "");
+                  }}
+                  onBlur={field.onBlur}
+                />
+              )}
             />
-            {errors.start_date && (
-              <p className="text-rose-500 text-xs font-medium mt-1">
-                {errors.start_date.message}
-              </p>
-            )}
           </div>
 
-          {/* Monthly Due Date */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Monthly Due Date <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="date"
-              {...register("due_date", { required: "Due Date is required" })}
-              className={`w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border ${
-                errors.due_date
-                  ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
-                  : "border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/15"
-              } outline-none focus:ring-2 transition-all shadow-2xs font-medium`}
+          {/* Monthly Due Date using FloatingDatePicker */}
+          <div data-field-container data-field="due_date">
+            <Controller
+              name="due_date"
+              control={control}
+              rules={{ required: "Due Date is required" }}
+              render={({ field }) => (
+                <FloatingDatePicker
+                  id="emi_due_date"
+                  name="due_date"
+                  label="Monthly Due Date"
+                  required
+                  format="DD/MM/YYYY"
+                  error={errors.due_date}
+                  value={field.value}
+                  onChange={(val) => {
+                    const formatted =
+                      val && moment(val).isValid()
+                        ? moment(val).format("YYYY-MM-DD")
+                        : val;
+                    field.onChange(formatted || "");
+                  }}
+                  onBlur={field.onBlur}
+                />
+              )}
             />
-            {errors.due_date && (
-              <p className="text-rose-500 text-xs font-medium mt-1">
-                {errors.due_date.message}
-              </p>
-            )}
           </div>
 
           {/* Payment Mode */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Payment Mode
-            </label>
-            <select
+          <div data-field-container data-field="payment_mode">
+            <FloatingSelect
+              id="emi_payment_mode"
+              label="Payment Mode"
+              options={PAYMENT_MODES}
+              error={errors.payment_mode}
               {...register("payment_mode")}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium cursor-pointer"
-            >
-              {PAYMENT_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {mode}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {/* Status */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Loan Status
-            </label>
-            <select
+          <div data-field-container data-field="status">
+            <FloatingSelect
+              id="emi_status"
+              label="Loan Status"
+              options={["Active", "Closed"]}
+              error={errors.status}
               {...register("status")}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium cursor-pointer"
-            >
-              <option value="Active">Active</option>
-              <option value="Closed">Closed</option>
-            </select>
+            />
           </div>
         </div>
       </div>
@@ -538,12 +556,14 @@ export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggle
           </div>
         </div>
 
-        <div>
-          <textarea
-            rows={2}
+        <div data-field-container data-field="notes">
+          <FloatingTextarea
+            id="emi_notes"
+            label="Notes & Remarks"
+            rows={3}
             placeholder="e.g. Hypothecation NOC pending from bank, e-mandate registered with SBI account..."
+            error={errors.notes}
             {...register("notes")}
-            className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white text-slate-900 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all shadow-2xs font-medium placeholder-slate-400 resize-none"
           />
         </div>
       </div>
@@ -601,12 +621,12 @@ export default function EmiForm({ setEmiList, modalData, isEdit, onClose, toggle
       )}
 
       {/* 6. Form Footer Action Buttons */}
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 sticky bottom-0 bg-white py-2">
+      <div className="pt-2 flex items-center justify-end gap-2">
         <button
           type="button"
           onClick={handleClose}
           disabled={apiLoading}
-          className="px-5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
+          className="px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
         >
           Cancel
         </button>

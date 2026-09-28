@@ -82,10 +82,12 @@ export function editVehicleDocumentController(request) {
     const id = request.id;
     const updatedFields = {
       id: request.id,
-      vehicleNo: request.vehicleNo,
+      fleet_id: request.fleet_id || request.fleetId || null,
+      vehicleNo: request.vehicleNo || null,
       documentType: request.documentType,
       expiryDate: request.expiryDate,
       note: request.note,
+      performedByName: request.performedByName,
     };
 
     editVehicleDocumentById(id, updatedFields)

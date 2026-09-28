@@ -67,47 +67,53 @@ const DocumentsFilterCard = ({
     <button
       type="button"
       onClick={() => onFilterClick(item.value)}
-      className={`group relative flex flex-col justify-between p-4 md:p-5 rounded-2xl text-left transition-all duration-200 border ${
+      className={`group relative overflow-hidden flex flex-col justify-between p-4 md:p-5 rounded-2xl text-left transition-all duration-200 border ${
         isSelected
           ? "ring-2 ring-blue-500 border-transparent shadow-md -translate-y-0.5"
           : "border-slate-200/50 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5"
       } ${theme.bg} cursor-pointer min-w-[170px] flex-1`}
     >
-      {/* Top row: Icon Container on Left, Arrow Icon on Right */}
-      <div className="flex items-center justify-between w-full mb-3">
-        <div
-          className={`w-11 h-11 rounded-full flex items-center justify-center shadow-xs transition-transform group-hover:scale-105 ${theme.iconBg}`}
-        >
-          <IconComponent className="w-5 h-5" />
-        </div>
+      {/* Background Watermark Label Text */}
+      <span
+        aria-hidden="true"
+        className="absolute -right-1 -bottom-1.5 text-2xl sm:text-4xl font-black uppercase tracking-tight text-slate-900/[0.1] group-hover:text-slate-900/[0.10] select-none pointer-events-none transition-colors duration-200 leading-none z-0"
+      >
+        {theme.label}
+      </span>
 
-        <div className="w-6 h-6 rounded-full bg-white/70 flex items-center justify-center text-slate-400 group-hover:text-slate-700 group-hover:bg-white shadow-2xs transition-all">
-          <FiChevronRight className="w-3.5 h-3.5" />
-        </div>
-      </div>
-
-      {/* Middle: Category Label */}
-      <div>
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+      {/* Foreground Content */}
+      <div className="relative z-10 w-full">
+        {/* <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block mb-2">
           {theme.label}
-        </span>
-        {/* Large Count */}
-        {isLoading ? (
-          <div className="h-8 w-20 bg-slate-200/80 rounded-lg animate-pulse mt-1" />
-        ) : (
-          <div className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
-            {countDisplay}
-          </div>
-        )}
-      </div>
+        </span> */}
 
-      {/* Bottom: Subtext */}
-      <div className="text-xs font-medium text-slate-400 mt-1">
-        {isLoading ? (
-          <div className="h-3.5 w-24 bg-slate-200/60 rounded animate-pulse mt-0.5" />
-        ) : (
-          subtext
-        )}
+        {/* Row: Icon Container on Left, Counts on Right */}
+        <div className="flex items-center justify-between w-full">
+          <div
+            className={`w-11 h-11 rounded-full flex items-center justify-center shadow-xs transition-transform group-hover:scale-105 ${theme.iconBg}`}
+          >
+            <IconComponent className="w-5 h-5" />
+          </div>
+
+          <div>
+            {/* Large Count */}
+            {isLoading ? (
+              <div className="h-8 w-20 bg-slate-200/80 rounded-lg animate-pulse mt-1" />
+            ) : (
+              <div className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+                {countDisplay}
+              </div>
+            )}
+            {/* Subtext */}
+            {/* <div className="text-xs font-medium text-slate-400 mt-1">
+              {isLoading ? (
+                <div className="h-3.5 w-24 bg-slate-200/60 rounded animate-pulse mt-0.5" />
+              ) : (
+                subtext
+              )}
+            </div> */}
+          </div>
+        </div>
       </div>
     </button>
   );

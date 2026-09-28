@@ -1,6 +1,7 @@
 import executeQuery, { executeTransaction } from "@/helpers/dbConnection";
 import { ensureDriverTable } from "./driverModel";
 import { ensureFleetTable } from "./fleetModel";
+import { logFleetActivity } from "./fleetActivityModel";
 
 /**
  * Assign a driver to a fleet vehicle.
@@ -52,6 +53,23 @@ export function assignDriverToFleetModel(fleetId, driverId) {
         await queryFn(`UPDATE drivers SET fleet_id = ? WHERE id = ?`, [fId, dId]);
       });
 
+      // Log Fleet Activity
+      await logFleetActivity({
+        fleetId: fId,
+        operationType: "DRIVER",
+        entityType: "DRIVER_ALLOCATION",
+        entityId: String(dId),
+        action: "ASSIGN",
+        title: "Driver assigned",
+        description: `Driver: ${driver.driver_name}`,
+        oldValue: null,
+        newValue: { driver_id: dId, driver_name: driver.driver_name },
+        changedFields: ["driver_id", "driver_name"],
+        performedByName: "Admin User",
+        source: "driver",
+        metadata: { driver_name: driver.driver_name, vehicle_number: fleet.vehicle_number },
+      });
+
       resolve({
         status: true,
         message: `Driver ${driver.driver_name} successfully assigned to vehicle ${fleet.vehicle_number}`,
@@ -91,6 +109,26 @@ export function removeDriverFromFleetModel({ driverId, fleetId }) {
         });
       }
 
+      // Look up existing driver & fleet before unassigning
+      let targetFleetId = fId;
+      let driverName = "Driver";
+      let vehicleNo = "";
+
+      if (dId) {
+        const dRows = await executeQuery(`SELECT id, driver_name, fleet_id FROM drivers WHERE id = ?`, [dId]);
+        if (Array.isArray(dRows) && dRows.length > 0) {
+          targetFleetId = targetFleetId || dRows[0].fleet_id;
+          driverName = dRows[0].driver_name || "Driver";
+        }
+      }
+
+      if (targetFleetId) {
+        const fRows = await executeQuery(`SELECT id, vehicle_number FROM fleets WHERE id = ?`, [targetFleetId]);
+        if (Array.isArray(fRows) && fRows.length > 0) {
+          vehicleNo = fRows[0].vehicle_number;
+        }
+      }
+
       await executeTransaction(async (queryFn) => {
         if (dId) {
           await queryFn(`UPDATE drivers SET fleet_id = NULL WHERE id = ?`, [dId]);
@@ -98,6 +136,25 @@ export function removeDriverFromFleetModel({ driverId, fleetId }) {
           await queryFn(`UPDATE drivers SET fleet_id = NULL WHERE fleet_id = ?`, [fId]);
         }
       });
+
+      // Log Fleet Activity for driver removal
+      if (targetFleetId) {
+        await logFleetActivity({
+          fleetId: targetFleetId,
+          operationType: "DRIVER",
+          entityType: "DRIVER_ALLOCATION",
+          entityId: dId ? String(dId) : null,
+          action: "UNASSIGN",
+          title: "Driver removed",
+          description: `${driverName} unassigned from vehicle ${vehicleNo || ""}`.trim(),
+          oldValue: { driver_id: dId, driver_name: driverName },
+          newValue: null,
+          changedFields: ["driver_id"],
+          performedByName: "Admin User",
+          source: "driver",
+          metadata: { driver_name: driverName, vehicle_number: vehicleNo },
+        });
+      }
 
       resolve({
         status: true,
