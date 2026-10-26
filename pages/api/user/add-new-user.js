@@ -1,20 +1,18 @@
 import { addNeUserController } from "@/backend/controllers/userController";
+import { getAuthUserFromReq } from "@/utilities/authServer";
 
 export default function handler(req, res) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const request = req.body;
-    const response = {
-      status: false,
-    };
+    const authUser = getAuthUserFromReq(req);
 
-    addNeUserController(request)
+    addNeUserController(request, authUser)
       .then((result) => {
         res.status(200).json(result);
-        resolve(result);
+        resolve();
       })
       .catch((error) => {
-        response.error = error;
-        res.status(200).json(response);
+        res.status(200).json({ status: false, message: error?.message || "Cannot add user" });
         resolve();
       });
   });

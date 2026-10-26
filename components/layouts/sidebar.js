@@ -14,6 +14,7 @@ import {
   FiChevronUp,
   FiX,
   FiChevronRight,
+  FiUsers,
 } from "react-icons/fi";
 import { HiOutlineTruck } from "react-icons/hi";
 import { HiOutlineUserGroup } from "react-icons/hi";
@@ -24,6 +25,7 @@ export default function Sidebar({
   isCollapsed,
   setIsCollapsed,
   sidebarRef,
+  user,
 }) {
   const router = useRouter();
   const currentPath = router.pathname;
@@ -32,27 +34,51 @@ export default function Sidebar({
 
   const mainNavItems = [
     {
+      id: "dashboard",
       name: "Dashboard",
       icon: FiHome,
       path: "/",
       exact: true,
+      visibleTo: [
+        "super_admin",
+        "admin",
+        "office_staff",
+        "maintenance_supervisor",
+        "user",
+      ],
     },
     {
+      id: "documents",
       name: "Documents",
       icon: FiFileText,
       path: "/documents",
+      visibleTo: [
+        "super_admin",
+        "admin",
+        "office_staff",
+        "maintenance_supervisor",
+      ],
     },
     // {
+    //   id: "expenses",
     //   name: "",
     //   icon: FiFileText,
     //   path: "/expenses",
     // },
     {
+      id: "messager",
       name: "Messenger",
       icon: FiMessageSquare,
       path: "/messager",
+      visibleTo: [
+        "super_admin",
+        "admin",
+        "office_staff",
+        "user",
+      ],
     },
     {
+      id: "invoice",
       name: "Invoice",
       icon: FiFile,
       path: "/invoice",
@@ -61,47 +87,143 @@ export default function Sidebar({
         { name: "New Invoice", path: "/invoice/new" },
         { name: "All Invoices", path: "/invoice" },
       ],
+      visibleTo: ["super_admin", "admin", "office_staff"],
     },
     {
+      id: "dailyorders",
       name: "Daily Orders",
       icon: FiTruck,
       path: "/dailyorders",
+      visibleTo: ["super_admin", "admin", "office_staff"],
     },
     {
+      id: "fleets",
       name: "Fleets",
       icon: HiOutlineTruck,
       path: "/fleets",
+      visibleTo: ["super_admin", "admin", "maintenance_supervisor"],
     },
     {
+      id: "drivers",
       name: "Drivers",
       icon: HiOutlineUserGroup,
       path: "/drivers",
+      visibleTo: ["super_admin", "admin", "office_staff"],
     },
     {
+      id: "users",
+      name: "Sub Users",
+      icon: FiUsers,
+      path: "/users",
+      adminOnly: true,
+      visibleTo: ["super_admin", "admin"],
+    },
+    {
+      id: "apps",
       name: "Apps",
       icon: FiGrid,
       path: "/apps",
+      visibleTo: [
+        "super_admin",
+        "admin",
+        "office_staff",
+        "maintenance_supervisor",
+        "user",
+      ],
     },
   ];
 
   const secondaryNavItems = [
     {
+      id: "settings",
       name: "Settings",
       icon: FiSettings,
       path: "/settings",
+      visibleTo: [
+        "super_admin",
+        "admin",
+        "office_staff",
+        "maintenance_supervisor",
+        "user",
+      ],
     },
     {
+      id: "support",
       name: "Help & Support",
       icon: FiHelpCircle,
       path: "/support",
+      visibleTo: [
+        "super_admin",
+        "admin",
+        "office_staff",
+        "maintenance_supervisor",
+        "user",
+      ],
     },
   ];
+
+  const userRole = (user?.role || "super_admin").toLowerCase().trim();
+  const isSuperAdmin =
+    userRole === "super_admin" || user?.email === "suraj@agnibyte.com";
+  const isAdmin =
+    !user || isSuperAdmin || userRole === "admin" || userRole === "administrator";
+
+  // Normalize legacy roles
+  let normalizedRole = userRole;
+  if (normalizedRole === "manager" || normalizedRole === "dispatcher")
+    normalizedRole = "office_staff";
+  if (normalizedRole === "viewer") normalizedRole = "maintenance_supervisor";
+  if (normalizedRole === "administrator") normalizedRole = "admin";
+
+  const isOptionVisible = (item) => {
+    // 1. Organization-level Module Access: If blocked for user's organization, hide for all roles in that organization
+    if (!isSuperAdmin && Array.isArray(user?.orgModules)) {
+      const moduleId =
+        item.id || (item.path === "/" ? "dashboard" : item.path.replace(/^\//, "").split("/")[0]);
+      if (moduleId && !user.orgModules.includes(moduleId)) {
+        return false;
+      }
+    }
+
+    // 2. If visibleTo array is specified, verify role match
+    if (Array.isArray(item.visibleTo) && item.visibleTo.length > 0) {
+      if (isSuperAdmin) return true;
+      const lowerRoles = item.visibleTo.map((r) => String(r).toLowerCase().trim());
+      const hasRoleMatch =
+        lowerRoles.includes(userRole) ||
+        lowerRoles.includes(normalizedRole) ||
+        lowerRoles.includes("*") ||
+        lowerRoles.includes("all");
+
+      if (hasRoleMatch) return true;
+    }
+
+    // 3. Check custom permissions list if assigned
+    if (Array.isArray(user?.permissions) && user.permissions.length > 0) {
+      const moduleKey =
+        item.id || (item.path === "/" ? "dashboard" : item.path.replace(/^\//, "").split("/")[0]);
+      if (user.permissions.includes(moduleKey)) return true;
+    }
+
+    if (Array.isArray(item.visibleTo) && item.visibleTo.length > 0) {
+      return false;
+    }
+
+    if (item.adminOnly && !isAdmin) return false;
+    return true;
+  };
+
+  const visibleNavItems = mainNavItems.filter(isOptionVisible);
+  const visibleSecondaryNavItems = secondaryNavItems.filter(isOptionVisible);
 
   const isActive = (item) => {
     if (item.exact) {
       return currentPath === item.path;
     }
     if (item.path === "/fleets" && (currentPath.startsWith("/fleet/") || currentPath.startsWith("/fleets"))) {
+      return true;
+    }
+    if (item.path === "/users" && currentPath.startsWith("/users")) {
       return true;
     }
     return currentPath === item.path || currentPath.startsWith(item.path + "/");
@@ -156,7 +278,7 @@ export default function Sidebar({
         {/* Main Navigation List */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-1.5 sidebar-scrollbar w-full">
           <div className="space-y-1 w-full">
-            {mainNavItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const active = isActive(item);
               const Icon = item.icon;
 
@@ -241,7 +363,7 @@ export default function Sidebar({
 
           {/* Secondary Navigation */}
           <div className="space-y-1 w-full">
-            {secondaryNavItems.map((item) => {
+            {visibleSecondaryNavItems.map((item) => {
               const active = isActive(item);
               const Icon = item.icon;
               return (

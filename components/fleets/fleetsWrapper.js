@@ -179,7 +179,8 @@ export default function FleetsWrapper({ pageData }) {
       <PageHeader
         eyebrow="Fleet Operations"
         title="Fleet Management"
-        subtitle="Manage and monitor all your transport vehicles, drivers, payload capacities, and operational status in real time."
+        subtitle=""
+        imageSrc="/imges/layouts/fleets.png"
       />
 
       {/* 4 Metric Summary Cards */}

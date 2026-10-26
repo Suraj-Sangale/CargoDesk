@@ -1,11 +1,17 @@
 import { getAllDriversController } from "@/backend/controllers/driverController";
 
+export const config = {
+  api: {
+    responseLimit: false,
+  },
+};
+
 export default function handler(req, res) {
   return new Promise((resolve) => {
     getAllDriversController()
       .then((result) => {
         res.status(200).json(result);
-        resolve(result);
+        resolve();
       })
       .catch((error) => {
         res.status(200).json({

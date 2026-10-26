@@ -687,3 +687,48 @@ const defaultSeedFleets = [
     notes: "Operating on civil construction materials route.",
   },
 ];
+
+export const userTableHeadCells = [
+  {
+    id: "id",
+    numeric: false,
+    disablePadding: false,
+    label: "Sr. No.",
+  },
+  {
+    id: "member",
+    numeric: false,
+    disablePadding: false,
+    label: "Member",
+  },
+  {
+    id: "role",
+    numeric: false,
+    disablePadding: false,
+    label: "Role",
+  },
+  {
+    id: "orgName",
+    numeric: false,
+    disablePadding: false,
+    label: "Organization",
+  },
+  {
+    id: "phone",
+    numeric: false,
+    disablePadding: false,
+    label: "Contact No.",
+  },
+  {
+    id: "status",
+    numeric: false,
+    disablePadding: false,
+    label: "Status",
+  },
+  {
+    id: "action",
+    numeric: false,
+    disablePadding: false,
+    label: "Action",
+  },
+];

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import CustomSearch from "../common/customSearch";
 import {
   FloatingInput,
@@ -61,6 +61,7 @@ export default function FleetForm({
     register,
     handleSubmit,
     setValue,
+    control,
     formState: { errors },
     reset,
   } = useForm({
@@ -90,7 +91,9 @@ export default function FleetForm({
       if (modalData.driver_id) {
         initialDriverId = modalData.driver_id;
       } else {
-        const assigned = drivers.find((d) => Number(d.fleet_id) === Number(modalData.id));
+        const assigned = drivers.find(
+          (d) => Number(d.fleet_id) == Number(modalData.id),
+        );
         if (assigned) {
           initialDriverId = assigned.id;
         }
@@ -115,7 +118,8 @@ export default function FleetForm({
     ];
 
     drivers.forEach((d) => {
-      const isCurrentFleet = modalData?.id && Number(d.fleet_id) === Number(modalData.id);
+      const isCurrentFleet =
+        modalData?.id && Number(d.fleet_id) === Number(modalData.id);
       const isAssignedElsewhere = d.fleet_id && !isCurrentFleet;
 
       opts.push({
@@ -125,8 +129,8 @@ export default function FleetForm({
           isCurrentFleet
             ? " [Currently Assigned]"
             : isAssignedElsewhere
-            ? ` [Assigned: ${d.assigned_vehicle || "Vehicle"}]`
-            : " [Available]"
+              ? ` [Assigned: ${d.assigned_vehicle || "Vehicle"}]`
+              : " [Available]"
         }`,
         driver: d,
       });
@@ -138,7 +142,9 @@ export default function FleetForm({
   // Find currently selected driver object for preview
   const selectedDriver = useMemo(() => {
     if (!selectedDriverId) return null;
-    return drivers.find((d) => String(d.id) === String(selectedDriverId)) || null;
+    return (
+      drivers.find((d) => String(d.id) === String(selectedDriverId)) || null
+    );
   }, [selectedDriverId, drivers]);
 
   // Check if selected driver is currently assigned elsewhere
@@ -173,9 +179,7 @@ export default function FleetForm({
       manufacturing_year: data.manufacturing_year
         ? data.manufacturing_year.trim()
         : "",
-      gps_tracking_id: data.gps_tracking_id
-        ? data.gps_tracking_id.trim()
-        : "",
+      gps_tracking_id: data.gps_tracking_id ? data.gps_tracking_id.trim() : "",
       chassis_number: data.chassis_number ? data.chassis_number.trim() : "",
       engine_number: data.engine_number ? data.engine_number.trim() : "",
       status: data.status || "Active",
@@ -192,13 +196,8 @@ export default function FleetForm({
     }
 
     if (response && response.status) {
-      showToast(
-        response.message || (isEdit ? "Fleet updated successfully" : "Fleet added successfully"),
-        "success"
-      );
-
       // Refresh synchronized context datasets
-      await refreshAll();
+      if (refreshAll) await refreshAll();
 
       if (setFleetList) {
         if (isEdit) {
@@ -213,8 +212,8 @@ export default function FleetForm({
                     driver_name: selectedDriver?.driver_name || null,
                     driver_contact: selectedDriver?.contact_number || null,
                   }
-                : item
-            )
+                : item,
+            ),
           );
         } else {
           setFleetList((prev) => [
@@ -232,6 +231,11 @@ export default function FleetForm({
 
       reset(DEFAULT_FLEET_DATA);
       setSelectedDriverId("");
+      showToast(
+        response.message ||
+          (isEdit ? "Fleet updated successfully" : "Fleet added successfully"),
+        "success",
+      );
       handleClose();
     } else {
       showToast(response?.message || "Failed to save fleet record", "error");
@@ -302,26 +306,59 @@ export default function FleetForm({
 
           {/* Vehicle Type */}
           <div data-field-container data-field="vehicle_type">
-            <FloatingSelect
-              id="fleet_vehicle_type"
-              label="Vehicle Type / Body"
-              required
-              options={FLEET_VEHICLE_TYPES}
-              error={errors.vehicle_type}
-              {...register("vehicle_type", {
-                required: "Vehicle Type is required",
-              })}
+            <Controller
+              name="vehicle_type"
+              control={control}
+              rules={{ required: "Vehicle Type is required" }}
+              render={({ field }) => (
+                <FloatingSelect
+                  id="fleet_vehicle_type"
+                  label="Vehicle Type / Body"
+                  required
+                  options={FLEET_VEHICLE_TYPES}
+                  value={field.value || ""}
+                  selectedValue={field.value || ""}
+                  onChange={(val) => {
+                    const actualVal =
+                      val && typeof val === "object"
+                        ? val.value !== undefined
+                          ? val.value
+                          : val.target?.value
+                        : val;
+                    field.onChange(actualVal || "");
+                  }}
+                  onBlur={field.onBlur}
+                  error={errors.vehicle_type}
+                />
+              )}
             />
           </div>
 
           {/* Fuel Type */}
           <div data-field-container data-field="fuel_type">
-            <FloatingSelect
-              id="fleet_fuel_type"
-              label="Fuel Type"
-              options={FLEET_FUEL_TYPES}
-              error={errors.fuel_type}
-              {...register("fuel_type")}
+            <Controller
+              name="fuel_type"
+              control={control}
+              render={({ field }) => (
+                <FloatingSelect
+                  id="fleet_fuel_type"
+                  label="Fuel Type"
+                  options={FLEET_FUEL_TYPES}
+                  value={field.value || ""}
+                  selectedValue={field.value || ""}
+                  onChange={(val) => {
+                    const actualVal =
+                      val && typeof val === "object"
+                        ? val.value !== undefined
+                          ? val.value
+                          : val.target?.value
+                        : val;
+                    field.onChange(actualVal || "");
+                  }}
+                  onBlur={field.onBlur}
+                  error={errors.fuel_type}
+                />
+              )}
             />
           </div>
         </div>
@@ -375,12 +412,29 @@ export default function FleetForm({
 
           {/* Ownership Type */}
           <div data-field-container data-field="ownership_type">
-            <FloatingSelect
-              id="fleet_ownership_type"
-              label="Ownership Type"
-              options={FLEET_OWNERSHIP_TYPES}
-              error={errors.ownership_type}
-              {...register("ownership_type")}
+            <Controller
+              name="ownership_type"
+              control={control}
+              render={({ field }) => (
+                <FloatingSelect
+                  id="fleet_ownership_type"
+                  label="Ownership Type"
+                  options={FLEET_OWNERSHIP_TYPES}
+                  value={field.value || ""}
+                  selectedValue={field.value || ""}
+                  onChange={(val) => {
+                    const actualVal =
+                      val && typeof val === "object"
+                        ? val.value !== undefined
+                          ? val.value
+                          : val.target?.value
+                        : val;
+                    field.onChange(actualVal || "");
+                  }}
+                  onBlur={field.onBlur}
+                  error={errors.ownership_type}
+                />
+              )}
             />
           </div>
 
@@ -431,6 +485,7 @@ export default function FleetForm({
               name="driver_id"
               id="fleet_driver_select"
               value={selectedDriverId}
+              selectedValue={selectedDriverId}
               options={driverOptions}
               placeholder="Search by driver name or contact number..."
               onChange={(opt) => {
@@ -447,9 +502,12 @@ export default function FleetForm({
               <div>
                 <span className="font-bold">Reassignment Notice: </span>
                 <span>
-                  <strong>{selectedDriver.driver_name}</strong> is currently assigned to vehicle{" "}
-                  <strong>{selectedDriver.assigned_vehicle || "another vehicle"}</strong>. Saving this fleet
-                  will reassign them to this vehicle.
+                  <strong>{selectedDriver.driver_name}</strong> is currently
+                  assigned to vehicle{" "}
+                  <strong>
+                    {selectedDriver.assigned_vehicle || "another vehicle"}
+                  </strong>
+                  . Saving this fleet will reassign them to this vehicle.
                 </span>
               </div>
             </div>
@@ -483,7 +541,9 @@ export default function FleetForm({
                   </div>
                   <div className="text-[11px] text-slate-500 font-medium">
                     📞 {selectedDriver.contact_number || "No Contact"} •{" "}
-                    <span className="font-mono">{selectedDriver.license_number || "DL"}</span>
+                    <span className="font-mono">
+                      {selectedDriver.license_number || "DL"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -525,12 +585,29 @@ export default function FleetForm({
         <div className="space-y-4">
           {/* Status Selection */}
           <div data-field-container data-field="status">
-            <FloatingSelect
-              id="fleet_status"
-              label="Operational Status"
-              options={FLEET_STATUS_OPTIONS}
-              error={errors.status}
-              {...register("status")}
+            <Controller
+              name="status"
+              control={control}
+              render={({ field }) => (
+                <FloatingSelect
+                  id="fleet_status"
+                  label="Operational Status"
+                  options={FLEET_STATUS_OPTIONS}
+                  value={field.value || ""}
+                  selectedValue={field.value || ""}
+                  onChange={(val) => {
+                    const actualVal =
+                      val && typeof val === "object"
+                        ? val.value !== undefined
+                          ? val.value
+                          : val.target?.value
+                        : val;
+                    field.onChange(actualVal || "");
+                  }}
+                  onBlur={field.onBlur}
+                  error={errors.status}
+                />
+              )}
             />
           </div>
 
@@ -549,7 +626,7 @@ export default function FleetForm({
       </div>
 
       {/* Form Action Buttons */}
-      <div className="pt-2 flex items-center justify-end gap-2">
+      <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 sticky bottom-0 bg-white py-2">
         <button
           type="button"
           onClick={handleClose}
@@ -572,7 +649,9 @@ export default function FleetForm({
           ) : (
             <>
               <FiCheck className="w-4 h-4" />
-              <span>{isEdit ? "Update Fleet Vehicle" : "Save Fleet Vehicle"}</span>
+              <span>
+                {isEdit ? "Update Fleet Vehicle" : "Save Fleet Vehicle"}
+              </span>
             </>
           )}
         </button>

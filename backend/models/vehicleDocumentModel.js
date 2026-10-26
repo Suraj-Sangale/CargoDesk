@@ -117,7 +117,7 @@ export function getAllVehicleDocuments() {
         ORDER BY vd.id DESC
       `;
 
-      logQuery(selectQuery)
+      // logQuery(selectQuery)
       const result = await executeQuery(selectQuery);
       resolve({
         success: true,

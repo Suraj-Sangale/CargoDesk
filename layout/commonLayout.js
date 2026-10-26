@@ -58,6 +58,7 @@ export default function CommonLayout({ children, pageProps = {} }) {
         isCollapsed={isCollapsed}
         setIsCollapsed={setIsCollapsed}
         sidebarRef={sidebarRef}
+        user={pageProps?.pageData?.user}
       />
 
       {/* Main Content Area */}

@@ -19,7 +19,9 @@ export default function executeQuery(query, values = []) {
         resolve(JSON.parse(JSON.stringify(results)));
       })
       .catch((error) => {
-        console.error("Database query error ====", error);
+        if (error?.code !== "ER_DUP_FIELDNAME") {
+          console.error("Database query error ====", error);
+        }
         reject(error);
       });
   });

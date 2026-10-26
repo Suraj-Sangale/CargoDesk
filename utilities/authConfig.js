@@ -12,6 +12,7 @@ export const PUBLIC_ROUTES = [
   "/404",
   "/500",
   "/403",
+  "/module-blocked",
 ];
 
 // Route prefix patterns that are public
@@ -85,6 +86,10 @@ export function getSafeRedirectUrl(url, defaultPath = "/") {
  * @returns {boolean}
  */
 export function hasRequiredRole(userRole, allowedRoles) {
+  if (userRole === "super_admin") {
+    return true; // Super admin has universal access to all protected modules
+  }
+
   if (!allowedRoles || (Array.isArray(allowedRoles) && allowedRoles.length === 0)) {
     return true;
   }

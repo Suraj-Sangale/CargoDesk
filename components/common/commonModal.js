@@ -10,6 +10,7 @@ export default function CommonModal({
   handleBackButtonClick,
   showBackButton,
   modalSize = "w-11/12 md:w-[480px]",
+  noScroll = false,
 }) {
   const [isRendered, setIsRendered] = useState(Boolean(modalOpen));
   const [isClosing, setIsClosing] = useState(false);
@@ -75,7 +76,9 @@ export default function CommonModal({
   return (
     <div
       id="backdrop"
-      className={`fixed inset-0 z-[101] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-x-hidden overflow-y-auto ${
+      className={`fixed inset-0 z-[101] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-x-hidden ${
+        noScroll ? "overflow-y-hidden" : "overflow-y-auto"
+      } ${
         isClosing ? "animate-backdrop-out pointer-events-none" : "animate-backdrop-in"
       }`}
       onClick={handleBackdropClick}
@@ -129,7 +132,7 @@ export default function CommonModal({
         )}
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className={`flex-1 ${noScroll ? "overflow-hidden flex flex-col min-h-0" : "overflow-y-auto overflow-x-hidden"}`}>
           {React.isValidElement(children)
             ? React.cloneElement(children, { toggleModal, onClose: closeModal })
             : children}

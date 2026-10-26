@@ -4,13 +4,45 @@ import {
   getUserMessageTemplatesModel,
 } from "../models/messangerModel";
 import { sendBulkSms } from "../services/smsService";
+import { sendBulkWhatsApp } from "../services/whatsappService";
 
 /**
  * Main controller to send messages to one or multiple recipients.
- * Delegates to the unified SMS service (supporting Twilio, Fast2SMS, etc.)
+ * Supports "sms", "whatsapp", and "both" channels.
  */
 export default async function sendMessage(requestBody = {}) {
+  const { channel = "sms", message, contacts = [] } = requestBody;
+
   try {
+    const selectedChannel = (channel || "sms").toLowerCase().trim();
+
+    if (selectedChannel === "whatsapp") {
+      return await sendBulkWhatsApp({ message, contacts });
+    }
+
+    if (selectedChannel === "both") {
+      const [smsResult, whatsappResult] = await Promise.all([
+        sendBulkSms({ message, contacts }),
+        sendBulkWhatsApp({ message, contacts }),
+      ]);
+
+      const overallStatus = Boolean(smsResult?.status || whatsappResult?.status);
+
+      return {
+        status: overallStatus,
+        channel: "both",
+        message: `SMS: ${smsResult?.message || "N/A"} | WhatsApp: ${whatsappResult?.message || "N/A"}`,
+        data: {
+          sms: smsResult?.data,
+          whatsapp: whatsappResult?.data,
+          sentCount: (smsResult?.data?.sentCount || 0) + (whatsappResult?.data?.sentCount || 0),
+          failedCount: (smsResult?.data?.failedCount || 0) + (whatsappResult?.data?.failedCount || 0),
+          total: contacts.length,
+        },
+      };
+    }
+
+    // Default: SMS
     return await sendBulkSms(requestBody);
   } catch (error) {
     console.error("Error in messagerController:", error);
@@ -20,22 +52,6 @@ export default async function sendMessage(requestBody = {}) {
     };
   }
 }
-
-// postSiteApiData("SEND_SMS", request)
-//   .then((result) => {
-//     if (result.status) {
-//       response.status = true;
-//       response.message = "Message sent successfully";
-//     } else {
-//       response.message = result.message || "Failed to send message.";
-//     }
-//     resolve(response);
-//   })
-//   .catch((error) => {
-//     response.message =
-//       error.message || "An error occurred while sending the message.";
-//     reject(response);
-//   });
 
 export function addNewMsgTemplateController(request) {
   return new Promise((resolve, reject) => {
@@ -57,6 +73,7 @@ export function addNewMsgTemplateController(request) {
       });
   });
 }
+
 export function getUserMessageTemplates(userId) {
   return new Promise((resolve, reject) => {
     const response = {
@@ -77,6 +94,7 @@ export function getUserMessageTemplates(userId) {
       });
   });
 }
+
 export function deleteMessageTemplates(request) {
   return new Promise((resolve, reject) => {
     const response = {

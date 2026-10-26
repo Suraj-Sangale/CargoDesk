@@ -36,7 +36,7 @@ export const FloatingInput = forwardRef(
       children,
       ...props
     },
-    ref
+    ref,
   ) => {
     const inputId = id || name;
     const [isFocused, setIsFocused] = useState(false);
@@ -57,7 +57,9 @@ export const FloatingInput = forwardRef(
     const errorMessage = typeof error === "object" ? error?.message : error;
 
     return (
-      <div className={`w-full relative focus-within:z-20 ${containerClassName}`}>
+      <div
+        className={`w-full relative focus-within:z-20 ${containerClassName}`}
+      >
         <div
           className={`relative group floating-group focus-within:z-20 ${
             hasControlledValue || isFocused ? "is-floated" : ""
@@ -127,8 +129,8 @@ export const FloatingInput = forwardRef(
                 isError
                   ? "!text-red-500 peer-focus:!text-red-500 peer-[:not(:placeholder-shown)]:!text-red-500"
                   : hasControlledValue
-                  ? "text-slate-700 font-semibold peer-focus:!text-[#4bb7ff] group-focus-within:!text-[#4bb7ff]"
-                  : "text-[#8fa0b5] peer-focus:!text-[#4bb7ff] group-focus-within:!text-[#4bb7ff] peer-[:not(:placeholder-shown)]:!text-slate-700 peer-[:not(:placeholder-shown)]:font-semibold peer-autofill:!text-slate-700"
+                    ? "text-slate-700 font-semibold peer-focus:!text-[#4bb7ff] group-focus-within:!text-[#4bb7ff]"
+                    : "text-[#8fa0b5] peer-focus:!text-[#4bb7ff] group-focus-within:!text-[#4bb7ff] peer-[:not(:placeholder-shown)]:!text-slate-700 peer-[:not(:placeholder-shown)]:font-semibold peer-autofill:!text-slate-700"
               } ${labelClassName}`}
             >
               {label}
@@ -157,7 +159,7 @@ export const FloatingInput = forwardRef(
         )}
       </div>
     );
-  }
+  },
 );
 FloatingInput.displayName = "FloatingInput";
 
@@ -191,17 +193,21 @@ export const FloatingSelect = forwardRef(
       isSearchable,
       ...props
     },
-    ref
+    ref,
   ) => {
     const selectId = id || name;
     const isError = Boolean(error);
     const errorMessage = typeof error === "object" ? error?.message : error;
     const hasVal =
       (value !== undefined && value !== null && String(value).length > 0) ||
-      (selectedValue !== undefined && selectedValue !== null && String(selectedValue).length > 0);
+      (selectedValue !== undefined &&
+        selectedValue !== null &&
+        String(selectedValue).length > 0);
 
     return (
-      <div className={`w-full relative focus-within:z-40 ${containerClassName}`}>
+      <div
+        className={`w-full relative focus-within:z-40 ${containerClassName}`}
+      >
         <div className="relative group floating-group is-floated focus-within:z-40">
           {Icon && (
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-[#4bb7ff] transition-colors z-20">
@@ -258,8 +264,8 @@ export const FloatingSelect = forwardRef(
                 isError
                   ? "!text-red-500"
                   : hasVal
-                  ? "text-slate-700 group-focus-within:!text-[#4bb7ff]"
-                  : "text-[#8fa0b5] group-focus-within:!text-[#4bb7ff]"
+                    ? "text-slate-700 group-focus-within:!text-[#4bb7ff]"
+                    : "text-[#8fa0b5] group-focus-within:!text-[#4bb7ff]"
               } ${labelClassName}`}
             >
               {label}
@@ -280,7 +286,7 @@ export const FloatingSelect = forwardRef(
         )}
       </div>
     );
-  }
+  },
 );
 FloatingSelect.displayName = "FloatingSelect";
 
@@ -310,7 +316,7 @@ export const FloatingTextarea = forwardRef(
       onBlur,
       ...props
     },
-    ref
+    ref,
   ) => {
     const textareaId = id || name;
     const [isFocused, setIsFocused] = useState(false);
@@ -320,7 +326,9 @@ export const FloatingTextarea = forwardRef(
     const errorMessage = typeof error === "object" ? error?.message : error;
 
     return (
-      <div className={`w-full relative focus-within:z-20 ${containerClassName}`}>
+      <div
+        className={`w-full relative focus-within:z-20 ${containerClassName}`}
+      >
         <div
           className={`relative group floating-group focus-within:z-20 ${
             hasControlledValue || isFocused ? "is-floated" : ""
@@ -385,8 +393,8 @@ export const FloatingTextarea = forwardRef(
                 isError
                   ? "!text-red-500 peer-focus:!text-red-500 peer-[:not(:placeholder-shown)]:!text-red-500"
                   : hasControlledValue
-                  ? "text-slate-700 font-semibold peer-focus:!text-[#4bb7ff] group-focus-within:!text-[#4bb7ff]"
-                  : "text-[#8fa0b5] peer-focus:!text-[#4bb7ff] group-focus-within:!text-[#4bb7ff] peer-[:not(:placeholder-shown)]:!text-slate-700 peer-[:not(:placeholder-shown)]:font-semibold peer-autofill:!text-slate-700"
+                    ? "text-slate-700 font-semibold peer-focus:!text-[#4bb7ff] group-focus-within:!text-[#4bb7ff]"
+                    : "text-[#8fa0b5] peer-focus:!text-[#4bb7ff] group-focus-within:!text-[#4bb7ff] peer-[:not(:placeholder-shown)]:!text-slate-700 peer-[:not(:placeholder-shown)]:font-semibold peer-autofill:!text-slate-700"
               } ${labelClassName}`}
             >
               {label}
@@ -407,7 +415,7 @@ export const FloatingTextarea = forwardRef(
         )}
       </div>
     );
-  }
+  },
 );
 FloatingTextarea.displayName = "FloatingTextarea";
 
@@ -441,7 +449,7 @@ export const FloatingDatePicker = forwardRef(
       maxDate,
       ...props
     },
-    ref
+    ref,
   ) => {
     const pickerId = id || name;
     const [isFocused, setIsFocused] = useState(false);
@@ -453,13 +461,15 @@ export const FloatingDatePicker = forwardRef(
       value && moment(value).isValid()
         ? moment(value)
         : defaultValue && moment(defaultValue).isValid()
-        ? moment(defaultValue)
-        : null;
+          ? moment(defaultValue)
+          : null;
 
     const hasVal = Boolean(momentVal && momentVal.isValid());
 
     return (
-      <div className={`w-full relative focus-within:z-40 ${containerClassName}`}>
+      <div
+        className={`w-full relative focus-within:z-40 ${containerClassName}`}
+      >
         <div className="relative group floating-group is-floated focus-within:z-40">
           {Icon && (
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-[#4bb7ff] transition-colors z-20">
@@ -499,7 +509,8 @@ export const FloatingDatePicker = forwardRef(
                     inputProps: {
                       id: pickerId,
                       "data-field": pickerId,
-                      className: "!py-0.5 text-slate-900 font-semibold text-sm placeholder:text-slate-400/60",
+                      className:
+                        "!py-0.5 text-slate-900 font-semibold text-sm placeholder:text-slate-400/60",
                       placeholder: placeholder,
                     },
                     onFocus: (e) => {
@@ -563,10 +574,11 @@ export const FloatingDatePicker = forwardRef(
                         borderColor: "#3b82f6",
                         borderWidth: "1.5px",
                       },
-                      "& .MuiYearCalendar-root .MuiPickersYear-yearButton.Mui-selected": {
-                        backgroundColor: "#2563eb !important",
-                        color: "#ffffff !important",
-                      },
+                      "& .MuiYearCalendar-root .MuiPickersYear-yearButton.Mui-selected":
+                        {
+                          backgroundColor: "#2563eb !important",
+                          color: "#ffffff !important",
+                        },
                     },
                   },
                 }}
@@ -601,8 +613,8 @@ export const FloatingDatePicker = forwardRef(
                 isError
                   ? "!text-red-500"
                   : hasVal || isFocused
-                  ? "text-slate-700 group-focus-within:!text-[#4bb7ff]"
-                  : "text-[#8fa0b5] group-focus-within:!text-[#4bb7ff]"
+                    ? "text-slate-700 group-focus-within:!text-[#4bb7ff]"
+                    : "text-[#8fa0b5] group-focus-within:!text-[#4bb7ff]"
               } ${labelClassName}`}
             >
               {label}
@@ -623,7 +635,7 @@ export const FloatingDatePicker = forwardRef(
         )}
       </div>
     );
-  }
+  },
 );
 FloatingDatePicker.displayName = "FloatingDatePicker";
 

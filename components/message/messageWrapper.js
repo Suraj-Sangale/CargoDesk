@@ -4,6 +4,7 @@ import Link from "next/link";
 import { postApiData } from "@/utilities/services/apiService";
 import PrevMessageCard from "./prevMessageCard";
 import PageHeader from "@/components/common/pageHeader";
+import CommonModal from "@/components/common/commonModal";
 import { showToast } from "@/utilities/toastService";
 import {
   FiSearch,
@@ -18,10 +19,28 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiExternalLink,
+  FiMessageSquare,
+  FiCheckCircle,
+  FiSmartphone,
+  FiPower,
 } from "react-icons/fi";
+import { FaWhatsapp } from "react-icons/fa";
 import { RiSendPlaneFill } from "react-icons/ri";
 import { ImSpinner9 } from "react-icons/im";
 import { scrollSectionIntoView } from "@/utilities/utils";
+
+/**
+ * Builds a direct WhatsApp Web / Mobile Click-to-Chat link
+ */
+const getWhatsAppUrl = (phone, msg = "") => {
+  if (!phone) return "#";
+  const cleaned = String(phone).replace(/[\s\-\(\)\.]/g, "");
+  let digits = cleaned.replace(/\+/g, "");
+  if (digits.length === 10) {
+    digits = "91" + digits; // Default Indian Country code
+  }
+  return `https://api.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(msg || "")}`;
+};
 
 export default function MessageWrapper({
   pageData,
@@ -44,6 +63,21 @@ export default function MessageWrapper({
     contacts: [],
     groups: [],
   });
+
+  // Channel: "sms" | "whatsapp" | "both"
+  const [channel, setChannel] = useState("sms");
+
+  // WhatsApp Gateway State
+  const [whatsappStatus, setWhatsappStatus] = useState({
+    isConnected: false,
+    isConnecting: false,
+    status: "disconnected",
+    qrCode: null,
+    phone: null,
+    userName: null,
+  });
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [sendProgress, setSendProgress] = useState(null);
@@ -91,6 +125,64 @@ export default function MessageWrapper({
     { label: "Vehicle Number", value: "{vehicleNo}" },
     { label: "Date", value: "{date}" },
   ];
+
+  // Fetch WhatsApp Gateway Status
+  const fetchWhatsAppStatus = async () => {
+    try {
+      const res = await postApiData("GET_WHATSAPP_STATUS");
+      if (res?.status && res?.data) {
+        setWhatsappStatus(res.data);
+      }
+    } catch (err) {
+      console.error("Error checking WhatsApp status:", err);
+    }
+  };
+
+  const handleConnectWhatsApp = async () => {
+    setShowQrModal(true);
+    setQrLoading(true);
+    try {
+      await postApiData("CONNECT_WHATSAPP_GATEWAY", { forceReconnect: true });
+      await fetchWhatsAppStatus();
+    } catch (err) {
+      showToast({ message: "Failed to initialize QR code", type: "error" });
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const handleLogoutWhatsApp = async () => {
+    try {
+      const res = await postApiData("LOGOUT_WHATSAPP_GATEWAY");
+      if (res?.status) {
+        showToast({
+          message: "WhatsApp disconnected successfully",
+          type: "success",
+        });
+        setShowQrModal(false);
+        await fetchWhatsAppStatus();
+      }
+    } catch (err) {
+      showToast({ message: "Failed to disconnect WhatsApp", type: "error" });
+    }
+  };
+
+  // Initial check & auto-polling when modal is active
+  useEffect(() => {
+    fetchWhatsAppStatus();
+  }, []);
+
+  useEffect(() => {
+    let interval = null;
+    if (showQrModal && !whatsappStatus.isConnected) {
+      interval = setInterval(() => {
+        fetchWhatsAppStatus();
+      }, 2500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [showQrModal, whatsappStatus.isConnected]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -258,7 +350,7 @@ export default function MessageWrapper({
     }
   };
 
-  const CLIENT_BATCH_SIZE = 50; // Configurable client-side batch size for chunked sending
+  const CLIENT_BATCH_SIZE = 50;
 
   const onSubmit = async () => {
     if (formData.contacts.length === 0 && formData.groups.length === 0) {
@@ -314,7 +406,6 @@ export default function MessageWrapper({
     let overallFailedDetails = [];
 
     try {
-      // Chunk recipients into manageable batches to prevent HTTP timeouts & overload
       for (let i = 0; i < totalRecipients; i += CLIENT_BATCH_SIZE) {
         const batch = uniqueNumbers.slice(i, i + CLIENT_BATCH_SIZE);
         const processedCount = Math.min(i + batch.length, totalRecipients);
@@ -328,6 +419,7 @@ export default function MessageWrapper({
         const payload = {
           message: formData.message,
           contacts: batch,
+          channel: channel,
         };
 
         const response = await postApiData("SEND_MESSAGE", payload);
@@ -352,7 +444,6 @@ export default function MessageWrapper({
         }
       }
 
-      // Aggregate final campaign statistics
       const summary = {
         total: totalRecipients,
         sentCount: overallSentCount,
@@ -360,32 +451,44 @@ export default function MessageWrapper({
         invalidCount: overallInvalidNumbers.length,
         failedDetails: overallFailedDetails,
         invalidNumbers: overallInvalidNumbers,
+        channel: channel,
       };
 
       setSendSummary(summary);
+
+      const channelName =
+        channel === "whatsapp"
+          ? "WhatsApp"
+          : channel === "both"
+            ? "SMS & WhatsApp"
+            : "SMS";
 
       if (
         overallSentCount === totalRecipients &&
         overallInvalidNumbers.length === 0
       ) {
         showToast({
-          message: `Message sent successfully to all ${overallSentCount} recipient${overallSentCount > 1 ? "s" : ""}!`,
+          message: `Message sent successfully via ${channelName} to all ${overallSentCount} recipient${overallSentCount > 1 ? "s" : ""}!`,
           type: "success",
         });
       } else if (overallSentCount > 0) {
         showToast({
-          message: `Sent to ${overallSentCount} of ${totalRecipients} recipient${totalRecipients > 1 ? "s" : ""}.${overallFailedCount > 0 ? ` ${overallFailedCount} failed.` : ""}`,
+          message: `Sent via ${channelName} to ${overallSentCount} of ${totalRecipients} recipient${totalRecipients > 1 ? "s" : ""}.${overallFailedCount > 0 ? ` ${overallFailedCount} failed.` : ""}`,
           type: "success",
         });
       } else {
         const errorMsg =
           overallFailedDetails[0]?.error ||
-          "Failed to send messages. Please check your SMS configuration.";
+          `Failed to send messages via ${channelName}.`;
         setSendMsgApiError(errorMsg);
         showToast({
           message: errorMsg,
           type: "error",
         });
+
+        if (channel === "whatsapp" && !whatsappStatus.isConnected) {
+          handleConnectWhatsApp();
+        }
       }
     } catch (err) {
       console.error("Message sending failed:", err);
@@ -439,27 +542,111 @@ export default function MessageWrapper({
       <PageHeader
         eyebrow=""
         title="Send a Message"
-        subtitle="Type a new message or use a saved template to quickly communicate with your contacts or groups."
+        subtitle="Type a new message or use a saved template to quickly communicate with your contacts via SMS or WhatsApp."
         imageSrc="/imges/layouts/newdDshboard.png"
       />
 
       <form onSubmit={handleSubmit(onSubmit)}>
-        {/* Main 2-Column Responsive Layout matching reference */}
+        {/* Main 2-Column Responsive Layout */}
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           {/* LEFT COLUMN: Message Composer + Saved Templates (~68%) */}
           <div className="flex-1 w-full space-y-6">
             {/* 1. Message Composer Card */}
             <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4">
-              {/* Card Title */}
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                  Message
-                </h2>
+              {/* Card Title, Channel Selector & WhatsApp Status Badge */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-100">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                    <span>Message Composer</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Choose delivery channel and compose your message.
+                  </p>
+                </div>
+
+                <div className="flex items-center flex-wrap gap-2">
+                  {/* WhatsApp Gateway Status Badge */}
+                  {whatsappStatus.isConnected ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowQrModal(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-full text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+                      title="WhatsApp Gateway Connected. Click to view or disconnect."
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <FaWhatsapp className="w-3.5 h-3.5" />
+                      <span>
+                        Linked{" "}
+                        {whatsappStatus.phone
+                          ? `(+${whatsappStatus.phone})`
+                          : ""}
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleConnectWhatsApp}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 rounded-full text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+                      title="Click to scan QR code and connect free automated WhatsApp Gateway"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      <FaWhatsapp className="w-3.5 h-3.5" />
+                      <span>Link WhatsApp (Free QR)</span>
+                    </button>
+                  )}
+
+                  {/* Segmented Channel Switcher: SMS | WhatsApp | Both */}
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/60 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setChannel("sms")}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        channel === "sms"
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <FiMessageSquare className="w-3.5 h-3.5" />
+                      <span>SMS</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setChannel("whatsapp")}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        channel === "whatsapp"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-emerald-700"
+                      }`}
+                    >
+                      <FaWhatsapp className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setChannel("both")}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        channel === "both"
+                          ? "bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <span>🚀 Both</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {/* Textarea Box with Blue Border */}
+              {/* Textarea Box */}
               <div
-                className="relative rounded-2xl border border-blue-400 focus-within:ring-2 focus-within:ring-blue-500/20 bg-white p-4 transition-all"
+                className={`relative rounded-2xl border transition-all bg-white p-4 ${
+                  channel === "whatsapp"
+                    ? "border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-500/20"
+                    : channel === "both"
+                      ? "border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-500/20"
+                      : "border-blue-400 focus-within:ring-2 focus-within:ring-blue-500/20"
+                }`}
                 id="messageInput"
               >
                 <textarea
@@ -602,7 +789,13 @@ export default function MessageWrapper({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-md shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-50"
+                  className={`inline-flex items-center gap-2 px-6 py-2.5 text-white rounded-xl text-sm font-semibold shadow-md transition-all cursor-pointer disabled:opacity-50 ${
+                    channel === "whatsapp"
+                      ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/25"
+                      : channel === "both"
+                        ? "bg-gradient-to-r from-blue-600 to-emerald-600 hover:opacity-95 shadow-indigo-500/25"
+                        : "bg-[#2563EB] hover:bg-blue-700 shadow-blue-500/25"
+                  }`}
                 >
                   {loading ? (
                     <>
@@ -615,18 +808,34 @@ export default function MessageWrapper({
                     </>
                   ) : (
                     <>
-                      <RiSendPlaneFill className="w-4 h-4" />
-                      <span>Send Message</span>
+                      {channel === "whatsapp" ? (
+                        <FaWhatsapp className="w-4 h-4" />
+                      ) : (
+                        <RiSendPlaneFill className="w-4 h-4" />
+                      )}
+                      <span>
+                        {channel === "whatsapp"
+                          ? "Send via WhatsApp"
+                          : channel === "both"
+                            ? "Send SMS & WhatsApp"
+                            : "Send SMS"}
+                      </span>
                     </>
                   )}
                 </button>
               </div>
 
-              {/* Progress Bar (Visible during batch transmission) */}
+              {/* Progress Bar */}
               {loading && sendProgress && (
                 <div className="pt-2 space-y-1.5 animate-fade-in">
                   <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                    <span className="flex items-center gap-1.5 text-blue-600 font-semibold">
+                    <span
+                      className={`flex items-center gap-1.5 font-semibold ${
+                        channel === "whatsapp"
+                          ? "text-emerald-600"
+                          : "text-blue-600"
+                      }`}
+                    >
                       <ImSpinner9 className="w-3 h-3 animate-spin" />
                       <span>Transmitting batch to recipients...</span>
                     </span>
@@ -637,7 +846,11 @@ export default function MessageWrapper({
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
                     <div
-                      className="bg-[#2563EB] h-full transition-all duration-300 rounded-full"
+                      className={`h-full transition-all duration-300 rounded-full ${
+                        channel === "whatsapp"
+                          ? "bg-emerald-600"
+                          : "bg-[#2563EB]"
+                      }`}
                       style={{ width: `${sendProgress.percent}%` }}
                     />
                   </div>
@@ -731,8 +944,6 @@ export default function MessageWrapper({
             </div>
 
             {/* 2. Saved Templates Section */}
-
-            {/* A. Mobile Collapsed Card (< 1024px, when not expanded) */}
             {!isTemplatesExpandedMobile && (
               <div className="lg:hidden bg-white rounded-2xl p-4 shadow-xs border border-slate-200/80 transition-all hover:border-blue-200">
                 <div className="flex items-center justify-between gap-3">
@@ -784,14 +995,13 @@ export default function MessageWrapper({
               </div>
             )}
 
-            {/* B. Full Saved Templates Card (Always shown on >= 1024px / lg, shown when expanded on < 1024px) */}
             <div
               id="saved-templates-card"
               className={`${
                 isTemplatesExpandedMobile ? "block" : "hidden lg:block"
               } bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-5 animate-fade-in`}
             >
-              {/* Header Row: Title & Subtitle on Left, Search & + Add New on Right */}
+              {/* Header Row */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center justify-between sm:justify-start gap-3">
                   <div>
@@ -799,179 +1009,151 @@ export default function MessageWrapper({
                       <h2 className="text-lg font-bold text-slate-900 tracking-tight">
                         Saved Templates
                       </h2>
-                      <span className="px-2 py-0.5 text-xs font-bold bg-blue-50 text-blue-700 rounded-full border border-blue-100">
+                      <span className="px-2.5 py-0.5 text-xs font-bold bg-blue-50 text-[#2563EB] rounded-full border border-blue-100">
                         {filteredTemplates.length}
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 font-medium mt-0.5">
-                      Use predefined templates to send messages quickly.
+                      Quickly insert pre-written messages or manage your
+                      library.
                     </p>
                   </div>
 
-                  {/* Collapse Button on Mobile (< 1024px) */}
                   <button
                     type="button"
                     onClick={() => setIsTemplatesExpandedMobile(false)}
-                    className="lg:hidden flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0"
+                    className="lg:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
                     title="Collapse Templates"
                   >
-                    <FiChevronUp className="w-4 h-4" />
-                    <span>Collapse</span>
+                    <FiChevronUp className="w-5 h-5" />
                   </button>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  {/* Search input */}
-                  {!showAddMsgTemplet && (
-                    <div className="relative w-44 sm:w-56">
-                      <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                      <input
-                        type="text"
-                        value={templateSearch}
-                        onChange={(e) => setTemplateSearch(e.target.value)}
-                        placeholder="Search templates..."
-                        className="w-full pl-9 pr-3 py-2 text-xs bg-white text-slate-800 placeholder-slate-400 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 outline-none transition-all"
-                      />
-                      {templateSearch && (
-                        <button
-                          type="button"
-                          onClick={() => setTemplateSearch("")}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                          <FiX className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  )}
+                {/* Search & Add New Button */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1 sm:w-48">
+                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={templateSearch}
+                      onChange={(e) => setTemplateSearch(e.target.value)}
+                      placeholder="Search templates..."
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 text-slate-800 placeholder-slate-400 rounded-xl border border-slate-200 hover:border-slate-300 focus:border-blue-500 outline-none transition-all"
+                    />
+                    {templateSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setTemplateSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <FiX className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
 
-                  {/* + Add New Button */}
                   <button
                     type="button"
                     onClick={() => setShowAddMsgTemplet(!showAddMsgTemplet)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0B1E62] hover:bg-blue-900 text-white rounded-xl text-xs md:text-sm font-semibold transition-all cursor-pointer shadow-xs"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
                   >
-                    {showAddMsgTemplet ? (
-                      <>
-                        <FiX className="w-3.5 h-3.5" />
-                        <span>Cancel</span>
-                      </>
-                    ) : (
-                      <>
-                        <FiPlus className="w-3.5 h-3.5" />
-                        <span>Add New</span>
-                      </>
-                    )}
+                    <FiPlus className="w-3.5 h-3.5" />
+                    <span>Add New</span>
                   </button>
                 </div>
               </div>
 
-              {/* Inline Add Template Form */}
-              {showAddMsgTemplet ? (
-                <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-3 animate-slide-down">
-                  <span className="text-xs font-bold text-slate-800">
-                    Create New Template
-                  </span>
+              {/* Add New Template Form */}
+              {showAddMsgTemplet && (
+                <div className="p-4 bg-slate-50/80 rounded-2xl border border-blue-100 space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Create New Message Template
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMsgTemplet(false)}
+                      className="text-slate-400 hover:text-slate-600 p-0.5"
+                    >
+                      <FiX className="w-4 h-4" />
+                    </button>
+                  </div>
                   <textarea
                     rows={3}
-                    className="w-full p-3 text-xs md:text-sm bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 resize-none"
-                    placeholder="Type your message to save as a template..."
                     value={newTemplateText}
                     onChange={(e) => setNewTemplateText(e.target.value)}
+                    placeholder="Write your template text here... (Variables like {name}, {vehicleNo} supported)"
+                    className="w-full text-xs text-slate-800 placeholder-slate-400 bg-white p-3 rounded-xl border border-slate-200 focus:border-blue-500 outline-none resize-none shadow-2xs"
                   />
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => setShowAddMsgTemplet(false)}
-                      className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                      className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
                       onClick={handleSaveTemplate}
-                      disabled={!newTemplateText.trim() || addMsgLoading}
-                      className="px-4 py-1.5 text-xs font-semibold bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                      disabled={addMsgLoading || !newTemplateText.trim()}
+                      className="px-4 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
                     >
-                      {addMsgLoading ? (
-                        <>
-                          <ImSpinner9 className="w-3 h-3 animate-spin" />
-                          <span>Saving...</span>
-                        </>
-                      ) : (
-                        "Save Template"
-                      )}
+                      {addMsgLoading ? "Saving..." : "Save Template"}
                     </button>
                   </div>
                 </div>
+              )}
+
+              {/* Grid of Templates */}
+              {filteredTemplates.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredTemplates.map((item) => (
+                    <PrevMessageCard
+                      key={item.id}
+                      item={item}
+                      handleDelete={() => {
+                        setToDelete(item);
+                        setIsConfirm(true);
+                      }}
+                      handleCopy={() => handleCopy(item)}
+                      copied={copied}
+                      deleteLoading={
+                        deleteMsgLoading && toDelete?.id === item.id
+                      }
+                      handleChange={handleChange}
+                    />
+                  ))}
+                </div>
               ) : (
-                /* 2-Column Templates Grid */
-                <>
-                  {filteredTemplates.length === 0 ? (
-                    <div className="py-12 text-center space-y-3">
-                      <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
-                        <FiFileText className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">
-                          {templateSearch
-                            ? "No matching templates found"
-                            : "No saved templates yet"}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          {templateSearch
-                            ? "Try another search keyword"
-                            : "Create a template to quickly send recurring messages."}
-                        </p>
-                      </div>
-                      {!templateSearch && (
-                        <button
-                          type="button"
-                          onClick={() => setShowAddMsgTemplet(true)}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-                        >
-                          <FiPlus className="w-3.5 h-3.5" />
-                          <span>Add New Template</span>
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {filteredTemplates.map((item, i) => (
-                        <PrevMessageCard
-                          key={item.id || i}
-                          index={i}
-                          item={item}
-                          handleChange={handleChange}
-                          copied={copied}
-                          handleCopy={handleCopy}
-                          handleDelete={handleDelete}
-                          deleteMsgLoading={deleteMsgLoading}
-                          toDelete={toDelete}
-                          setIsConfirm={setIsConfirm}
-                          isConfirm={isConfirm}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </>
+                <div className="text-center py-10 text-slate-400 text-xs">
+                  <FiFileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p>No templates found.</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMsgTemplet(true)}
+                    className="text-blue-600 underline font-medium mt-1 inline-block cursor-pointer"
+                  >
+                    Create your first template
+                  </button>
+                </div>
               )}
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Select Recipients Card (~32%) */}
+          {/* RIGHT COLUMN: Recipients Panel (~32%) */}
           <div
             className="w-full lg:w-96 shrink-0 space-y-4"
             id="select-recipients"
           >
-            <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4 flex flex-col">
-              {/* Header: Title on Left, Manage Contacts Link Button on Right */}
-              <div className="flex items-start justify-between gap-2">
+            <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4">
+              {/* Header: Select Recipients + Manage Link */}
+              <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                    Select Recipients
+                    Recipients
                   </h2>
-                  <p className="text-xs text-slate-400 font-medium mt-0.5">
-                    Choose contacts or groups to send your message.
+                  <p className="text-xs text-slate-400 font-medium">
+                    Choose contacts or groups
                   </p>
                 </div>
 
@@ -1054,42 +1236,56 @@ export default function MessageWrapper({
                         )[0].toUpperCase();
 
                         return (
-                          <label
+                          <div
                             key={contact.id}
-                            className={`flex items-center gap-3 py-2.5 px-2 rounded-xl transition-all cursor-pointer border-b border-slate-100/80 ${
+                            className={`flex items-center justify-between py-2 px-2 rounded-xl transition-all border-b border-slate-100/80 ${
                               isSelected
                                 ? "bg-blue-50/80"
                                 : "hover:bg-slate-50/80"
                             }`}
                           >
-                            {/* Checkbox */}
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleCheckboxChange(contact)}
-                              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer shrink-0"
-                            />
+                            <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                              {/* Checkbox */}
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleCheckboxChange(contact)}
+                                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer shrink-0"
+                              />
 
-                            {/* Circular Pastel Blue Avatar */}
-                            <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 bg-[#EBF5FF] text-[#2563EB]">
-                              {initial}
-                            </div>
+                              {/* Circular Avatar */}
+                              <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 bg-[#EBF5FF] text-[#2563EB]">
+                                {initial}
+                              </div>
 
-                            {/* Contact Name */}
-                            <div className="flex-1 min-w-0">
-                              <p
-                                className="text-sm font-semibold text-slate-900 truncate"
-                                title={contact.name}
-                              >
-                                {contact.name}
-                              </p>
-                            </div>
+                              {/* Contact Name & Phone */}
+                              <div className="flex-1 min-w-0">
+                                <p
+                                  className="text-sm font-semibold text-slate-900 truncate"
+                                  title={contact.name}
+                                >
+                                  {contact.name}
+                                </p>
+                                <p className="text-[11px] font-mono text-slate-400 truncate">
+                                  {contact.contactNo}
+                                </p>
+                              </div>
+                            </label>
 
-                            {/* Phone Number */}
-                            <span className="text-xs font-mono text-slate-500 shrink-0">
-                              {contact.contactNo}
-                            </span>
-                          </label>
+                            {/* Direct WhatsApp Quick Chat Link */}
+                            <a
+                              href={getWhatsAppUrl(
+                                contact.contactNo,
+                                formData.message,
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100/70 rounded-lg transition-colors shrink-0 cursor-pointer ml-1"
+                              title={`Open WhatsApp chat with ${contact.name}`}
+                            >
+                              <FaWhatsapp className="w-4 h-4" />
+                            </a>
+                          </div>
                         );
                       })
                     ) : (
@@ -1163,12 +1359,31 @@ export default function MessageWrapper({
                 )}
               </div>
 
-              {/* Footer: X selected + Clear All + Manage Contacts */}
+              {/* Footer */}
               <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
                 <span className="font-semibold text-blue-600">
                   {totalSelectedCount} selected
                 </span>
                 <div className="flex items-center gap-3">
+                  {formData.contacts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        formData.contacts.forEach((c) => {
+                          const url = getWhatsAppUrl(
+                            c.contactNo,
+                            formData.message,
+                          );
+                          if (url && url !== "#") window.open(url, "_blank");
+                        });
+                      }}
+                      className="font-semibold text-emerald-600 hover:text-emerald-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      title="Open selected contacts in WhatsApp"
+                    >
+                      <FaWhatsapp className="w-3.5 h-3.5" />
+                      <span>WhatsApp ({formData.contacts.length})</span>
+                    </button>
+                  )}
                   {totalSelectedCount > 0 && (
                     <button
                       type="button"
@@ -1178,22 +1393,8 @@ export default function MessageWrapper({
                       Clear All
                     </button>
                   )}
-                  <Link
-                    href="/messager/manage-contacts"
-                    className="font-semibold text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
-                  >
-                    <span>Manage Contacts</span>
-                    <FiExternalLink className="w-3 h-3" />
-                  </Link>
                 </div>
               </div>
-
-              {/* Selection Error */}
-              {/* {contactsError && (
-                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium text-center">
-                  Please select at least one contact or group.
-                </div>
-              )} */}
 
               {sendMsgApiError && (
                 <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium text-center">
@@ -1204,6 +1405,116 @@ export default function MessageWrapper({
           </div>
         </div>
       </form>
+
+      {/* WhatsApp QR Code Link Device Modal */}
+      <CommonModal
+        modalOpen={showQrModal}
+        setModalOpen={setShowQrModal}
+        modalTitle="Link WhatsApp Account (100% Free)"
+      >
+        <div className="p-6 space-y-5 text-center">
+          {whatsappStatus.isConnected ? (
+            <div className="space-y-4 py-2">
+              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
+                <FiCheckCircle className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  WhatsApp Gateway is Connected!
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Automated background messaging is active for:
+                </p>
+                <p className="text-sm font-bold text-emerald-600 font-mono mt-1">
+                  +{whatsappStatus.phone || "Active Linked Phone"}
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
+                >
+                  Done
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogoutWhatsApp}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold rounded-xl transition cursor-pointer"
+                >
+                  <FiPower className="w-3.5 h-3.5" />
+                  <span>Unlink / Disconnect</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-center gap-2 text-slate-700 font-bold text-sm">
+                <FiSmartphone className="w-4 h-4 text-emerald-600" />
+                <span>Scan QR Code with WhatsApp</span>
+              </div>
+
+              {/* QR Code Container */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 inline-block mx-auto shadow-inner">
+                {qrLoading || !whatsappStatus.qrCode ? (
+                  <div className="w-56 h-56 flex flex-col items-center justify-center text-slate-400 space-y-2">
+                    <ImSpinner9 className="w-8 h-8 animate-spin text-emerald-600" />
+                    <span className="text-xs font-medium">
+                      Generating QR code...
+                    </span>
+                  </div>
+                ) : (
+                  <img
+                    src={whatsappStatus.qrCode}
+                    alt="WhatsApp QR Code"
+                    className="w-56 h-56 mx-auto rounded-xl shadow-xs"
+                  />
+                )}
+              </div>
+
+              {/* Step by step Instructions */}
+              <div className="bg-slate-50 p-3.5 rounded-xl text-left text-xs text-slate-600 space-y-1.5 border border-slate-100">
+                <p className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">
+                  How to link:
+                </p>
+                <ol className="list-decimal list-inside space-y-1 text-slate-600 text-[11px]">
+                  <li>
+                    Open <strong>WhatsApp</strong> on your mobile phone.
+                  </li>
+                  <li>
+                    Tap <strong>Menu (⋮)</strong> on Android or{" "}
+                    <strong>Settings</strong> on iPhone.
+                  </li>
+                  <li>
+                    Tap <strong>Linked Devices</strong> &rarr;{" "}
+                    <strong>Link a Device</strong>.
+                  </li>
+                  <li>Point your phone camera at this QR code to scan.</li>
+                </ol>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleConnectWhatsApp}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-xl transition cursor-pointer"
+                >
+                  <FiRefreshCw className="w-3.5 h-3.5" />
+                  <span>Refresh QR Code</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </CommonModal>
     </div>
   );
 }

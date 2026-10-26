@@ -340,11 +340,11 @@ export function EmiPanel({ fleet }) {
 /**
  * Driver Tab Panel
  */
-export function DriverPanel({ fleet }) {
+export function DriverPanel({ fleet, onAssignDriver, onUnassignDriver }) {
   const hasDriver = Boolean(fleet?.driver_name);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 sm:p-6">
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 sm:p-6 space-y-4">
       <div className="flex items-center justify-between pb-4 border-b border-slate-100">
         <div>
           <h3 className="text-base font-bold text-slate-900">Assigned Driver</h3>
@@ -352,30 +352,72 @@ export function DriverPanel({ fleet }) {
             Primary driver allocated to operate vehicle {fleet?.vehicle_number}.
           </p>
         </div>
+        {hasDriver && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onAssignDriver}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              <FiUser className="w-3.5 h-3.5" />
+              <span>Change Driver</span>
+            </button>
+            {onUnassignDriver && (
+              <button
+                type="button"
+                onClick={onUnassignDriver}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <span>Unassign</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {hasDriver ? (
-        <div className="py-4 flex items-start gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center font-bold text-xl shadow-xs">
-            {fleet.driver_name.charAt(0)}
-          </div>
-          <div>
-            <h4 className="text-base font-bold text-slate-900">{fleet.driver_name}</h4>
-            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
-              <FiPhone className="w-3.5 h-3.5" />
-              <span>{fleet.driver_contact || "No Contact Number"}</span>
-            </p>
-            {fleet.driver_license_number && (
-              <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-                <FiShield className="w-3.5 h-3.5" />
-                <span>License: {fleet.driver_license_number}</span>
+        <div className="py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-slate-50/70 border border-slate-200/60">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center font-bold text-xl shadow-xs shrink-0">
+              {fleet.driver_name.charAt(0)}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-base font-bold text-slate-900">{fleet.driver_name}</h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  Active On Fleet
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1 flex items-center gap-2">
+                <FiPhone className="w-3.5 h-3.5 text-slate-400" />
+                <span>{fleet.driver_contact || "No Contact Number"}</span>
               </p>
-            )}
+              {fleet.driver_license_number && (
+                <p className="text-xs text-slate-600 mt-1 flex items-center gap-2">
+                  <FiShield className="w-3.5 h-3.5 text-slate-400" />
+                  <span>License: {fleet.driver_license_number}</span>
+                </p>
+              )}
+            </div>
           </div>
         </div>
       ) : (
-        <div className="py-8 text-center text-slate-500 text-xs sm:text-sm">
-          <p>No driver currently assigned to this fleet vehicle.</p>
+        <div className="py-10 text-center flex flex-col items-center justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mb-3">
+            <FiUser className="w-7 h-7" />
+          </div>
+          <h4 className="text-sm font-bold text-slate-800">No Driver Currently Assigned</h4>
+          <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
+            Vehicle {fleet?.vehicle_number} does not have an active driver assigned to it.
+          </p>
+          <button
+            type="button"
+            onClick={onAssignDriver}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+          >
+            <FiUser className="w-4 h-4" />
+            <span>Assign Driver Now</span>
+          </button>
         </div>
       )}
     </div>

@@ -373,7 +373,7 @@ export function addNewFleetModel(data) {
 export function updateFleetModel(id, data) {
   return new Promise(async (resolve, reject) => {
     try {
-      await ensureFleetTable();
+      // await ensureFleetTable();
 
       const parsedDriverId =
         data.driver_id !== undefined
@@ -429,21 +429,22 @@ export function updateFleetModel(id, data) {
 
         // Manage driver assignment if provided in update payload
         if (parsedDriverId !== undefined) {
+          const targetVehNo = updateData.vehicle_number || oldFleet?.vehicle_number || null;
           if (parsedDriverId) {
             // Remove previous driver on this fleet (if different)
             await queryFn(
-              `UPDATE drivers SET fleet_id = NULL WHERE fleet_id = ? AND id != ?`,
+              `UPDATE drivers SET fleet_id = NULL, assigned_vehicle = NULL WHERE fleet_id = ? AND id != ?`,
               [id, parsedDriverId],
             );
             // Assign selected driver to this fleet
-            await queryFn(`UPDATE drivers SET fleet_id = ? WHERE id = ?`, [
-              id,
-              parsedDriverId,
-            ]);
+            await queryFn(
+              `UPDATE drivers SET fleet_id = ?, assigned_vehicle = ? WHERE id = ?`,
+              [id, targetVehNo, parsedDriverId],
+            );
           } else {
             // Unassign whoever was on this fleet
             await queryFn(
-              `UPDATE drivers SET fleet_id = NULL WHERE fleet_id = ?`,
+              `UPDATE drivers SET fleet_id = NULL, assigned_vehicle = NULL WHERE fleet_id = ?`,
               [id],
             );
           }

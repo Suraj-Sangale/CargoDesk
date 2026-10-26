@@ -34,8 +34,8 @@ export default function TopHeader({
 
   const showBrandName = isMobile ? !isMobileOpen : isCollapsed;
 
-  const rawUserName = pageData?.user?.name || pageData?.user?.username || "Suraj";
-  const userName = convertFirstLetterCapital(rawUserName) || "Suraj";
+  const rawUserName = pageData?.user?.name || pageData?.user?.firstName || "User";
+  const userName = convertFirstLetterCapital(rawUserName) || "User";
   const userInitial = userName.charAt(0).toUpperCase() || "S";
 
   // Close dropdowns on outside click

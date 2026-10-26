@@ -21,6 +21,7 @@ export default async function handler(req, res) {
             lastName: user.lastName,
             email: user.email,
             phone: user.phone,
+            orgId: user.orgId ? Number(user.orgId) : null,
           },
           process.env.SECRET_KEY,
           { expiresIn: "1d" }

@@ -47,10 +47,10 @@ export function assignDriverToFleetModel(fleetId, driverId) {
       // Execute transaction to maintain 1-to-1 consistency
       await executeTransaction(async (queryFn) => {
         // 1. Remove any other driver assigned to this fleet
-        await queryFn(`UPDATE drivers SET fleet_id = NULL WHERE fleet_id = ? AND id != ?`, [fId, dId]);
+        await queryFn(`UPDATE drivers SET fleet_id = NULL, assigned_vehicle = NULL WHERE fleet_id = ? AND id != ?`, [fId, dId]);
 
-        // 2. Set this driver's fleet_id
-        await queryFn(`UPDATE drivers SET fleet_id = ? WHERE id = ?`, [fId, dId]);
+        // 2. Set this driver's fleet_id and assigned_vehicle
+        await queryFn(`UPDATE drivers SET fleet_id = ?, assigned_vehicle = ? WHERE id = ?`, [fId, fleet.vehicle_number, dId]);
       });
 
       // Log Fleet Activity
@@ -131,9 +131,9 @@ export function removeDriverFromFleetModel({ driverId, fleetId }) {
 
       await executeTransaction(async (queryFn) => {
         if (dId) {
-          await queryFn(`UPDATE drivers SET fleet_id = NULL WHERE id = ?`, [dId]);
+          await queryFn(`UPDATE drivers SET fleet_id = NULL, assigned_vehicle = NULL WHERE id = ?`, [dId]);
         } else if (fId) {
-          await queryFn(`UPDATE drivers SET fleet_id = NULL WHERE fleet_id = ?`, [fId]);
+          await queryFn(`UPDATE drivers SET fleet_id = NULL, assigned_vehicle = NULL WHERE fleet_id = ?`, [fId]);
         }
       });
 

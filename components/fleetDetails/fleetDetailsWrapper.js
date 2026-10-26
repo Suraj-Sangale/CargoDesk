@@ -14,10 +14,12 @@ import {
 import CommonModal from "../common/commonModal";
 import FleetForm from "../fleets/fleetForm";
 import AddDocumentForm from "../common/molecules/addDocumentForm";
+import CustomSearch from "../common/customSearch";
 import { postApiData } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
 import { useFleetDriver } from "@/context/fleetDriverContext";
-import { FiAlertCircle, FiArrowLeft } from "react-icons/fi";
+import { FiAlertCircle, FiArrowLeft, FiUser, FiCheck } from "react-icons/fi";
+import { ImSpinner9 } from "react-icons/im";
 import Link from "next/link";
 
 export default function FleetDetailsWrapper({
@@ -27,7 +29,8 @@ export default function FleetDetailsWrapper({
 }) {
   const router = useRouter();
   const { fleetId } = router.query;
-  const { refreshAll } = useFleetDriver() || {};
+  const { refreshAll, assignDriverToFleet, removeDriverFromFleet, drivers } =
+    useFleetDriver() || {};
 
   const [fleet, setFleet] = useState(initialFleet);
   const [activeTab, setActiveTab] = useState("history"); // Defaults to Activity History as primary view
@@ -38,6 +41,9 @@ export default function FleetDetailsWrapper({
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [docModalOpen, setDocModalOpen] = useState(false);
   const [addDocLoading, setAddDocLoading] = useState(false);
+  const [assignDriverModalOpen, setAssignDriverModalOpen] = useState(false);
+  const [selectedDriverId, setSelectedDriverId] = useState("");
+  const [assigningLoading, setAssigningLoading] = useState(false);
 
   // Fetch fleet details if not provided via SSR
   const fetchFleetDetails = async (id) => {
@@ -132,6 +138,63 @@ export default function FleetDetailsWrapper({
       });
   };
 
+  // Driver options for assign modal
+  const driverSelectOptions = React.useMemo(() => {
+    if (!drivers || !Array.isArray(drivers)) return [];
+    return drivers.map((d) => {
+      const isCurrent = Number(d.fleet_id) === Number(fleet?.id);
+      const isElsewhere = d.fleet_id && !isCurrent;
+      return {
+        value: String(d.id),
+        label: `${d.driver_name} (${d.contact_number || "No Contact"})${
+          isCurrent
+            ? " [Currently Assigned]"
+            : isElsewhere
+            ? ` [Assigned: ${d.assigned_vehicle || "Vehicle"}]`
+            : " [Available]"
+        }`,
+      };
+    });
+  }, [drivers, fleet?.id]);
+
+  // Handle direct driver assignment from modal
+  const handleConfirmDriverAssignment = async () => {
+    if (!selectedDriverId) {
+      showToast({ message: "Please select a driver to assign", type: "error" });
+      return;
+    }
+    setAssigningLoading(true);
+    try {
+      const res = await assignDriverToFleet(fleet?.id, selectedDriverId);
+      if (res?.status) {
+        setAssignDriverModalOpen(false);
+        if (fleet?.id) {
+          await fetchFleetDetails(fleet.id);
+        }
+      }
+    } finally {
+      setAssigningLoading(false);
+    }
+  };
+
+  // Handle unassigning driver
+  const handleUnassignDriver = async () => {
+    setAssigningLoading(true);
+    try {
+      const res = await removeDriverFromFleet({
+        fleetId: fleet?.id,
+        driverId: fleet?.driver_id,
+      });
+      if (res?.status) {
+        if (fleet?.id) {
+          await fetchFleetDetails(fleet.id);
+        }
+      }
+    } finally {
+      setAssigningLoading(false);
+    }
+  };
+
   // If fleet not found error state
   if (error && !loading) {
     return (
@@ -223,7 +286,16 @@ export default function FleetDetailsWrapper({
 
           {activeTab === "emi" && <EmiPanel fleet={fleet} />}
 
-          {activeTab === "driver" && <DriverPanel fleet={fleet} />}
+          {activeTab === "driver" && (
+            <DriverPanel
+              fleet={fleet}
+              onAssignDriver={() => {
+                setSelectedDriverId(fleet?.driver_id ? String(fleet.driver_id) : "");
+                setAssignDriverModalOpen(true);
+              }}
+              onUnassignDriver={handleUnassignDriver}
+            />
+          )}
 
           {activeTab === "maintenance" && <MaintenancePanel fleet={fleet} />}
 
@@ -284,6 +356,78 @@ export default function FleetDetailsWrapper({
             setReminderModal={setDocModalOpen}
             isLoading={addDocLoading}
           />
+        </CommonModal>
+      )}
+
+      {/* Direct Assign Driver Modal */}
+      {assignDriverModalOpen && (
+        <CommonModal
+          modalOpen={assignDriverModalOpen}
+          setModalOpen={setAssignDriverModalOpen}
+          modalTitle={`Assign Driver to ${fleet?.vehicle_number || "Vehicle"}`}
+          modalSize="w-11/12 md:w-[480px]"
+        >
+          <div className="p-5 space-y-4">
+            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-purple-50/70 border border-purple-100">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                <FiUser className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Transport Driver Allocation
+                </h4>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Select a certified driver to assign as the primary operator of {fleet?.vehicle_number}.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Select Driver
+              </label>
+              <CustomSearch
+                name="assign_driver"
+                value={selectedDriverId}
+                selectedValue={selectedDriverId}
+                options={driverSelectOptions}
+                placeholder="Search by driver name or contact number..."
+                onChange={(opt) => {
+                  const val = opt?.value !== undefined ? opt.value : opt || "";
+                  setSelectedDriverId(val ? String(val) : "");
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setAssignDriverModalOpen(false)}
+                disabled={assigningLoading}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDriverAssignment}
+                disabled={assigningLoading || !selectedDriverId}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                {assigningLoading ? (
+                  <>
+                    <ImSpinner9 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Assigning...</span>
+                  </>
+                ) : (
+                  <>
+                    <FiCheck className="w-3.5 h-3.5" />
+                    <span>Confirm Assignment</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </CommonModal>
       )}
     </div>

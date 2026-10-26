@@ -531,7 +531,7 @@ const CustomSearch = forwardRef(
       <div
         ref={containerRef}
         className={`relative w-full text-left select-none ${
-          isOpen ? "z-50" : "z-10"
+          isOpen ? "z-50" : "z-10Test"
         } ${
           disabled ? "opacity-60 cursor-not-allowed pointer-events-none" : ""
         }`}
