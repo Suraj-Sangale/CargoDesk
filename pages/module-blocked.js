@@ -33,7 +33,7 @@ export default function ModuleBlockedPage() {
             <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-left">
               <p className="text-xs font-semibold text-slate-800">Why am I seeing this?</p>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Your organization's administrator or the Super Admin has restricted access to this page for your company.
+                Your organization&apos;s administrator or the Super Admin has restricted access to this page for your company.
               </p>
               <div className="mt-3 pt-3 border-t border-slate-200/70 space-y-1.5 text-xs text-slate-600">
                 <div className="flex items-center gap-2 text-slate-700">

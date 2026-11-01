@@ -142,3 +142,58 @@ export function postSiteApiData(
     }
   });
 }
+
+/**
+ * Common storage upload service with automatic fallback:
+ * 1. Attempts direct PUT upload to S3/R2 presigned URL.
+ * 2. If blocked by browser CORS or network, automatically uploads via server proxy.
+ *
+ * @param {object} params
+ * @param {string} params.uploadUrl - Presigned PUT URL
+ * @param {File|Blob} params.file - Binary file object
+ * @param {string} params.mimeType - File MIME type
+ * @param {string} params.s3Key - Safe storage key for proxy fallback
+ * @returns {Promise<{ status: boolean, mode: string }>}
+ */
+export async function uploadMediaFile({ uploadUrl, file, mimeType, s3Key }) {
+  // 1. Direct PUT upload to S3/R2 presigned URL
+  if (uploadUrl) {
+    try {
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": mimeType,
+        },
+        body: file,
+      });
+
+      if (uploadRes.ok) {
+        return { status: true, mode: "direct" };
+      }
+      console.warn(`Direct storage upload returned HTTP ${uploadRes.status}, trying server proxy fallback...`);
+    } catch (directErr) {
+      console.warn("Direct storage upload failed (likely CORS or network). Trying server proxy fallback...", directErr);
+    }
+  }
+
+  // 2. Fallback: Upload via server proxy if direct upload was blocked
+  if (s3Key) {
+    const proxyEndpoint = apiList.PROXY_MAINTENANCE_UPLOAD || "/api/maintenance/uploads/proxy";
+    const proxyUrl = `${proxyEndpoint}?s3Key=${encodeURIComponent(s3Key)}&mimeType=${encodeURIComponent(mimeType)}`;
+    const proxyRes = await fetch(proxyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": mimeType,
+      },
+      body: file,
+    });
+
+    const proxyJson = await proxyRes.json();
+    if (proxyRes.ok && proxyJson?.status) {
+      return { status: true, mode: "proxy", ...proxyJson };
+    }
+    throw new Error(proxyJson?.message || `Proxy upload returned HTTP ${proxyRes.status}`);
+  }
+
+  throw new Error("Missing upload configuration for media file.");
+}

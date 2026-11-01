@@ -167,7 +167,7 @@ export async function ensureDriverTable() {
 export function getAllDriversModel() {
   return new Promise(async (resolve) => {
     try {
-      await ensureDriverTable();
+      // await ensureDriverTable();
       const selectQuery = `
         SELECT 
           d.*,
@@ -202,7 +202,7 @@ export function getAllDriversModel() {
 export function addNewDriverModel(data) {
   return new Promise(async (resolve) => {
     try {
-      await ensureDriverTable();
+      // await ensureDriverTable();
 
       const {
         driver_name,
@@ -312,7 +312,7 @@ export function addNewDriverModel(data) {
 export function updateDriverModel(id, data) {
   return new Promise(async (resolve) => {
     try {
-      await ensureDriverTable();
+      // await ensureDriverTable();
 
       const parsedFleetId =
         data.fleet_id !== undefined
@@ -439,7 +439,7 @@ export function deleteDriverModel(ids) {
         return resolve({ status: false, message: "No driver IDs provided for deletion" });
       }
 
-      await ensureDriverTable();
+      // await ensureDriverTable();
       const deleteQuery = `DELETE FROM drivers WHERE id IN (?)`;
       const result = await executeQuery(deleteQuery, [ids]);
 

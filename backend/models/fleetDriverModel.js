@@ -10,8 +10,8 @@ import { logFleetActivity } from "./fleetActivityModel";
 export function assignDriverToFleetModel(fleetId, driverId) {
   return new Promise(async (resolve, reject) => {
     try {
-      await ensureFleetTable();
-      await ensureDriverTable();
+      // await ensureFleetTable();
+      // await ensureDriverTable();
 
       const fId = Number(fleetId);
       const dId = Number(driverId);
@@ -96,8 +96,8 @@ export function assignDriverToFleetModel(fleetId, driverId) {
 export function removeDriverFromFleetModel({ driverId, fleetId }) {
   return new Promise(async (resolve, reject) => {
     try {
-      await ensureDriverTable();
-      await ensureFleetTable();
+      // await ensureDriverTable();
+      // await ensureFleetTable();
 
       const dId = driverId ? Number(driverId) : null;
       const fId = fleetId ? Number(fleetId) : null;

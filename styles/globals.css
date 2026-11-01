@@ -181,6 +181,15 @@ input[type="number"] {
 	background: rgba(148, 163, 184, 1);
 }
 
+/* Modal Scrollbar Hygiene (Eliminates double scrollbars globally) */
+#backdrop {
+	overflow: hidden !important;
+}
+
+#backdrop .custom-scrollbar {
+	overscroll-behavior: contain;
+}
+
 /* ==========================================================================
    Responsive Modal & Mobile Bottom Sheet Keyframe Animations
    ========================================================================== */
@@ -339,3 +348,29 @@ input:-webkit-autofill + label {
 }
 
 
+
+
+/* Responsive visibility helper utilities */
+@utility desktopOnly {
+	@media (max-width: 767.98px) {
+		display: none !important;
+	}
+}
+
+@utility mobileOnly {
+	@media (min-width: 768px) {
+		display: none !important;
+	}
+}
+
+@media (max-width: 767.98px) {
+	.desktopOnly {
+		display: none !important;
+	}
+}
+
+@media (min-width: 768px) {
+	.mobileOnly {
+		display: none !important;
+	}
+}

@@ -23,6 +23,7 @@ import {
 } from "react-icons/fi";
 import { HiOutlineTruck, HiOutlineDocumentText } from "react-icons/hi";
 import ActivityDetailModal from "./activityDetailModal";
+import { postApiData } from "@/utilities/services/apiService";
 
 export default function ActivityHistory({
   fleetId,
@@ -76,36 +77,36 @@ export default function ActivityHistory({
     if (!fleetId) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      params.append("fleetId", String(fleetId));
-      params.append("page", String(currentPage));
-      params.append("limit", String(limit));
+      const payload = {
+        fleetId: String(fleetId),
+        page: currentPage,
+        limit,
+      };
 
       if (category && category !== "all") {
-        params.append("type", category.toUpperCase());
+        payload.type = category.toUpperCase();
       }
 
       if (searchTerm.trim()) {
-        params.append("search", searchTerm.trim());
+        payload.search = searchTerm.trim();
       }
 
       // Date range filtering
       if (datePreset === "last_30_days") {
-        params.append("fromDate", moment().subtract(30, "days").format("YYYY-MM-DD"));
-        params.append("toDate", moment().format("YYYY-MM-DD"));
+        payload.fromDate = moment().subtract(30, "days").format("YYYY-MM-DD");
+        payload.toDate = moment().format("YYYY-MM-DD");
       } else if (datePreset === "last_90_days") {
-        params.append("fromDate", moment().subtract(90, "days").format("YYYY-MM-DD"));
-        params.append("toDate", moment().format("YYYY-MM-DD"));
+        payload.fromDate = moment().subtract(90, "days").format("YYYY-MM-DD");
+        payload.toDate = moment().format("YYYY-MM-DD");
       } else if (datePreset === "this_year") {
-        params.append("fromDate", moment().startOf("year").format("YYYY-MM-DD"));
-        params.append("toDate", moment().format("YYYY-MM-DD"));
+        payload.fromDate = moment().startOf("year").format("YYYY-MM-DD");
+        payload.toDate = moment().format("YYYY-MM-DD");
       } else if (datePreset === "custom" && customFromDate) {
-        params.append("fromDate", customFromDate);
-        if (customToDate) params.append("toDate", customToDate);
+        payload.fromDate = customFromDate;
+        if (customToDate) payload.toDate = customToDate;
       }
 
-      const res = await fetch(`/api/fleet/history?${params.toString()}`);
-      const result = await res.json();
+      const result = await postApiData("GET_FLEET_HISTORY", payload);
 
       if (result?.status && Array.isArray(result.data)) {
         setActivities(result.data);
@@ -278,9 +279,9 @@ export default function ActivityHistory({
       {/* Top Section: Title & Subtitle + Date Range Dropdown */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+          {/* <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
             <HiOutlineTruck className="w-6 h-6" />
-          </div>
+          </div> */}
           <div>
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
               Activity History

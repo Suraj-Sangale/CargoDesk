@@ -206,6 +206,27 @@ export const FLEET_STATUS_OPTIONS = [
   "Inactive",
 ];
 
+export const FLEET_MAINTENANCE_TYPES = [
+  "Regular Service",
+  "Engine Repair",
+  "Tyre Replacement",
+  "Brake Repair",
+  "Electrical Issue",
+  "Battery Replacement",
+  "Oil & Filter Change",
+  "Suspension & Steering",
+  "Accident Damage",
+  "Breakdown",
+  "Other",
+];
+
+export const FLEET_MAINTENANCE_STATUSES = [
+  "Reported",
+  "In Progress",
+  "Completed",
+  "Cancelled",
+];
+
 export const driverTableHeadCells = [
   {
     id: "id",

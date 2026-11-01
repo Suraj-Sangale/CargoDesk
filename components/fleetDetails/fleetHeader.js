@@ -114,9 +114,9 @@ export default function FleetHeader({
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         {/* Left Side: Truck Icon + Info */}
         <div className="flex items-start sm:items-center gap-3.5 sm:gap-4">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-blue-50/80 border border-blue-100/90 flex items-center justify-center shrink-0 text-blue-600 shadow-xs">
+          {/* <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-blue-50/80 border border-blue-100/90 flex items-center justify-center shrink-0 text-blue-600 shadow-xs">
             <HiOutlineTruck className="w-7 h-7 sm:w-8 sm:h-8" />
-          </div>
+          </div> */}
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -147,7 +147,7 @@ export default function FleetHeader({
         </div>
 
         {/* Right Side: Action Buttons */}
-        <div className="flex items-center gap-2.5 self-start md:self-center shrink-0">
+        <div className="flex items-center justify-around md:gap-2.5">
           <button
             type="button"
             onClick={onEditFleet}
@@ -167,7 +167,7 @@ export default function FleetHeader({
           </button>
 
           {/* More Options Dropdown */}
-          <div className="relative" ref={menuRef}>
+          <div className="relative hidden md:block" ref={menuRef}>
             <button
               type="button"
               onClick={() => setMenuOpen((prev) => !prev)}

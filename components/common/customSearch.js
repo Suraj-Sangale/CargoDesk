@@ -92,6 +92,7 @@ const CustomSearch = forwardRef(
       id,
       isSearchable = true,
       allowClear = true,
+      startIcon = null,
       children,
       ...props
     },
@@ -553,9 +554,14 @@ const CustomSearch = forwardRef(
           data-field={name || id}
           onClick={toggleDropdown}
           tabIndex={disabled ? -1 : 0}
-          className={`w-full min-h-[48px] px-3.5 py-2.5 flex items-center justify-between gap-2 bg-white text-slate-900 rounded-xl cursor-pointer transition-all duration-200 outline-none focus:outline-none ${className}`}
+          className={`w-full min-h-[48px] px-3.5 py-2.5 flex items-center justify-between gap-2 bg-white text-slate-900 rounded-xl cursor-pointer transition-all duration-200 outline-none focus:outline-none ${className.includes('border') ? '' : 'border border-slate-300 hover:border-slate-400'} ${className}`}
         >
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            {startIcon && (
+              <div className="shrink-0 flex items-center justify-center">
+                {startIcon}
+              </div>
+            )}
             {selectedOption && selectedOption.value ? (
               <>
                 <div
@@ -563,12 +569,12 @@ const CustomSearch = forwardRef(
                 >
                   {selectedOption.initial}
                 </div>
-                <span className="text-sm font-semibold text-slate-800 truncate">
+                <span className="text-sm sm:text-base font-bold text-slate-900 truncate">
                   {selectedOption.label}
                 </span>
               </>
             ) : (
-              <span className="text-sm font-normal text-[#8fa0b5] truncate">
+              <span className="text-sm sm:text-base font-semibold text-slate-600 truncate">
                 {placeholder}
               </span>
             )}

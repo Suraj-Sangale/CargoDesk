@@ -70,7 +70,7 @@ export function getFleetByIdModel(id) {
       const docQuery = `SELECT * FROM vehicle_documents WHERE fleet_id = ? OR (fleet_id IS NULL AND REPLACE(REPLACE(vehicleNo, ' ', ''), '-', '') COLLATE utf8mb4_general_ci = REPLACE(REPLACE(?, ' ', ''), '-', '') COLLATE utf8mb4_general_ci) ORDER BY id DESC`;
       const emiQuery = `SELECT * FROM emi_master WHERE (fleet_id IS NOT NULL AND fleet_id = ?) OR (fleet_id IS NULL AND REPLACE(REPLACE(vehicle_number, ' ', ''), '-', '') COLLATE utf8mb4_general_ci = REPLACE(REPLACE(?, ' ', ''), '-', '') COLLATE utf8mb4_general_ci) ORDER BY id DESC`;
       const driverQuery = `SELECT COUNT(*) AS total FROM drivers WHERE fleet_id = ?`;
-      const maintQuery = `SELECT COUNT(*) AS total FROM fleet_activity_history WHERE fleet_id = ? AND operation_type = 'MAINTENANCE'`;
+      const maintQuery = `SELECT COUNT(*) AS total FROM fleet_maintenance WHERE vehicle_id = ?`;
       // Fetch dynamic records for tabs: Documents, EMI, Drivers, Maintenance
       const [docRows, emiRows, driverRes, maintRes] = await Promise.all([
         executeQuery(docQuery, [fleet.id, fleet.vehicle_number]).catch(

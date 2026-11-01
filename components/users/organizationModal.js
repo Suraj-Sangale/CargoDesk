@@ -57,7 +57,9 @@ export default function OrganizationModal({
             .map((m) => m.trim());
         }
       }
-      setSelectedModules(Array.isArray(mods) && mods.length > 0 ? mods : ALL_MODULE_IDS);
+      setSelectedModules(
+        Array.isArray(mods) && mods.length > 0 ? mods : ALL_MODULE_IDS,
+      );
     } else {
       setOrgName("");
       setOrgCode("");
@@ -121,7 +123,9 @@ export default function OrganizationModal({
 
   const toggleModule = (modId) => {
     setSelectedModules((prev) =>
-      prev.includes(modId) ? prev.filter((id) => id !== modId) : [...prev, modId]
+      prev.includes(modId)
+        ? prev.filter((id) => id !== modId)
+        : [...prev, modId],
     );
   };
 
@@ -177,10 +181,17 @@ export default function OrganizationModal({
             <div className="flex items-start gap-2.5 p-3 rounded-xl bg-purple-50/80 border border-purple-200/70 text-xs text-purple-900">
               <FiUserCheck className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
               <div className="leading-relaxed">
-                <span className="font-semibold text-purple-950">Auto Admin User:</span>{" "}
-                Creating this organization will automatically provision an Admin user{" "}
+                <span className="font-semibold text-purple-950">
+                  Auto Admin User:
+                </span>{" "}
+                Creating this organization will automatically provision an Admin
+                user{" "}
                 <span className="font-bold underline decoration-purple-300">
-                  "{orgName.trim() ? `${orgName.trim()} - Admin` : "Organization - Admin"}"
+                  &quot;
+                  {orgName.trim()
+                    ? `${orgName.trim()} - Admin`
+                    : "Organization - Admin"}
+                  &quot;
                 </span>{" "}
                 with these contact details and default password{" "}
                 <code className="px-1.5 py-0.5 rounded bg-purple-200/60 font-mono text-[11px] font-semibold text-purple-900">
@@ -360,7 +371,10 @@ export default function OrganizationModal({
                   Organization Module Access & Feature Provisioning
                 </h4>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Uncheck any module (e.g. <strong>Messenger</strong>) to completely block it for this organization. Blocked pages will be hidden from the sidebar for all roles in this organization and redirected to an access restricted support page.
+                  Uncheck any module (e.g. <strong>Messenger</strong>) to
+                  completely block it for this organization. Blocked pages will
+                  be hidden from the sidebar for all roles in this organization
+                  and redirected to an access restricted support page.
                 </p>
               </div>
               <button

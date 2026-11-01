@@ -17,6 +17,20 @@ export function withUserSsr(handler, options = {}) {
     const { user, redirect } = requireValidUser(context, allowedRoles);
     if (redirect) return { redirect };
 
+    // Restrict maintenance supervisors exclusively to the dedicated maintenance supervisor landing page
+    if (user?.role === "maintenance_supervisor") {
+      const currentUrl = context.resolvedUrl || context.req?.url || "/";
+      const cleanPath = currentUrl.split("?")[0];
+      if (cleanPath !== "/maintenance-supervisor" && !cleanPath.startsWith("/api/")) {
+        return {
+          redirect: {
+            destination: "/maintenance-supervisor",
+            permanent: false,
+          },
+        };
+      }
+    }
+
     const isSuperAdmin =
       user?.role === "super_admin" || user?.email === "suraj@agnibyte.com";
 

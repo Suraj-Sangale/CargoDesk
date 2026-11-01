@@ -4,10 +4,11 @@ import {
 } from "@/backend/models/fleetActivityModel";
 
 export function getFleetActivityHistoryController(req, res) {
-  const { fleetId, vehicleNo, type, operationType, action, entityType, fromDate, toDate, search, page, limit } = req.query;
+  const query = { ...(req.query || {}), ...(req.body || {}) };
+  const { fleetId, vehicleNo, type, operationType, action, entityType, fromDate, toDate, search, page, limit } = query;
 
   getFleetActivityHistoryModel({
-    fleetId: fleetId || req.query.id,
+    fleetId: fleetId || query.id,
     vehicleNo,
     type,
     operationType,

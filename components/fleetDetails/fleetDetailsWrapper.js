@@ -18,7 +18,15 @@ import CustomSearch from "../common/customSearch";
 import { postApiData } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
 import { useFleetDriver } from "@/context/fleetDriverContext";
-import { FiAlertCircle, FiArrowLeft, FiUser, FiCheck } from "react-icons/fi";
+import {
+  FiAlertCircle,
+  FiArrowLeft,
+  FiUser,
+  FiCheck,
+  FiChevronDown,
+  FiChevronUp,
+} from "react-icons/fi";
+import { HiOutlineTruck } from "react-icons/hi";
 import { ImSpinner9 } from "react-icons/im";
 import Link from "next/link";
 
@@ -38,6 +46,7 @@ export default function FleetDetailsWrapper({
   const [error, setError] = useState(!initialFleet && !fleetId ? "Invalid fleet ID" : null);
 
   // Modals state
+  const [summaryCollapsedMobile, setSummaryCollapsedMobile] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [docModalOpen, setDocModalOpen] = useState(false);
   const [addDocLoading, setAddDocLoading] = useState(false);
@@ -51,8 +60,7 @@ export default function FleetDetailsWrapper({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/fleet/get-by-id?id=${id}`);
-      const result = await res.json();
+      const result = await postApiData("GET_FLEET_BY_ID", { id });
       if (result?.status && result?.data) {
         setFleet(result.data);
       } else {
@@ -250,12 +258,71 @@ export default function FleetDetailsWrapper({
 
       {/* Main Two-Column Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Persistent Fleet Summary Card (35-40% width on desktop) */}
-        <div className="lg:col-span-4 xl:col-span-4 sticky top-6 z-10">
-          <FleetSummaryCard
-            fleet={fleet}
-            onEditPhoto={() => setEditModalOpen(true)}
-          />
+        {/* Left Column: Persistent Fleet Summary Card (Collapsible by default on mobile/responsive, sticky on desktop) */}
+        <div className="lg:col-span-4 xl:col-span-4 lg:sticky lg:top-6 z-10 space-y-2">
+          {/* Mobile Summary Accordion Trigger (Visible only on mobile/tablet < lg) */}
+          <button
+            type="button"
+            onClick={() => setSummaryCollapsedMobile((prev) => !prev)}
+            aria-expanded={!summaryCollapsedMobile}
+            className="lg:hidden w-full bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-3 text-left transition-all active:scale-[0.99] cursor-pointer hover:border-slate-300"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                <HiOutlineTruck className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 truncate">
+                    {fleet?.vehicle_number || "Vehicle Details"}
+                  </h3>
+                  <span
+                    className={`hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      (fleet?.status || "Active").toLowerCase() === "active"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : (fleet?.status || "").toLowerCase() === "maintenance"
+                        ? "bg-amber-50 text-amber-700 border border-amber-200"
+                        : "bg-blue-50 text-blue-700 border border-blue-200"
+                    }`}
+                  >
+                    {fleet?.status || "Active"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 truncate mt-0.5">
+                  {fleet?.vehicle_model || "Fleet Vehicle"} {fleet?.vehicle_type ? `• ${fleet.vehicle_type}` : ""}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 shrink-0 bg-blue-50/80 px-2.5 py-1.5 rounded-xl border border-blue-100">
+              <span>{summaryCollapsedMobile ? "View Details" : "Hide Details"}</span>
+              {summaryCollapsedMobile ? (
+                <FiChevronDown className="w-4 h-4 transition-transform" />
+              ) : (
+                <FiChevronUp className="w-4 h-4 transition-transform" />
+              )}
+            </div>
+          </button>
+
+          {/* Fleet Summary Card Content (Collapsible on mobile < lg, always visible on desktop lg:) */}
+          <div className={`${summaryCollapsedMobile ? "hidden lg:block" : "block"} transition-all`}>
+            <FleetSummaryCard
+              fleet={fleet}
+              onEditPhoto={() => setEditModalOpen(true)}
+            />
+
+            {/* Quick Collapse Button at bottom when expanded on mobile */}
+            {!summaryCollapsedMobile && (
+              <button
+                type="button"
+                onClick={() => setSummaryCollapsedMobile(true)}
+                className="lg:hidden w-full mt-2 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 bg-slate-100/70 hover:bg-slate-100 rounded-xl transition-colors text-center cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <FiChevronUp className="w-3.5 h-3.5" />
+                <span>Collapse Vehicle Summary</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right Column: Dynamic Tab Content / Activity History */}
@@ -297,7 +364,9 @@ export default function FleetDetailsWrapper({
             />
           )}
 
-          {activeTab === "maintenance" && <MaintenancePanel fleet={fleet} />}
+          {activeTab === "maintenance" && (
+            <MaintenancePanel fleet={fleet} onRefreshFleet={fetchFleetDetails} />
+          )}
 
           {activeTab === "insurance" && (
             <DocumentsPanel

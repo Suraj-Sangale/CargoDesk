@@ -131,7 +131,7 @@ export default function FleetTabs({
       </div>
 
       {/* More Tabs Dropdown - Outside of Scroll Container to Prevent Overflow Clamping */}
-      <div className="relative shrink-0 pl-1 pb-0.5" ref={moreRef}>
+      {/* <div className="relative shrink-0 pl-1 pb-0.5" ref={moreRef}>
         <button
           type="button"
           onClick={() => setMoreMenuOpen((prev) => !prev)}
@@ -152,7 +152,7 @@ export default function FleetTabs({
             }`}
           />
 
-          {/* Active Underline if any More tab is active */}
+          {/* Active Underline if any More tab is active 
           {isMoreActive && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full shadow-xs" />
           )}
@@ -193,7 +193,7 @@ export default function FleetTabs({
             })}
           </div>
         )}
-      </div>
+      </div> */}
     </div>
   );
 }
