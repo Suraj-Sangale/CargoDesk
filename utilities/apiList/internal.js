@@ -87,5 +87,5 @@ export const internalList = {
   DELETE_MAINTENANCE_RECORD: "/api/maintenance/delete",
   GET_MAINTENANCE_MEDIA_URL: "/api/maintenance/get-media-url",
   DELETE_MAINTENANCE_MEDIA: "/api/maintenance/delete-media",
+  GET_RECENT_MAINTENANCE: "/api/maintenance/recent",
 };
-

@@ -22,6 +22,14 @@ export default function Home({ pageData }) {
 }
 
 export const getServerSideProps = withUserSsr(async (context, { user }) => {
+  if (user?.role === "maintenance_supervisor") {
+    return {
+      redirect: {
+        destination: "/maintenance-supervisor",
+        permanent: false,
+      },
+    };
+  }
   const pageData = { user };
   return { props: { pageData } };
 });

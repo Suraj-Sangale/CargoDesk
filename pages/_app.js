@@ -7,7 +7,11 @@ import { Toaster } from "react-hot-toast";
 export default function MyApp({ Component, pageProps }) {
   const selectLayout = (component) => {
     if (typeof Component.layoutName !== "undefined") {
-      if (Component.layoutName === "login") {
+      if (
+        Component.layoutName === "login" ||
+        Component.layoutName === "none" ||
+        Component.layoutName === "maintenance"
+      ) {
         return <LoginLayout>{component}</LoginLayout>;
       }
     }

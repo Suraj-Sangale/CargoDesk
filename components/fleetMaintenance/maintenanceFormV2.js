@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import CustomSearch from "../common/customSearch";
 import { showToast } from "@/utilities/toastService";
 import { postApiData, uploadMediaFile } from "@/utilities/services/apiService";
 import {
@@ -18,6 +17,8 @@ import {
   FiSend,
   FiTruck,
   FiCheckCircle,
+  FiSearch,
+  FiChevronDown,
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 
@@ -52,6 +53,8 @@ export default function MaintenanceFormV2({
   isEdit = false,
   onClose,
   onSuccess,
+  resetOnSuccess = false,
+  submitButtonText = "Save Maintenance Record",
 }) {
   // 1. Vehicles Selection State
   const [vehicles, setVehicles] = useState([]);
@@ -63,6 +66,11 @@ export default function MaintenanceFormV2({
       ? String(initialData.vehicle_id)
       : ""
   );
+  const [vehicleSearchQuery, setVehicleSearchQuery] = useState("");
+  const [isVehicleDropdownOpen, setIsVehicleDropdownOpen] = useState(false);
+  const [highlightedVehicleIndex, setHighlightedVehicleIndex] = useState(0);
+  const vehicleDropdownRef = useRef(null);
+  const vehicleInputRef = useRef(null);
 
   // 2. Problem Description & Voice State
   const [problemDescription, setProblemDescription] = useState(initialData?.description || "");
@@ -109,6 +117,106 @@ export default function MaintenanceFormV2({
       isMounted = false;
     };
   }, [preselectedVehicle]);
+
+  // Selected Vehicle Object
+  const selectedVehicle = useMemo(() => {
+    if (preselectedVehicle) return preselectedVehicle;
+    if (!selectedVehicleId) return null;
+    return vehicles.find((v) => String(v.id) === String(selectedVehicleId)) || null;
+  }, [vehicles, selectedVehicleId, preselectedVehicle]);
+
+  // Sync input text when preselectedVehicle or selectedVehicle changes
+  useEffect(() => {
+    if (preselectedVehicle) {
+      setVehicleSearchQuery(preselectedVehicle.vehicle_number || "");
+    } else if (selectedVehicle) {
+      setVehicleSearchQuery(selectedVehicle.vehicle_number || "");
+    }
+  }, [preselectedVehicle, selectedVehicle]);
+
+  // Filter vehicles live as user types directly in the field
+  const filteredVehicles = useMemo(() => {
+    const query = vehicleSearchQuery.trim().toLowerCase();
+    if (!query) return vehicles;
+
+    // If query matches currently selected vehicle number, show all vehicles so user can pick another
+    if (selectedVehicle && selectedVehicle.vehicle_number.toLowerCase() === query) {
+      return vehicles;
+    }
+
+    return vehicles.filter((v) => {
+      const num = (v.vehicle_number || "").toLowerCase();
+      const model = (v.vehicle_model || "").toLowerCase();
+      const type = (v.vehicle_type || "").toLowerCase();
+      return num.includes(query) || model.includes(query) || type.includes(query);
+    });
+  }, [vehicles, vehicleSearchQuery, selectedVehicle]);
+
+  // Close dropdown on outside click and restore selected vehicle number if valid
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (vehicleDropdownRef.current && !vehicleDropdownRef.current.contains(event.target)) {
+        setIsVehicleDropdownOpen(false);
+        if (selectedVehicle) {
+          setVehicleSearchQuery(selectedVehicle.vehicle_number);
+        }
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [selectedVehicle]);
+
+  // Handle vehicle selection
+  const handleSelectVehicle = (v) => {
+    setSelectedVehicleId(String(v.id));
+    setVehicleSearchQuery(v.vehicle_number);
+    setIsVehicleDropdownOpen(false);
+    if (formError) setFormError(null);
+  };
+
+  // Clear vehicle selection and focus input to type again
+  const handleClearVehicle = (e) => {
+    if (e) e.stopPropagation();
+    setSelectedVehicleId("");
+    setVehicleSearchQuery("");
+    setIsVehicleDropdownOpen(true);
+    if (vehicleInputRef.current) {
+      vehicleInputRef.current.focus();
+    }
+  };
+
+  // Keyboard navigation inside vehicle search input
+  const handleVehicleKeyDown = (e) => {
+    if (!isVehicleDropdownOpen) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        setIsVehicleDropdownOpen(true);
+        return;
+      }
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedVehicleIndex((prev) =>
+        prev < filteredVehicles.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedVehicleIndex((prev) =>
+        prev > 0 ? prev - 1 : filteredVehicles.length - 1
+      );
+    } else if (e.key === "Enter") {
+      if (isVehicleDropdownOpen && filteredVehicles[highlightedVehicleIndex]) {
+        e.preventDefault();
+        handleSelectVehicle(filteredVehicles[highlightedVehicleIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setIsVehicleDropdownOpen(false);
+    }
+  };
 
   // Format vehicle options for CustomSearch
   const vehicleOptions = useMemo(() => {
@@ -447,9 +555,28 @@ export default function MaintenanceFormV2({
       }
 
       showToast({
-        message: "Maintenance report submitted successfully!",
+        message: "Maintenance Record Saved Successfully!",
         type: "success",
       });
+
+      // Reset form if resetOnSuccess is enabled or when used standalone without a modal onClose
+      if (resetOnSuccess || !onClose) {
+        if (!preselectedVehicle) {
+          setSelectedVehicleId("");
+          setVehicleSearchQuery("");
+        }
+        setProblemDescription("");
+        attachedFiles.forEach((item) => {
+          if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
+            try {
+              URL.revokeObjectURL(item.previewUrl);
+            } catch (_) {}
+          }
+        });
+        setAttachedFiles([]);
+        setFileError(null);
+        setFormError(null);
+      }
 
       if (onSuccess) {
         onSuccess(saveJson.data);
@@ -471,9 +598,9 @@ export default function MaintenanceFormV2({
   };
 
   return (
-    <div className="">
+    <div className="w-full">
       {/* Form Body */}
-      <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5">
+      <form onSubmit={handleSubmit} className="w-full p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
         {/* Error Alert */}
         {formError && (
           <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-xs font-semibold text-rose-700 animate-fadeIn">
@@ -482,33 +609,222 @@ export default function MaintenanceFormV2({
           </div>
         )}
 
-        {/* 2. Vehicle Number Selection */}
-        <div className="space-y-1.5">
+        {/* 2. Vehicle Number Selection - Direct Typeable Field with Results at Bottom */}
+        <div ref={vehicleDropdownRef} className="space-y-2 w-full relative">
           <div className="flex items-center justify-between">
-            <label className="block text-xs sm:text-sm font-bold text-slate-800">
-              Select Vehicle Number <span className="text-rose-500">*</span>
+            <label
+              htmlFor="vehicle_number_input"
+              className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-800"
+            >
+              <FiTruck className="w-4 h-4 text-blue-600" />
+              <span>Select Vehicle Number</span>
+              <span className="text-rose-500">*</span>
             </label>
-            {preselectedVehicle && (
+            {preselectedVehicle ? (
               <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
                 Locked to Current Fleet
+              </span>
+            ) : selectedVehicle ? (
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                <FiCheck className="w-3 h-3 text-emerald-600" />
+                <span>Selected</span>
+              </span>
+            ) : (
+              <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                <FiSearch className="w-3 h-3 text-blue-600" />
+                <span>Type to Search</span>
               </span>
             )}
           </div>
 
-          <div className="relative">
-            <CustomSearch
-              name="vehicle_id"
-              selectedValue={selectedVehicleId}
-              options={vehicleOptions}
-              disabled={Boolean(preselectedVehicle) || isSubmitting}
-              placeholder={loadingVehicles ? "Loading vehicle list..." : "Search Vehicle (e.g. MH12AB1234)..."}
-              onChange={(e) => {
-                const val = e?.value || e?.target?.value || e;
-                setSelectedVehicleId(val ? String(val) : "");
-                if (formError) setFormError(null);
+          <div className="relative w-full">
+            {/* Direct Typeable Input with Embedded Search Icon */}
+            <div
+              onClick={() => {
+                if (!preselectedVehicle && !isSubmitting && vehicleInputRef.current) {
+                  vehicleInputRef.current.focus();
+                  setIsVehicleDropdownOpen(true);
+                }
               }}
-            />
+              className={`w-full min-h-[52px] px-3.5 py-2.5 flex items-center gap-2.5 bg-white rounded-2xl border-2 transition-all duration-200 shadow-xs cursor-text ${
+                Boolean(preselectedVehicle) || isSubmitting
+                  ? "bg-slate-100 opacity-70 cursor-not-allowed border-slate-200"
+                  : isVehicleDropdownOpen
+                  ? "border-blue-600 ring-4 ring-blue-100/70"
+                  : selectedVehicleId
+                  ? "border-blue-500 bg-blue-50/20 hover:border-blue-600"
+                  : "border-slate-300 hover:border-blue-500"
+              }`}
+            >
+              <FiSearch className="w-5 h-5 text-blue-600 shrink-0" />
+
+              <input
+                ref={vehicleInputRef}
+                id="vehicle_number_input"
+                name="vehicle_id"
+                type="text"
+                autoComplete="off"
+                disabled={Boolean(preselectedVehicle) || isSubmitting}
+                value={vehicleSearchQuery}
+                placeholder={
+                  loadingVehicles
+                    ? "Loading vehicle list..."
+                    : "Type vehicle number here (e.g. MH 12 AB 1234)..."
+                }
+                onFocus={() => {
+                  if (!preselectedVehicle && !isSubmitting) {
+                    setIsVehicleDropdownOpen(true);
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setVehicleSearchQuery(val);
+                  setIsVehicleDropdownOpen(true);
+                  if (
+                    selectedVehicle &&
+                    !selectedVehicle.vehicle_number.toLowerCase().includes(val.toLowerCase())
+                  ) {
+                    setSelectedVehicleId("");
+                  }
+                  if (formError) setFormError(null);
+                }}
+                onKeyDown={handleVehicleKeyDown}
+                className="w-full bg-transparent text-slate-900 font-semibold text-sm sm:text-base outline-none placeholder:text-slate-400 placeholder:font-normal"
+              />
+
+              {/* Clear button */}
+              {!preselectedVehicle && (vehicleSearchQuery || selectedVehicleId) && !isSubmitting && (
+                <button
+                  type="button"
+                  onClick={handleClearVehicle}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0 cursor-pointer"
+                  title="Clear search"
+                  aria-label="Clear vehicle search"
+                >
+                  <FiX className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Toggle Dropdown Chevron */}
+              {!preselectedVehicle && !isSubmitting && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsVehicleDropdownOpen((prev) => !prev);
+                    if (!isVehicleDropdownOpen && vehicleInputRef.current) {
+                      vehicleInputRef.current.focus();
+                    }
+                  }}
+                  className={`p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all shrink-0 cursor-pointer ${
+                    isVehicleDropdownOpen ? "rotate-180 text-blue-600 bg-blue-50" : ""
+                  }`}
+                  title="Toggle vehicle list"
+                  aria-label="Toggle vehicle list"
+                  tabIndex={-1}
+                >
+                  <FiChevronDown className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Dropdown Results List at bottom of input */}
+            {isVehicleDropdownOpen && !preselectedVehicle && (
+              <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-2xl border-2 border-slate-200/90 shadow-2xl max-h-64 overflow-y-auto divide-y divide-slate-100 animate-slide-down">
+                {loadingVehicles ? (
+                  <div className="p-4 text-center text-slate-500 flex items-center justify-center gap-2">
+                    <ImSpinner9 className="w-4 h-4 animate-spin text-blue-600" />
+                    <span className="text-xs font-semibold">Loading vehicles...</span>
+                  </div>
+                ) : filteredVehicles.length > 0 ? (
+                  filteredVehicles.map((v, index) => {
+                    const isSelected = String(v.id) === String(selectedVehicleId);
+                    const isHighlighted = index === highlightedVehicleIndex;
+                    return (
+                      <div
+                        key={v.id}
+                        onClick={() => handleSelectVehicle(v)}
+                        onMouseEnter={() => setHighlightedVehicleIndex(index)}
+                        className={`p-3 sm:p-3.5 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                          isSelected
+                            ? "bg-blue-50/80 text-blue-900"
+                            : isHighlighted
+                            ? "bg-slate-50 text-slate-900"
+                            : "hover:bg-slate-50 text-slate-800"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
+                              isSelected
+                                ? "bg-blue-600 text-white shadow-xs"
+                                : "bg-slate-100 text-slate-700 border border-slate-200"
+                            }`}
+                          >
+                            <FiTruck className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-mono font-bold text-xs sm:text-sm text-slate-900 truncate">
+                              {v.vehicle_number}
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-medium truncate">
+                              {v.vehicle_model || v.vehicle_type || "Vehicle"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              v.status === "Active"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}
+                          >
+                            {v.status || "Active"}
+                          </span>
+                          {isSelected && (
+                            <FiCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-4 text-center space-y-1">
+                    <p className="text-xs font-bold text-slate-700">
+                      No vehicles found
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      No vehicle matches &ldquo;{vehicleSearchQuery}&rdquo;. Try typing another registration number or model.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Selected vehicle preview pill or guidance text */}
+          {selectedVehicle ? (
+            <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-xl px-3 py-2 text-xs animate-fadeIn">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono font-bold text-blue-950 truncate">
+                  {selectedVehicle.vehicle_number}
+                </span>
+                <span className="text-slate-600 truncate">
+                  • {selectedVehicle.vehicle_model || selectedVehicle.vehicle_type || "Vehicle"}
+                </span>
+              </div>
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-100/90 px-2 py-0.5 rounded-full shrink-0">
+                Vehicle Selected
+              </span>
+            </div>
+          ) : !preselectedVehicle && (
+            <p className="text-[11px] sm:text-xs text-slate-500 flex items-center gap-1.5 pt-0.5 pl-1 font-medium">
+              <FiSearch className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span>Type the registration number directly into the field above to see matching vehicles below.</span>
+            </p>
+          )}
         </div>
 
         {/* 3. Capture Photo & Upload File - Two Large Side-by-Side Buttons (Compulsory) */}
@@ -585,16 +901,16 @@ export default function MaintenanceFormV2({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isSubmitting || attachedFiles.length >= MAX_ATTACHMENTS}
-              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/70 hover:bg-indigo-50/40 text-slate-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/100 hover:bg-amber-50/40 text-amber-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+              <div className="w-12 h-12 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                 <FiUploadCloud className="w-6 h-6" />
               </div>
               <div className="text-center">
-                <span className="block text-sm sm:text-base font-bold text-slate-900 leading-tight">
+                <span className="block text-sm sm:text-base font-bold text-amber-900 leading-tight">
                   Upload File
                 </span>
-                <span className="text-[11px] font-semibold text-indigo-600">
+                <span className="text-[11px] font-semibold text-amber-600">
                   Gallery / Videos *
                 </span>
               </div>
@@ -709,7 +1025,7 @@ export default function MaintenanceFormV2({
           <div className="relative">
             <textarea
               ref={textareaRef}
-              rows={4}
+              rows={2}
               value={problemDescription}
               onChange={(e) => {
                 setProblemDescription(e.target.value);
@@ -799,7 +1115,7 @@ export default function MaintenanceFormV2({
             ) : (
               <>
                 <FiSend className="w-5 h-5" />
-                <span>Submit Report</span>
+                <span>{submitButtonText || "Save Maintenance Record"}</span>
               </>
             )}
           </button>

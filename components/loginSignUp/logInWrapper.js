@@ -46,8 +46,10 @@ export default function LoginWrapper() {
     }));
   };
 
-  const getDestinationUrl = () => {
-    return getSafeRedirectUrl(router.query.redirect, "/");
+  const getDestinationUrl = (user = null) => {
+    const role = (user?.role || "").toLowerCase().trim();
+    const defaultPath = role === "maintenance_supervisor" ? "/maintenance-supervisor" : "/";
+    return getSafeRedirectUrl(router.query.redirect, defaultPath);
   };
 
   const onSubmit = async () => {
@@ -65,7 +67,7 @@ export default function LoginWrapper() {
           message: response.message || "Login successful",
           type: "success",
         });
-        const destination = getDestinationUrl();
+        const destination = getDestinationUrl(response.user);
         // Use full navigation to ensure fresh cookie propagation and SSR hydration
         window.location.href = destination;
       } else {
@@ -99,7 +101,7 @@ export default function LoginWrapper() {
           message: response.message || "Login successful",
           type: "success",
         });
-        const destination = getDestinationUrl();
+        const destination = getDestinationUrl(response.user);
         window.location.href = destination;
       } else {
         showToast({
