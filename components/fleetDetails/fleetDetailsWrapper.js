@@ -277,7 +277,7 @@ export default function FleetDetailsWrapper({
                     {fleet?.vehicle_number || "Vehicle Details"}
                   </h3>
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                    className={`hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                       (fleet?.status || "Active").toLowerCase() === "active"
                         ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                         : (fleet?.status || "").toLowerCase() === "maintenance"

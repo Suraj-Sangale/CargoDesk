@@ -46,7 +46,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
     <div className="space-y-6">
       {/* Metric Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Vehicle Status
@@ -63,7 +63,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           <p className="text-xs text-slate-400 mt-1">Operational state</p>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Documents
@@ -82,7 +82,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           </button>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Assigned Driver
@@ -101,7 +101,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           </button>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Financing & EMI
@@ -119,7 +119,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
             View EMI schedule <FiArrowRight className="w-3 h-3" />
           </button>
         </div>
-        {fleet?.gps_tracking_id && <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        {fleet?.gps_tracking_id && <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               GPS Tracking ID
@@ -566,48 +566,48 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
   return (
     <div className="space-y-6">
       {/* 1. Summary Cards Section */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Records */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
               Total Services
             </span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="desktopOnly w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <FiTool className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
+          <div className="mt-2 flex md:flex-row flex-col items-baseline gap-2">
             <span className="text-2xl font-bold text-slate-900">{summary.total_records}</span>
-            <span className="text-xs text-slate-500 font-medium">Logged Entries</span>
+            <span className="desktopOnly text-xs text-slate-500 font-medium">Logged Entries</span>
           </div>
         </div>
 
         {/* Total Expenditure */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Total Expense
             </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="desktopOnly w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <FiDollarSign className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
+          <div className="mt-2 flex md:flex-row flex-col items-baseline gap-2">
             <span className="text-2xl font-bold text-slate-900">
               ₹{Number(summary.total_expenditure || 0).toLocaleString("en-IN")}
             </span>
-            <span className="text-xs text-slate-500 font-medium">Maintenance Cost</span>
+            <span className="desktopOnly text-xs text-slate-500 font-medium">Maintenance Cost</span>
           </div>
         </div>
 
         {/* Last Maintenance Date */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Last Service
             </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <div className="desktopOnly w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <FiCalendar className="w-4 h-4" />
             </div>
           </div>
@@ -621,17 +621,17 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         </div>
 
         {/* Current / Latest Status */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Latest Status
             </span>
-            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <div className="desktopOnly w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
               <FiCheckCircle className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusBadge(summary.latest_status)}`}>
+            <span className={`text-[8px] md:text-[10px] px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusBadge(summary.latest_status)}`}>
               {summary.latest_status}
             </span>
           </div>
@@ -849,7 +849,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-2">
-              <span className="text-xs text-slate-500 font-medium">
+              <span className="desktopOnly text-xs text-slate-500 font-medium">
                 Page {page} of {totalPages}
               </span>
               <div className="flex items-center gap-2">

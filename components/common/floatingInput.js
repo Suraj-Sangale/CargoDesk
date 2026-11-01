@@ -8,6 +8,34 @@ import moment from "moment";
 import CustomSearch from "./customSearch";
 
 /**
+ * Z-INDEX LAYERING SYSTEM (read before changing any z-* class)
+ * ------------------------------------------------------------
+ * Each field has TWO stacking levels:
+ *
+ * 1. OUTER wrapper (between fields)
+ *    - `relative`, and `focus-within:z-30` so the field being used (e.g. with an
+ *      open dropdown) always paints above neighbouring fields.
+ *
+ * 2. INNER `.floating-group` (inside one field) -> `isolate`
+ *    - `isolate` creates a private stacking context, so the small z values below
+ *      never leak out and fight with other fields or the page.
+ *      z-0  : notched outline fieldset (background + border)
+ *      z-10 : the real control (input / textarea / select / date picker)
+ *      z-20 : icon, floating label, right element (pointer-events-none overlays)
+ *      focus-within:z-30 on the select/date control wrapper so its dropdown
+ *             paints above the label/icon of the same field.
+ *
+ * 3. PORTALED popups (MUI date popper) live on <body>, so they use a global
+ *    z-index (POPPER_Z_INDEX) above Tailwind modals (z-50) and MUI modals (1300).
+ *
+ * NOTE: Tailwind has no `z-21`; it was silently ignored before. Don't use it.
+ */
+const POPPER_Z_INDEX = 1500;
+
+const OUTER_WRAPPER = "w-full relative focus-within:z-30";
+const INNER_GROUP = "relative isolate group floating-group";
+
+/**
  * FloatingInput Component
  * Implements transparent floating label with notched outlined border and solid 3D bottom depth accent.
  */
@@ -57,21 +85,20 @@ export const FloatingInput = forwardRef(
     const errorMessage = typeof error === "object" ? error?.message : error;
 
     return (
-      <div
-        className={`w-full relative focus-within:z-20 ${containerClassName}`}
-      >
+      <div className={`${OUTER_WRAPPER} ${containerClassName}`}>
         <div
-          className={`relative group floating-group focus-within:z-20 ${
+          className={`${INNER_GROUP} ${
             hasControlledValue || isFocused ? "is-floated" : ""
           }`}
         >
-          {/* Icon with focus active color */}
+          {/* Icon with focus active color (overlay layer) */}
           {Icon && (
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-[#4bb7ff] transition-colors z-20">
               <Icon className="w-4 h-4" />
             </div>
           )}
 
+          {/* Control layer */}
           <input
             ref={ref}
             id={inputId}
@@ -92,10 +119,10 @@ export const FloatingInput = forwardRef(
             {...props}
           />
 
-          {/* Notched Outline Fieldset (Cuts top border to exact label text width + applies 3D bottom depth) */}
+          {/* Outline layer (bottom): notched border + 3D bottom depth */}
           <fieldset
             aria-hidden="true"
-            className={`notched-outline z-0 transition-all duration-200 ${
+            className={`notched-outline z-0 pointer-events-none transition-all duration-200 ${
               isError
                 ? "border-red-500 shadow-[0_3px_0_0_#ef4444]"
                 : "border-slate-200/90 group-hover:border-slate-300 group-focus-within:border-[#4bb7ff] group-focus-within:shadow-[0_3px_0_0_#4bb7ff]"
@@ -111,6 +138,7 @@ export const FloatingInput = forwardRef(
             )}
           </fieldset>
 
+          {/* Label (overlay layer) */}
           {label && (
             <label
               htmlFor={inputId}
@@ -138,6 +166,7 @@ export const FloatingInput = forwardRef(
             </label>
           )}
 
+          {/* Right element (overlay layer) */}
           {rightElement && (
             <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-20">
               {rightElement}
@@ -205,17 +234,16 @@ export const FloatingSelect = forwardRef(
         String(selectedValue).length > 0);
 
     return (
-      <div
-        className={`w-full relative focus-within:z-40 ${containerClassName}`}
-      >
-        <div className="relative group floating-group is-floated focus-within:z-40">
+      <div className={`${OUTER_WRAPPER} ${containerClassName}`}>
+        <div className={`${INNER_GROUP} is-floated`}>
           {Icon && (
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-[#4bb7ff] transition-colors z-20">
               <Icon className="w-4 h-4" />
             </div>
           )}
 
-          <div className="relative z-21 w-full focus-within:z-50">
+          {/* Control layer: raised to z-30 while open so the dropdown paints above label/icon */}
+          <div className="relative z-10 w-full focus-within:z-30">
             <CustomSearch
               ref={ref}
               id={selectId}
@@ -238,10 +266,10 @@ export const FloatingSelect = forwardRef(
             </CustomSearch>
           </div>
 
-          {/* Notched Outline Fieldset (Cuts top border to exact label text width + applies 3D bottom depth) */}
+          {/* Outline layer (bottom) */}
           <fieldset
             aria-hidden="true"
-            className={`notched-outline z-0 transition-all duration-200 ${
+            className={`notched-outline z-0 pointer-events-none transition-all duration-200 ${
               isError
                 ? "border-red-500 shadow-[0_3px_0_0_#ef4444]"
                 : "border-slate-200/90 group-hover:border-slate-300 group-focus-within:border-[#4bb7ff] group-focus-within:shadow-[0_3px_0_0_#4bb7ff]"
@@ -257,6 +285,7 @@ export const FloatingSelect = forwardRef(
             )}
           </fieldset>
 
+          {/* Label (overlay layer) */}
           {label && (
             <label
               htmlFor={selectId}
@@ -326,14 +355,13 @@ export const FloatingTextarea = forwardRef(
     const errorMessage = typeof error === "object" ? error?.message : error;
 
     return (
-      <div
-        className={`w-full relative focus-within:z-20 ${containerClassName}`}
-      >
+      <div className={`${OUTER_WRAPPER} ${containerClassName}`}>
         <div
-          className={`relative group floating-group focus-within:z-20 ${
+          className={`${INNER_GROUP} ${
             hasControlledValue || isFocused ? "is-floated" : ""
           }`}
         >
+          {/* Control layer */}
           <textarea
             ref={ref}
             id={textareaId}
@@ -358,10 +386,10 @@ export const FloatingTextarea = forwardRef(
             {...props}
           />
 
-          {/* Notched Outline Fieldset with 3D bottom depth accent */}
+          {/* Outline layer (bottom) */}
           <fieldset
             aria-hidden="true"
-            className={`notched-outline z-0 transition-all duration-200 ${
+            className={`notched-outline z-0 pointer-events-none transition-all duration-200 ${
               isError
                 ? "border-red-500 shadow-[0_3px_0_0_#ef4444]"
                 : "border-slate-200/90 group-hover:border-slate-300 group-focus-within:border-[#4bb7ff] group-focus-within:shadow-[0_3px_0_0_#4bb7ff]"
@@ -377,6 +405,7 @@ export const FloatingTextarea = forwardRef(
             )}
           </fieldset>
 
+          {/* Label (overlay layer) */}
           {label && (
             <label
               htmlFor={textareaId}
@@ -467,17 +496,16 @@ export const FloatingDatePicker = forwardRef(
     const hasVal = Boolean(momentVal && momentVal.isValid());
 
     return (
-      <div
-        className={`w-full relative focus-within:z-40 ${containerClassName}`}
-      >
-        <div className="relative group floating-group is-floated focus-within:z-40">
+      <div className={`${OUTER_WRAPPER} ${containerClassName}`}>
+        <div className={`${INNER_GROUP} is-floated`}>
           {Icon && (
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-[#4bb7ff] transition-colors z-20">
               <Icon className="w-4 h-4" />
             </div>
           )}
 
-          <div className="relative z-21 w-full focus-within:z-50">
+          {/* Control layer */}
+          <div className="relative z-10 w-full focus-within:z-30">
             <LocalizationProvider dateAdapter={AdapterMoment}>
               <DatePicker
                 inputRef={ref}
@@ -525,9 +553,10 @@ export const FloatingDatePicker = forwardRef(
                   openPickerButton: {
                     tabIndex: -1,
                   },
+                  // Popper is portaled to <body>, so it uses a global z-index.
                   popper: {
                     sx: {
-                      zIndex: 99999,
+                      zIndex: POPPER_Z_INDEX,
                       "& .MuiPaper-root": {
                         borderRadius: "16px",
                         border: "1px solid #e2e8f0",
@@ -587,10 +616,10 @@ export const FloatingDatePicker = forwardRef(
             </LocalizationProvider>
           </div>
 
-          {/* Notched Outline Fieldset (Cuts top border to exact label text width + applies 3D bottom depth) */}
+          {/* Outline layer (bottom) */}
           <fieldset
             aria-hidden="true"
-            className={`notched-outline z-0 transition-all duration-200 ${
+            className={`notched-outline z-0 pointer-events-none transition-all duration-200 ${
               isError
                 ? "border-red-500 shadow-[0_3px_0_0_#ef4444]"
                 : "border-slate-200/90 group-hover:border-slate-300 group-focus-within:border-[#4bb7ff] group-focus-within:shadow-[0_3px_0_0_#4bb7ff]"
@@ -606,6 +635,7 @@ export const FloatingDatePicker = forwardRef(
             )}
           </fieldset>
 
+          {/* Label (overlay layer) */}
           {label && (
             <label
               htmlFor={pickerId}
