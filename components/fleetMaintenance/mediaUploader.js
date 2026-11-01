@@ -13,6 +13,7 @@ import {
   FiImage,
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
+import { compressImageFile } from "@/utilities/services/apiService";
 
 const MAX_ATTACHMENTS = 10;
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -43,7 +44,7 @@ export default function MediaUploader({
   }, []);
 
   const handleFilesSelected = useCallback(
-    (incomingFileList) => {
+    async (incomingFileList) => {
       if (!incomingFileList || incomingFileList.length === 0) return;
       setErrorMessage(null);
 
@@ -59,13 +60,19 @@ export default function MediaUploader({
       const remainingSlots = MAX_ATTACHMENTS - files.length;
 
       for (let i = 0; i < Math.min(incomingArr.length, remainingSlots); i++) {
-        const file = incomingArr[i];
+        let file = incomingArr[i];
         const isImage = file.type.startsWith("image/");
         const isVideo = file.type.startsWith("video/");
 
         if (!isImage && !isVideo) {
           setErrorMessage(`Skipped "${file.name}": Unsupported format. Only images and videos are supported.`);
           continue;
+        }
+
+        if (isImage) {
+          try {
+            file = await compressImageFile(file);
+          } catch (_) {}
         }
 
         if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {

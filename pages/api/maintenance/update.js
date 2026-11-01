@@ -1,5 +1,13 @@
 import { updateMaintenanceController } from "@/backend/controllers/fleetMaintenanceController";
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb",
+    },
+  },
+};
+
 export default async function handler(req, res) {
   if (req.method !== "POST" && req.method !== "PUT" && req.method !== "PATCH") {
     res.setHeader("Allow", ["POST", "PUT", "PATCH"]);
