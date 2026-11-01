@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { showToast } from "@/utilities/toastService";
-import { postApiData, uploadMediaFile } from "@/utilities/services/apiService";
+import { postApiData, uploadMediaFile, compressImageFile } from "@/utilities/services/apiService";
 import {
   FiCamera,
   FiUploadCloud,
@@ -93,6 +93,7 @@ export default function MaintenanceFormV2({
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
+  const speechBaseTextRef = useRef("");
 
   // Load vehicles list if not preselected
   useEffect(() => {
@@ -281,18 +282,25 @@ export default function MaintenanceFormV2({
 
       recognition.onresult = (event) => {
         let finalTranscript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + " ";
+        let interimTranscript = "";
+
+        // Iterate over full session results to compute current complete transcript
+        for (let i = 0; i < event.results.length; i++) {
+          const res = event.results[i];
+          const transcript = res[0]?.transcript || "";
+          if (res.isFinal) {
+            finalTranscript += (finalTranscript ? " " : "") + transcript.trim();
+          } else {
+            interimTranscript += (interimTranscript ? " " : "") + transcript.trim();
           }
         }
 
-        if (finalTranscript) {
-          setProblemDescription((prev) => {
-            const separator = prev && !prev.endsWith(" ") ? " " : "";
-            return (prev + separator + finalTranscript.trim()).trimStart();
-          });
+        const sessionSpeech = (finalTranscript + (interimTranscript ? " " + interimTranscript : "")).trim();
+        if (sessionSpeech) {
+          const base = speechBaseTextRef.current ? speechBaseTextRef.current.trim() : "";
+          const combined = base ? `${base} ${sessionSpeech}` : sessionSpeech;
+          setProblemDescription(combined);
+          setFormError(null);
         }
       };
 
@@ -310,6 +318,10 @@ export default function MaintenanceFormV2({
 
       recognition.onend = () => {
         setIsListening(false);
+        setProblemDescription((current) => {
+          speechBaseTextRef.current = (current || "").trim();
+          return current;
+        });
       };
 
       recognitionRef.current = recognition;
@@ -336,8 +348,11 @@ export default function MaintenanceFormV2({
         recognitionRef.current?.stop();
       } catch (_) {}
       setIsListening(false);
+      speechBaseTextRef.current = (problemDescription || "").trim();
     } else {
       setSpeechError(null);
+      // Capture current textarea text as base so new speech appends cleanly after existing text
+      speechBaseTextRef.current = (problemDescription || "").trim();
       try {
         if (recognitionRef.current) {
           recognitionRef.current.lang = selectedLang;
@@ -351,7 +366,7 @@ export default function MaintenanceFormV2({
 
   // Process files selected from camera or file picker
   const handleFilesSelected = useCallback(
-    (incomingFileList) => {
+    async (incomingFileList) => {
       if (!incomingFileList || incomingFileList.length === 0) return;
       setFileError(null);
 
@@ -365,13 +380,20 @@ export default function MaintenanceFormV2({
       const remainingSlots = MAX_ATTACHMENTS - attachedFiles.length;
 
       for (let i = 0; i < Math.min(incomingArr.length, remainingSlots); i++) {
-        const file = incomingArr[i];
+        let file = incomingArr[i];
         const isImage = file.type.startsWith("image/");
         const isVideo = file.type.startsWith("video/");
 
         if (!isImage && !isVideo) {
           setFileError(`"${file.name}" is not supported. Please select photos or videos.`);
           continue;
+        }
+
+        // Optimize mobile camera images automatically on client to prevent 413 limits and speed up upload
+        if (isImage) {
+          try {
+            file = await compressImageFile(file);
+          } catch (_) {}
         }
 
         if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {
@@ -426,9 +448,12 @@ export default function MaintenanceFormV2({
   // Quick problem chip click handler
   const handleChipClick = (chipText) => {
     setProblemDescription((prev) => {
-      if (!prev || prev.trim() === "") return chipText;
-      if (prev.includes(chipText)) return prev;
-      return `${prev.trim()}, ${chipText}`;
+      let next;
+      if (!prev || prev.trim() === "") next = chipText;
+      else if (prev.includes(chipText)) next = prev;
+      else next = `${prev.trim()}, ${chipText}`;
+      speechBaseTextRef.current = next;
+      return next;
     });
     if (textareaRef.current) {
       textareaRef.current.focus();
@@ -1028,7 +1053,9 @@ export default function MaintenanceFormV2({
               rows={2}
               value={problemDescription}
               onChange={(e) => {
-                setProblemDescription(e.target.value);
+                const val = e.target.value;
+                setProblemDescription(val);
+                speechBaseTextRef.current = val;
                 if (formError) setFormError(null);
               }}
               disabled={isSubmitting}

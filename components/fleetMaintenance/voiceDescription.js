@@ -24,6 +24,7 @@ export default function VoiceDescription({
 
   const recognitionRef = useRef(null);
   const textareaRef = useRef(null);
+  const speechBaseTextRef = useRef("");
 
   // Check speech recognition support on mount
   useEffect(() => {
@@ -50,20 +51,24 @@ export default function VoiceDescription({
 
       recognition.onresult = (event) => {
         let finalTranscript = "";
+        let interimTranscript = "";
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + " ";
+        for (let i = 0; i < event.results.length; i++) {
+          const res = event.results[i];
+          const transcript = res[0]?.transcript || "";
+          if (res.isFinal) {
+            finalTranscript += (finalTranscript ? " " : "") + transcript.trim();
+          } else {
+            interimTranscript += (interimTranscript ? " " : "") + transcript.trim();
           }
         }
 
-        if (finalTranscript) {
-          const currentVal = textareaRef.current ? textareaRef.current.value : value;
-          const separator = currentVal && !currentVal.endsWith(" ") ? " " : "";
-          const newVal = (currentVal + separator + finalTranscript.trim()).trimStart();
+        const sessionSpeech = (finalTranscript + (interimTranscript ? " " + interimTranscript : "")).trim();
+        if (sessionSpeech) {
+          const base = speechBaseTextRef.current ? speechBaseTextRef.current.trim() : "";
+          const combined = base ? `${base} ${sessionSpeech}` : sessionSpeech;
           if (onChange) {
-            onChange(newVal);
+            onChange(combined);
           }
         }
       };
@@ -82,6 +87,7 @@ export default function VoiceDescription({
 
       recognition.onend = () => {
         setIsListening(false);
+        speechBaseTextRef.current = (value || "").trim();
       };
 
       recognitionRef.current = recognition;
@@ -97,7 +103,7 @@ export default function VoiceDescription({
         } catch (_) {}
       }
     };
-  }, [selectedLang]);
+  }, [selectedLang, value]);
 
   // Toggle voice recognition
   const toggleListening = () => {
@@ -108,8 +114,10 @@ export default function VoiceDescription({
         recognitionRef.current.stop();
       } catch (_) {}
       setIsListening(false);
+      speechBaseTextRef.current = (value || "").trim();
     } else {
       setSpeechError(null);
+      speechBaseTextRef.current = (value || "").trim();
       try {
         recognitionRef.current.lang = selectedLang;
         recognitionRef.current.start();
