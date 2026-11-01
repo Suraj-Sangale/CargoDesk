@@ -251,7 +251,7 @@ export default function MaintenanceForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+    <form onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-6 space-y-4">
       {/* 1. Vehicle Selection Banner */}
       <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/60">

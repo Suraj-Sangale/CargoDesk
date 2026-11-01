@@ -181,6 +181,15 @@ input[type="number"] {
 	background: rgba(148, 163, 184, 1);
 }
 
+/* Modal Scrollbar Hygiene (Eliminates double scrollbars globally) */
+#backdrop {
+	overflow: hidden !important;
+}
+
+#backdrop .custom-scrollbar {
+	overscroll-behavior: contain;
+}
+
 /* ==========================================================================
    Responsive Modal & Mobile Bottom Sheet Keyframe Animations
    ========================================================================== */

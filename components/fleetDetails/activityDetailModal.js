@@ -121,7 +121,7 @@ export default function ActivityDetailModal({ activity, isOpen, onClose }) {
         modalTitle="Activity Audit Details"
         modalSize="w-11/12 md:w-[620px]"
       >
-        <div className="p-5 sm:p-6 space-y-5 text-xs sm:text-sm max-h-[80vh] overflow-y-auto">
+        <div className="p-5 sm:p-6 space-y-5 text-xs sm:text-sm">
           {/* 1. Header Summary Box */}
           <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-4 flex items-start gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">

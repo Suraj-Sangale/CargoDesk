@@ -142,7 +142,7 @@ export default function MaintenanceDetailsModal({
   };
 
   return (
-    <div className="p-5 sm:p-6 space-y-5 max-h-[85vh] overflow-y-auto">
+    <div className="p-5 sm:p-6 space-y-5">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
         <div className="flex items-center gap-3">
@@ -242,9 +242,9 @@ export default function MaintenanceDetailsModal({
           <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
             Photo & Video Evidence ({record.media?.length || 0})
           </h4>
-          <span className="text-[11px] text-slate-400 font-medium">
+          {/* <span className="text-[11px] text-slate-400 font-medium">
             Stored securely in Amazon S3 Mumbai (ap-south-1)
-          </span>
+          </span> */}
         </div>
 
         {record.media && record.media.length > 0 ? (

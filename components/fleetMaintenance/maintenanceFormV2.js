@@ -472,8 +472,8 @@ export default function MaintenanceFormV2({
 
   return (
     <div className="">
-      {/* Form Body - Scrollable */}
-      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+      {/* Form Body */}
+      <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5">
         {/* Error Alert */}
         {formError && (
           <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-xs font-semibold text-rose-700 animate-fadeIn">

@@ -76,9 +76,7 @@ export default function CommonModal({
   return (
     <div
       id="backdrop"
-      className={`fixed inset-0 z-[101] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-x-hidden ${
-        noScroll ? "overflow-y-hidden" : "overflow-y-auto"
-      } ${
+      className={`fixed inset-0 z-[101] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden ${
         isClosing ? "animate-backdrop-out pointer-events-none" : "animate-backdrop-in"
       }`}
       onClick={handleBackdropClick}
@@ -90,7 +88,7 @@ export default function CommonModal({
 
       {/* Modal / Bottom Sheet Card */}
       <div
-        className={`relative bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200/80 w-full sm:w-auto ${modalSize} mx-0 sm:mx-auto overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[86vh] z-10 will-change-transform ${
+        className={`relative bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200/80 w-full sm:w-auto ${modalSize} mx-0 sm:mx-auto overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] z-10 will-change-transform ${
           isClosing ? "animate-modal-out" : "animate-modal-in"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -131,8 +129,14 @@ export default function CommonModal({
           </div>
         )}
 
-        {/* Modal Body */}
-        <div className={`flex-1 ${noScroll ? "overflow-hidden flex flex-col min-h-0" : "overflow-y-auto overflow-x-hidden"}`}>
+        {/* Modal Body: Single sleek scrollbar for all modals */}
+        <div
+          className={`flex-1 min-h-0 ${
+            noScroll
+              ? "overflow-hidden flex flex-col"
+              : "overflow-y-auto overflow-x-hidden custom-scrollbar overscroll-contain"
+          }`}
+        >
           {React.isValidElement(children)
             ? React.cloneElement(children, { toggleModal, onClose: closeModal })
             : children}
