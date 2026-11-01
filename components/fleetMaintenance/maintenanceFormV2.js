@@ -300,7 +300,7 @@ export default function MaintenanceFormV2({
           const base = speechBaseTextRef.current ? speechBaseTextRef.current.trim() : "";
           const combined = base ? `${base} ${sessionSpeech}` : sessionSpeech;
           setProblemDescription(combined);
-          if (formError) setFormError(null);
+          setFormError(null);
         }
       };
 
@@ -448,9 +448,12 @@ export default function MaintenanceFormV2({
   // Quick problem chip click handler
   const handleChipClick = (chipText) => {
     setProblemDescription((prev) => {
-      if (!prev || prev.trim() === "") return chipText;
-      if (prev.includes(chipText)) return prev;
-      return `${prev.trim()}, ${chipText}`;
+      let next;
+      if (!prev || prev.trim() === "") next = chipText;
+      else if (prev.includes(chipText)) next = prev;
+      else next = `${prev.trim()}, ${chipText}`;
+      speechBaseTextRef.current = next;
+      return next;
     });
     if (textareaRef.current) {
       textareaRef.current.focus();
@@ -1050,7 +1053,9 @@ export default function MaintenanceFormV2({
               rows={2}
               value={problemDescription}
               onChange={(e) => {
-                setProblemDescription(e.target.value);
+                const val = e.target.value;
+                setProblemDescription(val);
+                speechBaseTextRef.current = val;
                 if (formError) setFormError(null);
               }}
               disabled={isSubmitting}
