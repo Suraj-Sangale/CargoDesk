@@ -1,13 +1,26 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import { postApiData } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
+import CommonModal from "@/components/common/commonModal";
+import ResetConfirmation from "@/components/common/items/resetConfirmation";
 
-const FleetDriverContext = createContext(null);
+export const FleetDriverContext = createContext(null);
 
-export function FleetDriverProvider({ children, initialFleets = [], initialDrivers = [] }) {
+export function FleetDriverProvider({
+  children,
+  initialFleets = [],
+  initialDrivers = [],
+}) {
   const [fleets, setFleets] = useState(initialFleets);
   const [drivers, setDrivers] = useState(initialDrivers);
   const [isLoading, setIsLoading] = useState(false);
+  const [logoutModal, setLogoutModal] = useState(false);
 
   // Fetch fleets from backend API
   const refreshFleets = useCallback(async () => {
@@ -75,9 +88,11 @@ export function FleetDriverProvider({ children, initialFleets = [], initialDrive
   const getAssignedDriver = useCallback(
     (fleetId) => {
       if (!fleetId) return null;
-      return drivers.find((d) => Number(d.fleet_id) === Number(fleetId)) || null;
+      return (
+        drivers.find((d) => Number(d.fleet_id) === Number(fleetId)) || null
+      );
     },
-    [drivers]
+    [drivers],
   );
 
   // Helper selector: Get assigned fleet for a driver
@@ -86,9 +101,11 @@ export function FleetDriverProvider({ children, initialFleets = [], initialDrive
       if (!driverId) return null;
       const driver = drivers.find((d) => Number(d.id) === Number(driverId));
       if (!driver || !driver.fleet_id) return null;
-      return fleets.find((f) => Number(f.id) === Number(driver.fleet_id)) || null;
+      return (
+        fleets.find((f) => Number(f.id) === Number(driver.fleet_id)) || null
+      );
     },
-    [drivers, fleets]
+    [drivers, fleets],
   );
 
   // Helper selector: Get available drivers (unassigned OR currently assigned to this fleet)
@@ -96,32 +113,36 @@ export function FleetDriverProvider({ children, initialFleets = [], initialDrive
     (currentFleetId) => {
       return drivers.filter((d) => {
         if (!d.fleet_id) return true; // Unassigned
-        if (currentFleetId && Number(d.fleet_id) === Number(currentFleetId)) return true; // Currently on this fleet
+        if (currentFleetId && Number(d.fleet_id) === Number(currentFleetId))
+          return true; // Currently on this fleet
         return false;
       });
     },
-    [drivers]
+    [drivers],
   );
 
   // Helper selector: Get available fleets (unassigned OR currently assigned to this driver)
   const getAvailableFleets = useCallback(
     (currentDriverId) => {
-      const currentDriver = drivers.find((d) => Number(d.id) === Number(currentDriverId));
+      const currentDriver = drivers.find(
+        (d) => Number(d.id) === Number(currentDriverId),
+      );
       const currentFleetId = currentDriver ? currentDriver.fleet_id : null;
 
       // Find all fleet IDs that are already taken by other drivers
       const assignedFleetIds = new Set(
         drivers
           .filter((d) => d.fleet_id && Number(d.id) !== Number(currentDriverId))
-          .map((d) => Number(d.fleet_id))
+          .map((d) => Number(d.fleet_id)),
       );
 
       return fleets.filter((f) => {
-        if (currentFleetId && Number(f.id) === Number(currentFleetId)) return true;
+        if (currentFleetId && Number(f.id) === Number(currentFleetId))
+          return true;
         return !assignedFleetIds.has(Number(f.id));
       });
     },
-    [drivers, fleets]
+    [drivers, fleets],
   );
 
   // Assign driver to fleet via API with synchronized state update
@@ -140,7 +161,10 @@ export function FleetDriverProvider({ children, initialFleets = [], initialDrive
         });
 
         if (response && response.status) {
-          showToast(response.message || "Driver assigned successfully", "success");
+          showToast(
+            response.message || "Driver assigned successfully",
+            "success",
+          );
           // Refresh both datasets to ensure complete synchronization
           await Promise.all([refreshFleets(), refreshDrivers()]);
           return { status: true, data: response.data };
@@ -156,7 +180,7 @@ export function FleetDriverProvider({ children, initialFleets = [], initialDrive
         setIsLoading(false);
       }
     },
-    [refreshFleets, refreshDrivers]
+    [refreshFleets, refreshDrivers],
   );
 
   // Remove assignment via API with synchronized state update
@@ -170,11 +194,17 @@ export function FleetDriverProvider({ children, initialFleets = [], initialDrive
         });
 
         if (response && response.status) {
-          showToast(response.message || "Assignment removed successfully", "success");
+          showToast(
+            response.message || "Assignment removed successfully",
+            "success",
+          );
           await Promise.all([refreshFleets(), refreshDrivers()]);
           return { status: true };
         } else {
-          showToast(response?.message || "Failed to remove assignment", "error");
+          showToast(
+            response?.message || "Failed to remove assignment",
+            "error",
+          );
           return { status: false, message: response?.message };
         }
       } catch (err) {
@@ -185,8 +215,22 @@ export function FleetDriverProvider({ children, initialFleets = [], initialDrive
         setIsLoading(false);
       }
     },
-    [refreshFleets, refreshDrivers]
+    [refreshFleets, refreshDrivers],
   );
+
+  const handleLogout = async () => {
+    try {
+      await postApiData("LOGOUT_USER");
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      window.location.href = "/login";
+    }
+  };
+
+  const toggleLogoutModal = useCallback(() => {
+    setLogoutModal((prev) => !prev);
+  }, []);
 
   const contextValue = {
     fleets,
@@ -203,11 +247,23 @@ export function FleetDriverProvider({ children, initialFleets = [], initialDrive
     getAssignedFleet,
     getAvailableDrivers,
     getAvailableFleets,
+    toggleLogoutModal,
   };
 
   return (
     <FleetDriverContext.Provider value={contextValue}>
       {children}
+      <CommonModal
+        modalOpen={logoutModal}
+        setModalOpen={setLogoutModal}
+        backDrop={false}
+      >
+        <ResetConfirmation
+          title="Are you sure you want to log out?"
+          onConfirm={handleLogout}
+          onCancel={toggleLogoutModal}
+        />
+      </CommonModal>
     </FleetDriverContext.Provider>
   );
 }
@@ -219,3 +275,5 @@ export function useFleetDriver() {
   }
   return context;
 }
+
+export default FleetDriverProvider;

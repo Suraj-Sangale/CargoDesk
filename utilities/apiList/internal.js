@@ -19,6 +19,9 @@ export const internalList = {
   VERIFY_USER: "/api/user/verify-user",
   LOGOUT_USER: "/api/user/logout",
   GET_USER_PROFILE: "/api/user/get-user-profile",
+  FORGOT_PASSWORD_SEND_OTP: "/api/user/forgot-password/send-otp",
+  FORGOT_PASSWORD_VERIFY_OTP: "/api/user/forgot-password/verify-otp",
+  FORGOT_PASSWORD_RESET: "/api/user/forgot-password/reset-password",
 
   // add new user & sub-users
   ADD_NEW_USER: "/api/user/add-new-user",

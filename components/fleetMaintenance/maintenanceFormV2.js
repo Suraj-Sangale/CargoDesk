@@ -634,8 +634,27 @@ export default function MaintenanceFormV2({
           </div>
         )}
 
+        {/* Backdrop overlay to make background slightly dark when vehicle search dropdown is open */}
+        {isVehicleDropdownOpen && !preselectedVehicle && (
+          <div
+            className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[1px] transition-opacity duration-200 animate-fadeIn"
+            onClick={() => {
+              setIsVehicleDropdownOpen(false);
+              if (selectedVehicle) {
+                setVehicleSearchQuery(selectedVehicle.vehicle_number);
+              }
+            }}
+            aria-hidden="true"
+          />
+        )}
+
         {/* 2. Vehicle Number Selection - Direct Typeable Field with Results at Bottom */}
-        <div ref={vehicleDropdownRef} className="space-y-2 w-full relative">
+        <div
+          ref={vehicleDropdownRef}
+          className={`space-y-2 w-full relative transition-all ${
+            isVehicleDropdownOpen && !preselectedVehicle ? "z-50" : "z-10"
+          }`}
+        >
           <div className="flex items-center justify-between">
             <label
               htmlFor="vehicle_number_input"

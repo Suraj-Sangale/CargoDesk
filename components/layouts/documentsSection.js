@@ -113,7 +113,7 @@ export default function DocumentsSection({
   return (
     <div className="space-y-6">
       {/* 5 Summary Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {documentsTypeList.map((item) => (
           <DocumentsFilterCard
             key={item.id}
