@@ -23,6 +23,7 @@ import {
   FiFileText,
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
+import Image from "next/image";
 
 export default function MaintenanceSupervisorPage({ pageData }) {
   const user = pageData?.user || null;
@@ -103,8 +104,8 @@ export default function MaintenanceSupervisorPage({ pageData }) {
           <div className="w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3">
             {/* Brand Logo & Page Title */}
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/20 shrink-0">
-                <FiTruck className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl text-white flex items-center justify-center shadow-md shadow-blue-600/30 shrink-0">
+                <Image src="/logo.png" alt="Logo" width={32} height={32} />
               </div>
               <div className="min-w-0">
                 <h1 className="text-base sm:text-lg font-black text-slate-900 leading-tight tracking-tight truncate">
@@ -159,7 +160,8 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                     Maintenance Record Saved Successfully!
                   </h4>
                   <p className="text-xs text-emerald-800 mt-0.5">
-                    Record #{lastSubmittedRecord.id} has been securely logged. You can immediately enter the next vehicle problem below.
+                    Record #{lastSubmittedRecord.id} has been securely logged.
+                    You can immediately enter the next vehicle problem below.
                   </p>
                 </div>
               </div>
@@ -244,7 +246,9 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                     disabled={loadingRecent}
                     className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 font-bold cursor-pointer disabled:opacity-50"
                   >
-                    <FiRefreshCw className={`w-3 h-3 ${loadingRecent ? "animate-spin" : ""}`} />
+                    <FiRefreshCw
+                      className={`w-3 h-3 ${loadingRecent ? "animate-spin" : ""}`}
+                    />
                     <span>Refresh</span>
                   </button>
                 </div>
@@ -252,7 +256,9 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                 {loadingRecent && recentRecords.length === 0 ? (
                   <div className="py-8 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
                     <ImSpinner9 className="w-6 h-6 animate-spin text-blue-600" />
-                    <span className="text-xs font-medium">Loading recent logs...</span>
+                    <span className="text-xs font-medium">
+                      Loading recent logs...
+                    </span>
                   </div>
                 ) : recentRecords.length > 0 ? (
                   <div className="space-y-2.5">
@@ -273,7 +279,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
 
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadge(
-                              item.status
+                              item.status,
                             )}`}
                           >
                             {item.status || "Reported"}
@@ -289,7 +295,9 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                         <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/50">
                           <span className="flex items-center gap-1">
                             <FiClock className="w-3 h-3 text-slate-400" />
-                            {moment(item.created_at || item.maintenance_date).format("DD MMM YYYY, hh:mm A")}
+                            {moment(
+                              item.created_at || item.maintenance_date,
+                            ).format("DD MMM YYYY, hh:mm A")}
                           </span>
 
                           <div className="flex items-center gap-2">
@@ -325,9 +333,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
             4. Minimal Footer
             ============================================================ */}
         <footer className="py-5 text-center text-xs text-slate-400 border-t border-slate-200/60 bg-white">
-          <p className="font-semibold text-slate-500">
-            Powered by CargoDesk
-          </p>
+          <p className="font-semibold text-slate-500">Powered by CargoDesk</p>
           <p className="text-[10px] text-slate-400 mt-0.5">
             Transport & Fleet Management System
           </p>
@@ -348,6 +354,5 @@ export const getServerSideProps = withUserSsr(
       },
     };
   },
-  { allowedRoles: ["maintenance_supervisor", "admin", "super_admin"] }
+  { allowedRoles: ["maintenance_supervisor", "admin", "super_admin"] },
 );
-

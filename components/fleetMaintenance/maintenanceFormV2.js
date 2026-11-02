@@ -641,25 +641,15 @@ export default function MaintenanceFormV2({
               htmlFor="vehicle_number_input"
               className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-800"
             >
-              <FiTruck className="w-4 h-4 text-blue-600" />
+              {/* <FiTruck className="w-4 h-4 text-blue-600" /> */}
               <span>Select Vehicle Number</span>
               <span className="text-rose-500">*</span>
             </label>
-            {preselectedVehicle ? (
+            {preselectedVehicle && (
               <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
                 Locked to Current Fleet
               </span>
-            ) : selectedVehicle ? (
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                <FiCheck className="w-3 h-3 text-emerald-600" />
-                <span>Selected</span>
-              </span>
-            ) : (
-              <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
-                <FiSearch className="w-3 h-3 text-blue-600" />
-                <span>Type to Search</span>
-              </span>
-            )}
+            ) }
           </div>
 
           <div className="relative w-full">
@@ -789,7 +779,7 @@ export default function MaintenanceFormV2({
                             <FiTruck className="w-4 h-4" />
                           </div>
                           <div className="min-w-0">
-                            <div className="font-mono font-bold text-xs sm:text-sm text-slate-900 truncate">
+                            <div className="font-bold text-xs sm:text-sm text-slate-900 truncate">
                               {v.vehicle_number}
                             </div>
                             <div className="text-[11px] text-slate-500 font-medium truncate">
@@ -830,7 +820,7 @@ export default function MaintenanceFormV2({
           </div>
 
           {/* Selected vehicle preview pill or guidance text */}
-          {selectedVehicle ? (
+          {/* {selectedVehicle && (
             <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-xl px-3 py-2 text-xs animate-fadeIn">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-mono font-bold text-blue-950 truncate">
@@ -844,12 +834,7 @@ export default function MaintenanceFormV2({
                 Vehicle Selected
               </span>
             </div>
-          ) : !preselectedVehicle && (
-            <p className="text-[11px] sm:text-xs text-slate-500 flex items-center gap-1.5 pt-0.5 pl-1 font-medium">
-              <FiSearch className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <span>Type the registration number directly into the field above to see matching vehicles below.</span>
-            </p>
-          )}
+          )} */}
         </div>
 
         {/* 3. Capture Photo & Upload File - Two Large Side-by-Side Buttons (Compulsory) */}
@@ -999,7 +984,7 @@ export default function MaintenanceFormV2({
         </div>
 
         {/* 5. Maintenance Details with Voice-to-Text */}
-        <div className="space-y-2">
+        <div className="space-y-2 mt-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <label className="block text-xs sm:text-sm font-bold text-slate-800">
@@ -1032,7 +1017,7 @@ export default function MaintenanceFormV2({
           </div>
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none my-3">
             {QUICK_PROBLEM_CHIPS.map((chip, idx) => (
               <button
                 key={idx}
