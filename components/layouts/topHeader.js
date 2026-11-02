@@ -6,6 +6,7 @@ import { postApiData } from "@/utilities/services/apiService";
 import CommonModal from "../common/commonModal";
 import ResetConfirmation from "../common/items/resetConfirmation";
 import { convertFirstLetterCapital } from "@/utilities/utils";
+import { useFleetDriver } from "@/context/fleetDriverContext";
 
 export default function TopHeader({
   pageData = {},
@@ -14,9 +15,9 @@ export default function TopHeader({
   isCollapsed = false,
   isMobileOpen = false,
 }) {
+  const { toggleLogoutModal } = useFleetDriver() || {};
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [logoutModal, setLogoutModal] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobile, setIsMobile] = useState(false);
@@ -52,15 +53,7 @@ export default function TopHeader({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await postApiData("LOGOUT_USER");
-    } catch (error) {
-      console.error("Logout error:", error);
-    } finally {
-      window.location.href = "/login";
-    }
-  };
+ 
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -195,7 +188,7 @@ export default function TopHeader({
                 <button
                   onClick={() => {
                     setDropdownOpen(false);
-                    setLogoutModal(true);
+               toggleLogoutModal();     
                   }}
                   className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50/70 transition-colors"
                 >
@@ -208,18 +201,7 @@ export default function TopHeader({
         </div>
       </div>
 
-      {/* Logout Confirmation Modal */}
-      <CommonModal
-        modalOpen={logoutModal}
-        setModalOpen={setLogoutModal}
-        backDrop={false}
-      >
-        <ResetConfirmation
-          title="Are you sure you want to log out?"
-          onConfirm={handleLogout}
-          onCancel={() => setLogoutModal(false)}
-        />
-      </CommonModal>
+     
     </header>
   );
 }
