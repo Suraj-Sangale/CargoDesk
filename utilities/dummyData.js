@@ -26,7 +26,7 @@ export const DOCUMENTS_TYPE_LIST = [
   { id: "2", label: "INSURANCE", value: "insurance", expiredCount: 0, withinMonthExpiryCount: 0 },
   { id: "3", label: "FITNESS", value: "fitness", expiredCount: 0, withinMonthExpiryCount: 0 },
   { id: "4", label: "PERMIT", value: "permit", expiredCount: 0, withinMonthExpiryCount: 0 },
-  { id: "5", label: "TAX", value: "tax", expiredCount: 0, withinMonthExpiryCount: 0 },
+  // { id: "5", label: "TAX", value: "tax", expiredCount: 0, withinMonthExpiryCount: 0 },
 ];
 
 export const DOCUMENTS_SECTION_COLUMNS = [
