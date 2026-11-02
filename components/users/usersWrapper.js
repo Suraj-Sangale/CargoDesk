@@ -582,9 +582,9 @@ export default function UsersWrapper({ pageData = {} }) {
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">
             Organizations, Sub-Users & Roles
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-xl">
+          {/* <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-xl">
             Super Admin global control: provision tenant Organizations, assign Organization Administrators, and manage Operations Coordinators and Fleet Maintenance Supervisors.
-          </p>
+          </p> */}
         </div>
 
         {/* Action Buttons */}
