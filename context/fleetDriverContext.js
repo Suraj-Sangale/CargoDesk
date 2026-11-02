@@ -10,7 +10,7 @@ import { showToast } from "@/utilities/toastService";
 import CommonModal from "@/components/common/commonModal";
 import ResetConfirmation from "@/components/common/items/resetConfirmation";
 
-const FleetDriverContext = createContext(null);
+export const FleetDriverContext = createContext(null);
 
 export function FleetDriverProvider({
   children,
@@ -228,9 +228,9 @@ export function FleetDriverProvider({
     }
   };
 
-  const toggleLogoutModal = () => {
-    setLogoutModal(!logoutModal);
-  };
+  const toggleLogoutModal = useCallback(() => {
+    setLogoutModal((prev) => !prev);
+  }, []);
 
   const contextValue = {
     fleets,
@@ -275,3 +275,5 @@ export function useFleetDriver() {
   }
   return context;
 }
+
+export default FleetDriverProvider;

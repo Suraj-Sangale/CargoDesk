@@ -12,10 +12,10 @@ const Dashboard = ({ pageData }) => {
   const [isEdit, setIsEdit] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
-  const [tableLoading, setTableLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
   const [reminderData, setReminderData] = useState("");
   const [focusField, setFocusField] = useState(null);
-  const [documentTableData, setDocumentTableData] = useState([]);
+  const [documentTableData, setDocumentTableData] = useState(pageData.documentsList);
   const [selectedTab, setSelectedTab] = useState("document");
 
   const addReminderData = async (data) => {
@@ -85,25 +85,25 @@ const Dashboard = ({ pageData }) => {
     setReminderModal(true);
   };
 
-  const getAllVehicleDocuments = async () => {
-    setTableLoading(true);
-    try {
-      const response = await postApiData("GET_ALL_VEHICALE_DOCUMENTS");
-      if (response.status && response.data.length > 0) {
-        setDocumentTableData(response.data);
-      } else {
-        setDocumentTableData([]);
-      }
-    } catch (error) {
-      console.error("Error occurred during fetching vehicle documents:", error);
-    } finally {
-      setTableLoading(false);
-    }
-  };
+  // const getAllVehicleDocuments = async () => {
+  //   setTableLoading(true);
+  //   try {
+  //     const response = await postApiData("GET_ALL_VEHICALE_DOCUMENTS");
+  //     if (response.status && response.data.length > 0) {
+  //       setDocumentTableData(response.data);
+  //     } else {
+  //       setDocumentTableData([]);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error occurred during fetching vehicle documents:", error);
+  //   } finally {
+  //     setTableLoading(false);
+  //   }
+  // };
 
-  useEffect(() => {
-    getAllVehicleDocuments();
-  }, []);
+  // useEffect(() => {
+  //   getAllVehicleDocuments();
+  // }, []);
 
   return (
     <div className="w-full">
