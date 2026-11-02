@@ -179,7 +179,7 @@ export default function LoginWrapper() {
             )}
 
             {/* Password */}
-            <div className="relative border-b-2 border-white/30 mt-9 mb-6">
+            <div className="relative border-b-2 border-white/30 mt-9">
               <Controller
                 control={control}
                 name="password"
@@ -224,7 +224,7 @@ export default function LoginWrapper() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full bg-white text-black font-semibold py-2 rounded hover:bg-opacity-80 transition cursor-pointer mb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2"
+              className="w-full bg-white text-black font-semibold mt-5 py-2 rounded hover:bg-opacity-80 transition cursor-pointer mb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2"
               disabled={loading}
             >
               {loading ? "Logging in..." : "Log In"}
