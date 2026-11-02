@@ -66,7 +66,7 @@ export function postApiData(action, payload = {}) {
         .then(async (response) => {
           if (!response.ok) {
             // Handle 401 Unauthorized globally for authenticated API calls
-            if (response.status === 401 && action !== "VERIFY_USER_LOGIN") {
+            if (response.status === 401 && action !== "VERIFY_USER_LOGIN" && !action.startsWith("FORGOT_PASSWORD_")) {
               handleUnauthorizedClient();
               return resolve({
                 status: false,
@@ -132,7 +132,7 @@ export function postSiteApiData(
 
       apiCall
         .then(async (response) => {
-          if (response.status === 401 && action !== "VERIFY_USER_LOGIN") {
+          if (response.status === 401 && action !== "VERIFY_USER_LOGIN" && !action.startsWith("FORGOT_PASSWORD_")) {
             handleUnauthorizedClient();
           }
           if (response.status === 413) {
