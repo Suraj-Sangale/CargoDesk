@@ -9,7 +9,7 @@ import {
   FloatingTextarea,
 } from "../common/floatingInput";
 import { useFleetDriver } from "@/context/fleetDriverContext";
-import { postApiData } from "@/utilities/services/apiService";
+import { postApiData, resolveMediaUrl } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
 import { vehicleNoListArr } from "@/utilities/dummyData";
 import useAutoFocusField from "@/hooks/useAutoFocusField";
@@ -519,15 +519,35 @@ export default function FleetForm({
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative shrink-0">
                   {selectedDriver.profile_photo ? (
-                    <img
-                      src={selectedDriver.profile_photo}
-                      alt={selectedDriver.driver_name}
-                      className="w-10 h-10 rounded-xl object-cover border border-slate-200"
-                    />
+                    <>
+                      <img
+                        src={resolveMediaUrl(selectedDriver.profile_photo)}
+                        alt={selectedDriver.driver_name}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          const fb = e.currentTarget.nextElementSibling;
+                          if (fb) fb.style.display = "flex";
+                        }}
+                        className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+                      />
+                      <div
+                        style={{ display: "none" }}
+                        className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold text-xs items-center justify-center"
+                      >
+                        {(selectedDriver.driver_name || "D")
+                          .split(" ")
+                          .filter(Boolean)
+                          .map((n) => n[0])
+                          .join("")
+                          .substring(0, 2)
+                          .toUpperCase()}
+                      </div>
+                    </>
                   ) : (
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center">
                       {(selectedDriver.driver_name || "D")
                         .split(" ")
+                        .filter(Boolean)
                         .map((n) => n[0])
                         .join("")
                         .substring(0, 2)

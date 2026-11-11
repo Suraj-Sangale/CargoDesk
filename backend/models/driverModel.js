@@ -1,5 +1,6 @@
 import executeQuery, { executeTransaction } from "@/helpers/dbConnection";
 import { logFleetActivity } from "./fleetActivityModel";
+import { getMediaProxyUrl, extractS3Key } from "../services/s3Service";
 
 let isTableInitialized = false;
 
@@ -124,6 +125,7 @@ export async function ensureDriverTable() {
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS drivers (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        orgId INT NULL,
         driver_name VARCHAR(100) NOT NULL,
         contact_number VARCHAR(30) NOT NULL,
         alt_contact_number VARCHAR(30) NULL,
@@ -146,6 +148,20 @@ export async function ensureDriverTable() {
     `;
     await executeQuery(createTableQuery);
 
+    // Ensure orgId column exists if table existed previously without it
+    const colRows = await executeQuery(`SHOW COLUMNS FROM drivers LIKE 'orgId'`);
+    if (!colRows || colRows.length === 0) {
+      await executeQuery(`ALTER TABLE drivers ADD COLUMN orgId INT NULL AFTER id`);
+    }
+
+    // Backfill any existing legacy drivers without an orgId to their assigned fleet's orgId or default org 1
+    await executeQuery(`
+      UPDATE drivers d 
+      LEFT JOIN fleets f ON d.fleet_id = f.id 
+      SET d.orgId = COALESCE(f.orgId, 1) 
+      WHERE d.orgId IS NULL OR d.orgId = 0
+    `);
+
     // Check count, seed default records if table is brand new/empty
     const countRes = await executeQuery(`SELECT COUNT(*) as total FROM drivers`);
     const count = countRes?.[0]?.total || 0;
@@ -164,13 +180,70 @@ export async function ensureDriverTable() {
   }
 }
 
-export function getAllDriversModel() {
+export function getAllDriversModel(requestOrUser = {}, authUser = null) {
   return new Promise(async (resolve) => {
     try {
-      // await ensureDriverTable();
+      await ensureDriverTable();
+
+      // 1. Resolve request payload and authUser whether passed as:
+      //    - getAllDriversModel(request, authUser) -> API route
+      //    - getAllDriversModel({}, user)          -> SSR with user as 2nd arg
+      //    - getAllDriversModel(user)              -> SSR with user as sole arg
+      let request = {};
+      let user = null;
+
+      if (authUser) {
+        request = requestOrUser || {};
+        user = authUser;
+      } else if (requestOrUser?.user) {
+        user = requestOrUser.user;
+        request = requestOrUser;
+      } else if (requestOrUser?.userId || requestOrUser?.role) {
+        user = requestOrUser;
+        request = {};
+      } else {
+        request = requestOrUser || {};
+      }
+
+      let orgId = user?.orgId ? Number(user.orgId) : null;
+      if (!orgId && user?.userId) {
+        const uRows = await executeQuery(
+          "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
+          [user.userId],
+        );
+        if (uRows?.[0]?.orgId) {
+          orgId = Number(uRows[0].orgId);
+        }
+      }
+
+      const isSuperAdmin =
+        user?.role === "super_admin" || user?.email === "suraj@agnibyte.com";
+
+      const whereClauses = [];
+      const params = [];
+
+      // Multi-tenant organization scoping (strictly matches fleetModel logic)
+      if (!isSuperAdmin) {
+        if (orgId) {
+          whereClauses.push("d.orgId = ?");
+          params.push(orgId);
+        } else {
+          whereClauses.push("d.orgId IS NULL");
+        }
+      } else if (request?.orgId) {
+        whereClauses.push("d.orgId = ?");
+        params.push(Number(request.orgId));
+      }
+
+      const whereSQL =
+        whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
       const selectQuery = `
         SELECT 
           d.*,
+          o.orgName AS organization_name,
+          o.orgName AS orgName,
+          o.orgCode AS orgCode,
           d.fleet_id AS fleet_id,
           f.id AS assigned_fleet_id,
           f.vehicle_number AS assigned_vehicle,
@@ -179,13 +252,54 @@ export function getAllDriversModel() {
           f.capacity AS assigned_vehicle_capacity,
           f.status AS assigned_vehicle_status
         FROM drivers d
+        LEFT JOIN organizations o ON o.orgId = d.orgId
         LEFT JOIN fleets f ON d.fleet_id = f.id
+        ${whereSQL}
         ORDER BY d.id DESC
       `;
-      const rows = await executeQuery(selectQuery);
+      const rows = await executeQuery(selectQuery, params);
+
+      const processedRows = (Array.isArray(rows) ? rows : []).map((row) => {
+        let photo = row.profile_photo;
+        if (photo && typeof photo === "string") {
+          const s3Key = extractS3Key(photo);
+          if (s3Key) {
+            photo = getMediaProxyUrl(s3Key);
+          }
+        }
+
+        let docs = row.supporting_documents;
+        if (docs && typeof docs === "string" && docs.trim().startsWith("[")) {
+          try {
+            const parsedDocs = JSON.parse(docs);
+            if (Array.isArray(parsedDocs)) {
+              docs = parsedDocs.map((d) => {
+                const s3Key = d.s3Key || extractS3Key(d.dataUrl || d.url);
+                if (s3Key) {
+                  const mediaUrl = getMediaProxyUrl(s3Key);
+                  return {
+                    ...d,
+                    s3Key,
+                    dataUrl: mediaUrl,
+                    url: mediaUrl,
+                  };
+                }
+                return d;
+              });
+            }
+          } catch (_) {}
+        }
+
+        return {
+          ...row,
+          profile_photo: photo,
+          supporting_documents: docs,
+        };
+      });
+
       resolve({
         status: true,
-        data: Array.isArray(rows) ? rows : [],
+        data: processedRows,
         message: "Drivers fetched successfully",
       });
     } catch (error) {
@@ -199,10 +313,58 @@ export function getAllDriversModel() {
   });
 }
 
-export function addNewDriverModel(data) {
+export function addNewDriverModel(data, authUser = null) {
   return new Promise(async (resolve) => {
     try {
-      // await ensureDriverTable();
+      await ensureDriverTable();
+
+      // 1. Resolve Organization ID securely from server session
+      let orgId = authUser?.orgId ? Number(authUser.orgId) : null;
+
+      if (!orgId && authUser?.userId) {
+        const uRows = await executeQuery(
+          "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
+          [authUser.userId],
+        );
+        if (uRows?.[0]?.orgId) {
+          orgId = Number(uRows[0].orgId);
+        }
+      }
+
+      const isSuperAdmin =
+        authUser?.role === "super_admin" ||
+        authUser?.email === "suraj@agnibyte.com";
+
+      // 2. Organization Validation:
+      // Super Admin can assign driver to an organization via orgId / organization_id
+      // Non-Super Admin MUST belong to an organization and cannot spoof/override it
+      const targetOrg = data?.orgId || data?.organization_id || data?.org_id;
+      if (isSuperAdmin) {
+        if (targetOrg && Number(targetOrg) > 0) {
+          orgId = Number(targetOrg);
+        }
+      } else {
+        if (!orgId) {
+          return resolve({
+            status: false,
+            message: "Organization ID is required. Your user account is not associated with an organization.",
+          });
+        }
+      }
+
+      // If orgId is resolved, verify the organization exists
+      if (orgId) {
+        const orgRows = await executeQuery(
+          "SELECT orgId, status FROM organizations WHERE orgId = ? LIMIT 1",
+          [orgId]
+        );
+        if (!orgRows || orgRows.length === 0) {
+          return resolve({
+            status: false,
+            message: "The specified organization does not exist.",
+          });
+        }
+      }
 
       const {
         driver_name,
@@ -227,7 +389,29 @@ export function addNewDriverModel(data) {
           ? Number(fleet_id)
           : null;
 
+      // 3. Cross-tenant fleet assignment validation
+      if (parsedFleetId) {
+        const fleetRows = await executeQuery(
+          "SELECT id, orgId, vehicle_number FROM fleets WHERE id = ? LIMIT 1",
+          [parsedFleetId]
+        );
+        if (!fleetRows || fleetRows.length === 0) {
+          return resolve({
+            status: false,
+            message: "Selected fleet vehicle does not exist.",
+          });
+        }
+        const fleetRecord = fleetRows[0];
+        if (orgId && fleetRecord.orgId && Number(fleetRecord.orgId) !== Number(orgId)) {
+          return resolve({
+            status: false,
+            message: "Cannot assign a fleet vehicle belonging to a different organization.",
+          });
+        }
+      }
+
       const payload = {
+        orgId: orgId || null,
         driver_name: driver_name ? driver_name.trim() : null,
         contact_number: contact_number ? contact_number.trim() : null,
         alt_contact_number: alt_contact_number ? alt_contact_number.trim() : null,
@@ -309,10 +493,50 @@ export function addNewDriverModel(data) {
   });
 }
 
-export function updateDriverModel(id, data) {
+export function updateDriverModel(id, data, authUser = null) {
   return new Promise(async (resolve) => {
     try {
-      // await ensureDriverTable();
+      // 1. Resolve Organization ID securely from server session
+      let orgId = authUser?.orgId ? Number(authUser.orgId) : null;
+      if (!orgId && authUser?.userId) {
+        const uRows = await executeQuery(
+          "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
+          [authUser.userId]
+        );
+        if (uRows?.[0]?.orgId) {
+          orgId = Number(uRows[0].orgId);
+        }
+      }
+
+      const isSuperAdmin =
+        authUser?.role === "super_admin" ||
+        authUser?.email === "suraj@agnibyte.com";
+
+      // 2. Fetch previous driver details for diffing and boundary validation
+      const oldDriverRows = await executeQuery(`SELECT id, orgId, driver_name, fleet_id FROM drivers WHERE id = ? LIMIT 1`, [id]);
+      const oldDriver = Array.isArray(oldDriverRows) && oldDriverRows.length > 0 ? oldDriverRows[0] : null;
+
+      if (!oldDriver) {
+        return resolve({
+          status: false,
+          message: "Driver record not found.",
+        });
+      }
+
+      // 3. Organization boundary validation
+      if (authUser && !isSuperAdmin && orgId && oldDriver.orgId && Number(oldDriver.orgId) !== Number(orgId)) {
+        return resolve({
+          status: false,
+          message: "Unauthorized: You cannot modify a driver belonging to another organization.",
+        });
+      }
+
+      // Super Admin can update driver's orgId
+      const targetOrg = data?.orgId || data?.organization_id || data?.org_id;
+      let newOrgId = undefined;
+      if (isSuperAdmin && targetOrg !== undefined) {
+        newOrgId = targetOrg ? Number(targetOrg) : null;
+      }
 
       const parsedFleetId =
         data.fleet_id !== undefined
@@ -321,7 +545,27 @@ export function updateDriverModel(id, data) {
             : null
           : undefined;
 
+      // 4. Validate cross-tenant fleet assignment
+      if (parsedFleetId) {
+        const effectiveOrgId = newOrgId !== undefined ? newOrgId : (oldDriver.orgId || orgId);
+        if (effectiveOrgId) {
+          const fleetRows = await executeQuery(
+            "SELECT id, orgId, vehicle_number FROM fleets WHERE id = ? LIMIT 1",
+            [parsedFleetId]
+          );
+          if (fleetRows && fleetRows.length > 0 && fleetRows[0].orgId) {
+            if (Number(fleetRows[0].orgId) !== Number(effectiveOrgId)) {
+              return resolve({
+                status: false,
+                message: "Cannot assign a fleet vehicle belonging to a different organization.",
+              });
+            }
+          }
+        }
+      }
+
       const updateData = {
+        orgId: newOrgId,
         driver_name: data.driver_name ? data.driver_name.trim() : undefined,
         contact_number: data.contact_number ? data.contact_number.trim() : undefined,
         alt_contact_number: data.alt_contact_number ? data.alt_contact_number.trim() : undefined,
@@ -432,14 +676,41 @@ export function updateDriverModel(id, data) {
   });
 }
 
-export function deleteDriverModel(ids) {
+export function deleteDriverModel(ids, authUser = null) {
   return new Promise(async (resolve) => {
     try {
       if (!Array.isArray(ids) || ids.length === 0) {
         return resolve({ status: false, message: "No driver IDs provided for deletion" });
       }
 
-      // await ensureDriverTable();
+      let orgId = authUser?.orgId ? Number(authUser.orgId) : null;
+      if (!orgId && authUser?.userId) {
+        const uRows = await executeQuery(
+          "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
+          [authUser.userId]
+        );
+        if (uRows?.[0]?.orgId) {
+          orgId = Number(uRows[0].orgId);
+        }
+      }
+
+      const isSuperAdmin =
+        authUser?.role === "super_admin" ||
+        authUser?.email === "suraj@agnibyte.com";
+
+      if (authUser && !isSuperAdmin && orgId) {
+        const forbiddenDrivers = await executeQuery(
+          `SELECT id FROM drivers WHERE id IN (?) AND (orgId IS NOT NULL AND orgId != ?)`,
+          [ids, orgId]
+        );
+        if (forbiddenDrivers && forbiddenDrivers.length > 0) {
+          return resolve({
+            status: false,
+            message: "Unauthorized: Cannot delete drivers belonging to another organization.",
+          });
+        }
+      }
+
       const deleteQuery = `DELETE FROM drivers WHERE id IN (?)`;
       const result = await executeQuery(deleteQuery, [ids]);
 

@@ -22,7 +22,7 @@ export default function Fleets({ pageData }) {
 export const getServerSideProps = withUserSsr(async (context, { user }) => {
   const pageData = {};
   try {
-    const fleetsRes = await getAllFleetsController();
+    const fleetsRes = await getAllFleetsController({}, user);
     if (fleetsRes?.status && Array.isArray(fleetsRes.data)) {
       pageData.fleets = fleetsRes.data;
     }

@@ -1,4 +1,5 @@
 import { getAllDriversController } from "@/backend/controllers/driverController";
+import { getAuthUserFromReq } from "@/utilities/authServer";
 
 export const config = {
   api: {
@@ -8,7 +9,13 @@ export const config = {
 
 export default function handler(req, res) {
   return new Promise((resolve) => {
-    getAllDriversController()
+    const request =
+      req.method === "POST"
+        ? { ...(req.query || {}), ...(req.body || {}) }
+        : { ...(req.query || {}) };
+    const authUser = getAuthUserFromReq(req);
+
+    getAllDriversController(request, authUser)
       .then((result) => {
         res.status(200).json(result);
         resolve();
