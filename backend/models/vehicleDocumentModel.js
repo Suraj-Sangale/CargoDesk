@@ -109,7 +109,6 @@ export function addNewVehicleDocument(request, authUser = null) {
 export function getAllVehicleDocuments(request = {}, user = null) {
   return new Promise(async (resolve, reject) => {
     try {
-
       let orgId = user?.orgId ? Number(user.orgId) : null;
       const isSuperAdmin =
         user?.role === "super_admin" || user?.email === "suraj@agnibyte.com";
@@ -131,7 +130,10 @@ export function getAllVehicleDocuments(request = {}, user = null) {
       const page = Math.max(1, parseInt(request?.page, 10) || 1);
       const limit = Math.max(
         1,
-        Math.min(100, parseInt(request?.limit || request?.rowsPerPage, 10) || 10)
+        Math.min(
+          100,
+          parseInt(request?.limit || request?.rowsPerPage, 10) || 10,
+        ),
       );
       const offset = (page - 1) * limit;
 
@@ -168,7 +170,7 @@ export function getAllVehicleDocuments(request = {}, user = null) {
       if (request?.search && String(request.search).trim()) {
         const searchVal = `%${String(request.search).trim()}%`;
         whereClauses.push(
-          "(vd.vehicleNo LIKE ? OR vd.documentType LIKE ? OR vd.note LIKE ? OR f.vehicle_number LIKE ? OR f.vehicle_model LIKE ?)"
+          "(vd.vehicleNo LIKE ? OR vd.documentType LIKE ? OR vd.note LIKE ? OR f.vehicle_number LIKE ? OR f.vehicle_model LIKE ?)",
         );
         params.push(searchVal, searchVal, searchVal, searchVal, searchVal);
       }
@@ -227,11 +229,17 @@ export function getAllVehicleDocuments(request = {}, user = null) {
 
       const total = countResult?.[0]?.total || 0;
       const totalPages = isPaginated ? Math.ceil(total / limit) || 1 : 1;
+      const processedRows = (Array.isArray(result) ? result : []).map(
+        (row, idx) => ({
+          ...row,
+          id: idx + 1,
+        }),
+      );
 
       resolve({
         success: true,
         status: true,
-        data: Array.isArray(result) ? result : [],
+        data: processedRows,
         pagination: {
           page: isPaginated ? page : 1,
           limit: isPaginated ? limit : total,

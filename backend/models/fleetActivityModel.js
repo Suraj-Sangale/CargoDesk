@@ -134,6 +134,104 @@ export async function logFleetActivity(params) {
 }
 
 /**
+ * Automatically syncs any unsynced maintenance records into fleet_activity_history.
+ * Ensures that whenever a maintenance record is created (e.g. by a maintenance supervisor)
+ * it reliably appears in the All Activities timeline.
+ */
+export async function syncFleetMaintenanceActivities(fleetId = null) {
+  try {
+    let sql = `
+      SELECT m.id, m.vehicle_id, m.maintenance_type, m.description, m.maintenance_date, m.cost, m.status, m.garage_name, m.created_by, m.created_at,
+             CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, '')) AS user_name,
+             u.email AS user_email,
+             f.vehicle_number
+      FROM fleet_maintenance m
+      LEFT JOIN fleets f ON f.id = m.vehicle_id
+      LEFT JOIN users u ON u.userId = m.created_by
+      WHERE m.id NOT IN (
+        SELECT entity_id FROM fleet_activity_history 
+        WHERE operation_type = 'MAINTENANCE' AND action = 'CREATE'
+      )
+    `;
+    const params = [];
+    if (fleetId) {
+      sql += ` AND m.vehicle_id = ?`;
+      params.push(Number(fleetId));
+    }
+    sql += ` ORDER BY m.id ASC`;
+
+    const unsyncedRows = await executeQuery(sql, params);
+    if (!Array.isArray(unsyncedRows) || unsyncedRows.length === 0) {
+      return 0;
+    }
+
+    const recordIds = unsyncedRows.map((r) => r.id);
+    const mediaSQL = `
+      SELECT id, maintenance_id, s3_key, file_name, mime_type, file_size, media_type
+      FROM fleet_maintenance_media
+      WHERE maintenance_id IN (?)
+    `;
+    const mediaRows = await executeQuery(mediaSQL, [recordIds]).catch(() => []);
+    const mediaMap = {};
+    (mediaRows || []).forEach((m) => {
+      if (!mediaMap[m.maintenance_id]) mediaMap[m.maintenance_id] = [];
+      mediaMap[m.maintenance_id].push(m);
+    });
+
+    let syncedCount = 0;
+    for (const record of unsyncedRows) {
+      const cleanType = (record.maintenance_type || "Maintenance").trim();
+      const cleanDesc = (record.description || "").trim();
+      const performerName = (record.user_name || "").trim() || record.user_email || "Maintenance Supervisor";
+      const mediaList = mediaMap[record.id] || [];
+
+      const success = await insertActivityRecord({
+        fleetId: Number(record.vehicle_id),
+        operationType: "MAINTENANCE",
+        entityType: "MAINTENANCE_RECORD",
+        entityId: String(record.id),
+        action: "CREATE",
+        title: `${cleanType} logged`,
+        description:
+          cleanDesc.length > 80
+            ? cleanDesc.substring(0, 77) + "..."
+            : cleanDesc || `${cleanType} logged for vehicle ${record.vehicle_number || ""}`,
+        oldValue: null,
+        newValue: {
+          id: record.id,
+          maintenance_type: cleanType,
+          cost: record.cost,
+          status: record.status,
+          date: record.maintenance_date,
+          media: mediaList,
+        },
+        changedFields: ["maintenance_type", "cost", "status", "maintenance_date"],
+        performedBy: record.created_by ? String(record.created_by) : null,
+        performedByName: performerName,
+        performedAt: record.created_at || record.maintenance_date || null,
+        source: "maintenance",
+        metadata: {
+          vehicle_number: record.vehicle_number,
+          cost: record.cost,
+          garage: record.garage_name || null,
+          maintenance_id: record.id,
+          media: mediaList,
+        },
+      });
+
+      if (success) {
+        syncedCount++;
+      }
+    }
+
+    return syncedCount;
+  } catch (err) {
+    console.warn("Could not auto-sync maintenance activities:", err?.message);
+    return 0;
+  }
+}
+
+/**
  * Fetches chronological activity history for a specific fleetId with
  * multi-dimensional filtering, search, category metrics, and pagination.
  */
@@ -166,6 +264,9 @@ export async function getFleetActivityHistoryModel(filters = {}) {
         summary: { total: 0 },
       };
     }
+
+    // Auto-sync any unsynced maintenance records before querying so "All Activities" always includes them
+    await syncFleetMaintenanceActivities(targetFleetId);
 
     // Base condition
     const conditions = ["fleet_id = ?"];

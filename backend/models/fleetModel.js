@@ -1,5 +1,5 @@
 import executeQuery, { executeTransaction } from "@/helpers/dbConnection";
-import { logFleetActivity } from "./fleetActivityModel";
+import { logFleetActivity, syncFleetMaintenanceActivities } from "./fleetActivityModel";
 
 export function getAllFleetsModel(requestOrUser = {}, authUser = null) {
   return new Promise(async (resolve, reject) => {
@@ -25,7 +25,6 @@ export function getAllFleetsModel(requestOrUser = {}, authUser = null) {
       }
 
       let orgId = user?.orgId ? Number(user.orgId) : null;
-      console.log("🚀 ~ user:", user)
       if (!orgId && user?.userId) {
         const uRows = await executeQuery(
           "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
@@ -79,10 +78,13 @@ export function getAllFleetsModel(requestOrUser = {}, authUser = null) {
         ORDER BY f.id DESC
       `;
       const rows = await executeQuery(selectQuery, params);
-      console.log("🚀 ~ rows:", rows)
+      const processedRows = (Array.isArray(rows) ? rows : []).map((row, idx) => ({
+        ...row,
+        sr_no: idx + 1,
+      }));
       resolve({
         status: true,
-        data: Array.isArray(rows) ? rows : [],
+        data: processedRows,
         message: "Fleets fetched successfully",
       });
     } catch (error) {
@@ -279,6 +281,13 @@ export function getFleetByIdModel(id) {
         } catch (emiSyncErr) {
           console.warn("Could not sync emi activity:", emiSyncErr?.message);
         }
+      }
+
+      // Auto-ensure maintenance records are recorded in activity history if not already present
+      try {
+        await syncFleetMaintenanceActivities(fleet.id);
+      } catch (maintSyncErr) {
+        console.warn("Could not sync maintenance activity:", maintSyncErr?.message);
       }
 
       resolve({
@@ -508,13 +517,25 @@ export function addNewFleetModel(data, authUser = null) {
 export function updateFleetModel(id, data, authUser = null) {
   return new Promise(async (resolve, reject) => {
     try {
-      // 1. Resolve Organization ID securely from server session
+      // 1. Validate Fleet ID
+      const fleetId = Number(id);
+
+      if (!Number.isInteger(fleetId) || fleetId <= 0) {
+        return resolve({
+          status: false,
+          message: "Invalid fleet ID.",
+        });
+      }
+
+      // 2. Resolve Organization ID securely
       let orgId = authUser?.orgId ? Number(authUser.orgId) : null;
+
       if (!orgId && authUser?.userId) {
         const uRows = await executeQuery(
           "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
-          [authUser.userId],
+          [authUser.userId]
         );
+
         if (uRows?.[0]?.orgId) {
           orgId = Number(uRows[0].orgId);
         }
@@ -524,12 +545,13 @@ export function updateFleetModel(id, data, authUser = null) {
         authUser?.role === "super_admin" ||
         authUser?.email === "suraj@agnibyte.com";
 
-      // Fetch old record and old driver for diffing and audit trail
-      const oldRows = await executeQuery(`SELECT * FROM fleets WHERE id = ?`, [
-        id,
-      ]);
-      const oldFleet =
-        Array.isArray(oldRows) && oldRows.length > 0 ? oldRows[0] : null;
+      // 3. Fetch existing fleet
+      const oldRows = await executeQuery(
+        `SELECT * FROM fleets WHERE id = ? LIMIT 1`,
+        [fleetId]
+      );
+
+      const oldFleet = oldRows?.[0] || null;
 
       if (!oldFleet) {
         return resolve({
@@ -538,54 +560,144 @@ export function updateFleetModel(id, data, authUser = null) {
         });
       }
 
-      // Organization boundary check for non-superadmin
-      if (authUser && !isSuperAdmin && orgId && oldFleet.orgId && Number(oldFleet.orgId) !== Number(orgId)) {
-        return resolve({
-          status: false,
-          message: "Unauthorized: You cannot modify a fleet vehicle belonging to another organization.",
-        });
+      // 4. Organization boundary validation
+      if (!isSuperAdmin) {
+        if (
+          !orgId ||
+          Number(oldFleet.orgId) !== Number(orgId)
+        ) {
+          return resolve({
+            status: false,
+            message:
+              "Unauthorized: You cannot modify a fleet vehicle belonging to another organization.",
+          });
+        }
       }
 
-      // Super Admin can update fleet's orgId
-      const targetOrg = data?.orgId || data?.organization_id || data?.org_id;
-      let newOrgId = undefined;
-      if (isSuperAdmin && targetOrg !== undefined) {
-        newOrgId = targetOrg ? Number(targetOrg) : null;
+      // 5. Super Admin organization update
+      const orgFields = ["orgId", "organization_id", "org_id"];
+
+      const orgField = orgFields.find((field) =>
+        Object.prototype.hasOwnProperty.call(data, field)
+      );
+
+      let newOrgId = oldFleet.orgId;
+
+      if (orgField) {
+        if (!isSuperAdmin) {
+          return resolve({
+            status: false,
+            message: "Only Super Admin can change fleet organization.",
+          });
+        }
+
+        const rawOrgId = data[orgField];
+
+        if (rawOrgId === null || rawOrgId === "") {
+          return resolve({
+            status: false,
+            message: "Invalid organization ID.",
+          });
+        }
+
+        newOrgId = Number(rawOrgId);
+
+        if (!Number.isInteger(newOrgId) || newOrgId <= 0) {
+          return resolve({
+            status: false,
+            message: "Invalid organization ID.",
+          });
+        }
+
+        const organizationRows = await executeQuery(
+          `SELECT id FROM organizations WHERE id = ? LIMIT 1`,
+          [newOrgId]
+        );
+
+        if (!organizationRows?.length) {
+          return resolve({
+            status: false,
+            message: "Organization not found.",
+          });
+        }
       }
 
-      const parsedDriverId =
-        data.driver_id !== undefined
-          ? data.driver_id !== null &&
-            data.driver_id !== "" &&
-            Number(data.driver_id) > 0
-            ? Number(data.driver_id)
-            : null
-          : undefined;
+      const effectiveOrgId = Number(newOrgId || orgId);
 
-      // Validate driver assignment cross-tenant
-      if (parsedDriverId) {
-        const effectiveOrgId = newOrgId !== undefined ? newOrgId : (oldFleet.orgId || orgId);
-        if (effectiveOrgId) {
-          const driverRows = await executeQuery(
-            "SELECT id, orgId, driver_name FROM drivers WHERE id = ? LIMIT 1",
-            [parsedDriverId]
-          );
-          if (driverRows && driverRows.length > 0 && driverRows[0].orgId) {
-            if (Number(driverRows[0].orgId) !== Number(effectiveOrgId)) {
-              return resolve({
-                status: false,
-                message: "Cannot assign a driver belonging to a different organization.",
-              });
-            }
+      // 6. Validate Driver ID
+      let parsedDriverId = undefined;
+
+      if (data.driver_id !== undefined) {
+        if (
+          data.driver_id === null ||
+          data.driver_id === ""
+        ) {
+          parsedDriverId = null;
+        } else {
+          parsedDriverId = Number(data.driver_id);
+
+          if (
+            !Number.isInteger(parsedDriverId) ||
+            parsedDriverId <= 0
+          ) {
+            return resolve({
+              status: false,
+              message: "Invalid driver ID.",
+            });
           }
         }
       }
 
+      // 7. Fetch existing driver assigned to this fleet
+      const oldDriverRows = await executeQuery(
+        `SELECT id, driver_name
+         FROM drivers
+         WHERE fleet_id = ? AND orgId = ?
+         LIMIT 1`,
+        [fleetId, oldFleet.orgId]
+      );
+
+      const oldDriver = oldDriverRows?.[0] || null;
+
+      // 8. Validate selected driver
+      let newDriver = null;
+
+      if (parsedDriverId) {
+        if (!effectiveOrgId) {
+          return resolve({
+            status: false,
+            message: "Organization is required for driver assignment.",
+          });
+        }
+
+        const driverRows = await executeQuery(
+          `SELECT id, orgId, driver_name
+           FROM drivers
+           WHERE id = ? AND orgId = ?
+           LIMIT 1`,
+          [parsedDriverId, effectiveOrgId]
+        );
+
+        if (!driverRows?.length) {
+          return resolve({
+            status: false,
+            message:
+              "Selected driver does not belong to this organization or does not exist.",
+          });
+        }
+
+        newDriver = driverRows[0];
+      }
+
+      // 9. Prepare update data
       const updateData = {
-        orgId: newOrgId,
-        vehicle_number: data.vehicle_number
-          ? data.vehicle_number.toUpperCase().trim()
-          : undefined,
+        orgId: orgField ? newOrgId : undefined,
+
+        vehicle_number:
+          data.vehicle_number !== undefined
+            ? data.vehicle_number?.toUpperCase().trim() || null
+            : undefined,
+
         vehicle_model: data.vehicle_model,
         vehicle_type: data.vehicle_type,
         capacity: data.capacity,
@@ -599,169 +711,201 @@ export function updateFleetModel(id, data, authUser = null) {
         notes: data.notes,
       };
 
-      // Clean undefined keys
-      Object.keys(updateData).forEach(
-        (key) => updateData[key] === undefined && delete updateData[key],
-      );
+      // Remove undefined keys
+      Object.keys(updateData).forEach((key) => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
 
-      // Fetch old record and old driver for diffing and audit trail
-      const oldRows = await executeQuery(`SELECT * FROM fleets WHERE id = ?`, [
-        id,
-      ]);
-      const oldFleet =
-        Array.isArray(oldRows) && oldRows.length > 0 ? oldRows[0] : null;
+      const targetVehNo =
+        updateData.vehicle_number !== undefined
+          ? updateData.vehicle_number
+          : oldFleet.vehicle_number;
 
-      const oldDriverRows = await executeQuery(
-        `SELECT id, driver_name FROM drivers WHERE fleet_id = ?`,
-        [id],
-      );
-      const oldDriver =
-        Array.isArray(oldDriverRows) && oldDriverRows.length > 0
-          ? oldDriverRows[0]
-          : null;
+      const driverChanged =
+        parsedDriverId !== undefined &&
+        Number(parsedDriverId || 0) !== Number(oldDriver?.id || 0);
 
+      // 10. Transaction: update fleet and driver assignment
       await executeTransaction(async (queryFn) => {
         if (Object.keys(updateData).length > 0) {
-          await queryFn(`UPDATE fleets SET ? WHERE id = ?`, [updateData, id]);
+          await queryFn(
+            `UPDATE fleets SET ? WHERE id = ?`,
+            [updateData, fleetId]
+          );
         }
 
-        // Manage driver assignment if provided in update payload
+        // Update assigned vehicle number if fleet vehicle number changes
+        if (updateData.vehicle_number !== undefined) {
+          await queryFn(
+            `UPDATE drivers
+             SET assigned_vehicle = ?
+             WHERE fleet_id = ? AND orgId = ?`,
+            [targetVehNo, fleetId, oldFleet.orgId]
+          );
+        }
+
+        // Manage driver assignment
         if (parsedDriverId !== undefined) {
-          const targetVehNo = updateData.vehicle_number || oldFleet?.vehicle_number || null;
           if (parsedDriverId) {
-            // Remove previous driver on this fleet (if different)
+            // Unassign previous driver from this fleet
             await queryFn(
-              `UPDATE drivers SET fleet_id = NULL, assigned_vehicle = NULL WHERE fleet_id = ? AND id != ?`,
-              [id, parsedDriverId],
+              `UPDATE drivers
+               SET fleet_id = NULL, assigned_vehicle = NULL
+               WHERE fleet_id = ? AND orgId = ? AND id != ?`,
+              [fleetId, effectiveOrgId, parsedDriverId]
             );
-            // Assign selected driver to this fleet
+
+            // Ensure driver is not assigned to another fleet
             await queryFn(
-              `UPDATE drivers SET fleet_id = ?, assigned_vehicle = ? WHERE id = ?`,
-              [id, targetVehNo, parsedDriverId],
+              `UPDATE drivers
+               SET fleet_id = NULL, assigned_vehicle = NULL
+               WHERE id = ? AND orgId = ? AND fleet_id IS NOT NULL AND fleet_id != ?`,
+              [parsedDriverId, effectiveOrgId, fleetId]
+            );
+
+            // Assign selected driver
+            await queryFn(
+              `UPDATE drivers
+               SET fleet_id = ?, assigned_vehicle = ?
+               WHERE id = ? AND orgId = ?`,
+              [
+                fleetId,
+                targetVehNo,
+                parsedDriverId,
+                effectiveOrgId,
+              ]
             );
           } else {
-            // Unassign whoever was on this fleet
+            // Unassign current driver
             await queryFn(
-              `UPDATE drivers SET fleet_id = NULL, assigned_vehicle = NULL WHERE fleet_id = ?`,
-              [id],
+              `UPDATE drivers
+               SET fleet_id = NULL, assigned_vehicle = NULL
+               WHERE fleet_id = ? AND orgId = ?`,
+              [fleetId, oldFleet.orgId]
             );
           }
         }
       });
 
-      // Centralized Activity Logging for Fleet Update
-      if (oldFleet) {
-        // Status change specific audit log
-        if (updateData.status && updateData.status !== oldFleet.status) {
+      // 11. Activity logging
+      const performedByName =
+        authUser?.name ||
+        authUser?.userName ||
+        "Admin User";
+
+      // Status change log
+      if (
+        updateData.status !== undefined &&
+        updateData.status !== oldFleet.status
+      ) {
+        await logFleetActivity({
+          fleetId,
+          operationType: "STATUS",
+          entityType: "STATUS_CHANGE",
+          entityId: String(fleetId),
+          action: updateData.status === "Active" ? "ACTIVATE" : "UPDATE",
+          title: "Vehicle status changed",
+          description: `${oldFleet.status} → ${updateData.status}`,
+          oldValue: { status: oldFleet.status },
+          newValue: { status: updateData.status },
+          changedFields: ["status"],
+          performedByName,
+          source: "fleets",
+        });
+      }
+
+      // Driver assignment change log
+      if (driverChanged) {
+        if (parsedDriverId && newDriver) {
           await logFleetActivity({
-            fleetId: id,
-            operationType: "STATUS",
-            entityType: "STATUS_CHANGE",
-            entityId: String(id),
-            action: updateData.status === "Active" ? "ACTIVATE" : "UPDATE",
-            title: "Vehicle status changed",
-            description: `${oldFleet.status} → ${updateData.status}`,
-            oldValue: { status: oldFleet.status },
-            newValue: { status: updateData.status },
-            changedFields: ["status"],
-            performedByName: data.performedByName || "Admin User",
-            source: "fleets",
+            fleetId,
+            operationType: "DRIVER",
+            entityType: "DRIVER_ALLOCATION",
+            entityId: String(parsedDriverId),
+            action: "ASSIGN",
+            title: "Driver assigned",
+            description: `Driver: ${newDriver.driver_name}`,
+            oldValue: oldDriver
+              ? {
+                  driver_id: oldDriver.id,
+                  driver_name: oldDriver.driver_name,
+                }
+              : null,
+            newValue: {
+              driver_id: newDriver.id,
+              driver_name: newDriver.driver_name,
+            },
+            changedFields: ["driver_id", "driver_name"],
+            performedByName,
+            source: "fleet-driver",
           });
-        }
-
-        // Driver Assignment Change Audit Log
-        if (
-          parsedDriverId !== undefined &&
-          parsedDriverId !== (oldDriver?.id || null)
-        ) {
-          if (parsedDriverId) {
-            const newDriverRows = await executeQuery(
-              `SELECT id, driver_name FROM drivers WHERE id = ?`,
-              [parsedDriverId],
-            );
-            const newDriverName =
-              newDriverRows?.[0]?.driver_name || `Driver #${parsedDriverId}`;
-            await logFleetActivity({
-              fleetId: id,
-              operationType: "DRIVER",
-              entityType: "DRIVER_ALLOCATION",
-              entityId: String(parsedDriverId),
-              action: "ASSIGN",
-              title: "Driver assigned",
-              description: `Driver: ${newDriverName}`,
-              oldValue: oldDriver
-                ? {
-                    driver_id: oldDriver.id,
-                    driver_name: oldDriver.driver_name,
-                  }
-                : null,
-              newValue: {
-                driver_id: parsedDriverId,
-                driver_name: newDriverName,
-              },
-              changedFields: ["driver_id", "driver_name"],
-              performedByName: data.performedByName || "Admin User",
-              source: "fleet-driver",
-            });
-          } else if (oldDriver) {
-            await logFleetActivity({
-              fleetId: id,
-              operationType: "DRIVER",
-              entityType: "DRIVER_ALLOCATION",
-              entityId: String(oldDriver.id),
-              action: "UNASSIGN",
-              title: "Driver removed",
-              description: `${oldDriver.driver_name} unassigned from vehicle`,
-              oldValue: {
-                driver_id: oldDriver.id,
-                driver_name: oldDriver.driver_name,
-              },
-              newValue: null,
-              changedFields: ["driver_id"],
-              performedByName: data.performedByName || "Admin User",
-              source: "fleet-driver",
-            });
-          }
-        }
-
-        // General Fleet Vehicle Details Update
-        const hasOtherChanges = Object.keys(updateData).some(
-          (k) =>
-            k !== "status" &&
-            String(oldFleet[k] ?? "") !== String(updateData[k] ?? ""),
-        );
-
-        if (hasOtherChanges) {
+        } else if (oldDriver) {
           await logFleetActivity({
-            fleetId: id,
-            operationType: "FLEET",
-            entityType: "VEHICLE_DETAILS",
-            entityId: String(id),
-            action: "UPDATE",
-            title: "Vehicle details updated",
-            description: `Vehicle details updated for ${updateData.vehicle_number || oldFleet.vehicle_number}`,
-            oldValue: oldFleet,
-            newValue: { ...oldFleet, ...updateData },
-            performedByName: data.performedByName || "Admin User",
-            source: "fleets",
+            fleetId,
+            operationType: "DRIVER",
+            entityType: "DRIVER_ALLOCATION",
+            entityId: String(oldDriver.id),
+            action: "UNASSIGN",
+            title: "Driver removed",
+            description: `${oldDriver.driver_name} unassigned from vehicle`,
+            oldValue: {
+              driver_id: oldDriver.id,
+              driver_name: oldDriver.driver_name,
+            },
+            newValue: null,
+            changedFields: ["driver_id"],
+            performedByName,
+            source: "fleet-driver",
           });
         }
       }
 
-      resolve({ status: true, message: "Fleet vehicle updated successfully" });
+      // General vehicle details update log
+      const hasOtherChanges = Object.keys(updateData).some(
+        (key) =>
+          key !== "status" &&
+          String(oldFleet[key] ?? "") !== String(updateData[key] ?? "")
+      );
+
+      if (hasOtherChanges) {
+        await logFleetActivity({
+          fleetId,
+          operationType: "FLEET",
+          entityType: "VEHICLE_DETAILS",
+          entityId: String(fleetId),
+          action: "UPDATE",
+          title: "Vehicle details updated",
+          description: `Vehicle details updated for ${
+            targetVehNo || oldFleet.vehicle_number
+          }`,
+          oldValue: oldFleet,
+          newValue: { ...oldFleet, ...updateData },
+          performedByName,
+          source: "fleets",
+        });
+      }
+
+      return resolve({
+        status: true,
+        message: "Fleet vehicle updated successfully.",
+      });
     } catch (error) {
       console.error("Error updating fleet:", error);
+
       if (error.code === "ER_DUP_ENTRY") {
-        resolve({
+        return resolve({
           status: false,
-          message: "A vehicle with this registration number already exists.",
-        });
-      } else {
-        resolve({
-          status: false,
-          message: "Database error while updating fleet vehicle",
+          message:
+            "A vehicle with this registration number already exists.",
         });
       }
+
+      return resolve({
+        status: false,
+        message: "Database error while updating fleet vehicle.",
+      });
     }
   });
 }
