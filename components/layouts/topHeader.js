@@ -12,7 +12,7 @@ import {
 } from "react-icons/fi";
 import { postApiData } from "@/utilities/services/apiService";
 import CommonModal from "../common/commonModal";
-import ResetConfirmation from "../common/items/resetConfirmation";
+import ResetConfirmation from "../common/items/commonConfirmation";
 import { convertFirstLetterCapital } from "@/utilities/utils";
 import { useFleetDriver } from "@/context/fleetDriverContext";
 
@@ -84,11 +84,10 @@ export default function TopHeader({
 
         {/* Brand Name (Smoothly slides and fades in when sidebar is closed) */}
         <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out shrink-0 flex items-center ${
-            showBrandName
+          className={`overflow-hidden transition-all duration-300 ease-in-out shrink-0 flex items-center ${showBrandName
               ? "max-w-[180px] opacity-100 translate-x-0"
               : "max-w-0 opacity-0 -translate-x-3 pointer-events-none"
-          }`}
+            }`}
           aria-hidden={!showBrandName}
         >
           <Link
