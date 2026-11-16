@@ -11,7 +11,12 @@ import {
   FloatingTextarea,
 } from "../common/floatingInput";
 import { useFleetDriver } from "@/context/fleetDriverContext";
-import { postApiData } from "@/utilities/services/apiService";
+import {
+  postApiData,
+  uploadMediaFile,
+  compressImageFile,
+  resolveMediaUrl,
+} from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
 import useAutoFocusField from "@/hooks/useAutoFocusField";
 import {
@@ -61,10 +66,13 @@ export default function DriverForm({
   const { fleets, refreshAll } = useFleetDriver();
 
   const [profilePhoto, setProfilePhoto] = useState("");
+  const [newProfileFile, setNewProfileFile] = useState(null);
+  const [profilePreviewUrl, setProfilePreviewUrl] = useState("");
   const [supportingDocs, setSupportingDocs] = useState([]);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [selectedFleetId, setSelectedFleetId] = useState("");
   const [apiLoading, setApiLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
   const profileInputRef = useRef(null);
@@ -84,22 +92,35 @@ export default function DriverForm({
   // Populate data when editing
   useEffect(() => {
     if (isEdit && modalData) {
+      const licType =
+        modalData.license_type ||
+        modalData.licenseType ||
+        modalData.license_category ||
+        modalData.licenseCategory ||
+        DRIVER_LICENSE_TYPES[0];
+      const bloodGrp = modalData.blood_group || modalData.bloodGroup || "B+";
+      const driverStatus = modalData.status || "Active";
+
       reset({
         driver_name: modalData.driver_name || modalData.name || "",
         contact_number: modalData.contact_number || modalData.contactNo || "",
         alt_contact_number: modalData.alt_contact_number || "",
         license_number: modalData.license_number || "",
-        license_type: modalData.license_type || DRIVER_LICENSE_TYPES[0],
+        license_type: licType,
         license_expiry: modalData.license_expiry
           ? moment(modalData.license_expiry).format("YYYY-MM-DD")
           : "",
         experience_years: modalData.experience_years || "5 Years",
-        blood_group: modalData.blood_group || "B+",
+        blood_group: bloodGrp,
         emergency_contact: modalData.emergency_contact || "",
-        status: modalData.status || "Active",
+        status: driverStatus,
         address: modalData.address || "",
         notes: modalData.notes || modalData.note || "",
       });
+
+      setValue("license_type", licType);
+      setValue("blood_group", bloodGrp);
+      setValue("status", driverStatus);
 
       // Find initial fleet id
       let initialFleetId = "";
@@ -120,16 +141,36 @@ export default function DriverForm({
       }
       setSelectedFleetId(initialFleetId ? String(initialFleetId) : "");
 
-      setProfilePhoto(modalData.profile_photo || "");
+      const rawPhoto = modalData.profile_photo || "";
+      const resolvedPhoto = resolveMediaUrl(rawPhoto);
+      setProfilePhoto(resolvedPhoto);
+      setProfilePreviewUrl(resolvedPhoto);
+      setNewProfileFile(null);
 
       // Parse supporting docs if JSON string or array
       if (modalData.supporting_documents) {
         if (Array.isArray(modalData.supporting_documents)) {
-          setSupportingDocs(modalData.supporting_documents);
+          setSupportingDocs(
+            modalData.supporting_documents.map((d) => ({
+              ...d,
+              dataUrl: resolveMediaUrl(d.dataUrl || d.url || ""),
+              url: resolveMediaUrl(d.url || d.dataUrl || ""),
+              isNew: false,
+            }))
+          );
         } else {
           try {
             const parsed = JSON.parse(modalData.supporting_documents);
-            setSupportingDocs(Array.isArray(parsed) ? parsed : []);
+            setSupportingDocs(
+              Array.isArray(parsed)
+                ? parsed.map((d) => ({
+                    ...d,
+                    dataUrl: resolveMediaUrl(d.dataUrl || d.url || ""),
+                    url: resolveMediaUrl(d.url || d.dataUrl || ""),
+                    isNew: false,
+                  }))
+                : []
+            );
           } catch (_) {
             setSupportingDocs([]);
           }
@@ -141,6 +182,8 @@ export default function DriverForm({
       reset(DEFAULT_DRIVER_VALUES);
       setSelectedFleetId("");
       setProfilePhoto("");
+      setProfilePreviewUrl("");
+      setNewProfileFile(null);
       setSupportingDocs([]);
     }
   }, [isEdit, modalData, reset, fleets]);
@@ -206,8 +249,8 @@ export default function DriverForm({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
-  // Handle Profile Photo selection with automatic client-side compression
-  const handleProfilePhotoChange = (e) => {
+  // Handle Profile Photo selection with client-side preview & optimization
+  const handleProfilePhotoChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -216,176 +259,326 @@ export default function DriverForm({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const maxWidth = 600;
-        const maxHeight = 600;
-        let width = img.width;
-        let height = img.height;
+    if (file.size > 10 * 1024 * 1024) {
+      showToast("Profile photo exceeds 10 MB limit", "error");
+      return;
+    }
 
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
+    let optimizedFile = file;
+    try {
+      optimizedFile = await compressImageFile(file, { maxDimension: 600, quality: 0.85 });
+    } catch (_) {}
 
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
+    if (profilePreviewUrl && profilePreviewUrl.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(profilePreviewUrl);
+      } catch (_) {}
+    }
 
-        const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        setProfilePhoto(compressedDataUrl);
-        showToast("Profile photo loaded & optimized", "success");
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
+    const preview = URL.createObjectURL(optimizedFile);
+    setNewProfileFile(optimizedFile);
+    setProfilePreviewUrl(preview);
+    showToast("Profile photo selected (will be uploaded to S3)", "success");
   };
 
-  // Handle Supporting Documents batch upload
+  const handleRemoveProfilePhoto = () => {
+    if (profilePreviewUrl && profilePreviewUrl.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(profilePreviewUrl);
+      } catch (_) {}
+    }
+    setProfilePhoto("");
+    setProfilePreviewUrl("");
+    setNewProfileFile(null);
+    if (profileInputRef.current) {
+      profileInputRef.current.value = "";
+    }
+    showToast("Profile photo removed", "info");
+  };
+
+  // Handle Supporting Documents batch selection
   const handleSupportingDocsUpload = (files) => {
     if (!files || files.length === 0) return;
 
-    const newDocs = [];
     const maxFileSize = 15 * 1024 * 1024;
+    const maxTotalDocs = 15;
+
+    if (supportingDocs.length + files.length > maxTotalDocs) {
+      showToast(`You can attach up to ${maxTotalDocs} documents.`, "error");
+      return;
+    }
+
+    const newDocItems = [];
 
     Array.from(files).forEach((file) => {
-      if (file.size > maxFileSize) {
-        showToast(`File ${file.name} is larger than 15MB limit`, "error");
+      const isImg = file.type?.startsWith("image/");
+      const isPdf =
+        file.type === "application/pdf" ||
+        file.name?.toLowerCase().endsWith(".pdf");
+
+      if (!isImg && !isPdf) {
+        showToast(
+          `Unsupported file format: ${file.name}. Only images and PDFs are allowed.`,
+          "error"
+        );
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const docItem = {
-          id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          dataUrl: e.target.result,
-          uploadedAt: new Date().toISOString(),
-        };
+      if (file.size > maxFileSize) {
+        showToast(
+          `File "${file.name}" exceeds 15 MB limit (${formatFileSize(file.size)})`,
+          "error"
+        );
+        return;
+      }
 
-        setSupportingDocs((prev) => [...prev, docItem]);
-      };
-      reader.readAsDataURL(file);
+      const previewUrl = URL.createObjectURL(file);
+      newDocItems.push({
+        id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        name: file.name,
+        size: file.size,
+        type: file.type || (isPdf ? "application/pdf" : "image/jpeg"),
+        file,
+        previewUrl,
+        isNew: true,
+      });
     });
 
-    showToast(`${files.length} document(s) uploaded successfully`, "success");
+    if (newDocItems.length > 0) {
+      setSupportingDocs((prev) => [...prev, ...newDocItems]);
+      showToast(
+        `${newDocItems.length} document(s) added (ready for S3 upload)`,
+        "success"
+      );
+    }
   };
 
   const handleRemoveDoc = (docId) => {
-    setSupportingDocs((prev) => prev.filter((d) => d.id !== docId));
+    setSupportingDocs((prev) => {
+      const target = prev.find((d) => d.id === docId);
+      if (target?.previewUrl && target.previewUrl.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(target.previewUrl);
+        } catch (_) {}
+      }
+      return prev.filter((d) => d.id !== docId);
+    });
     showToast("Document removed", "info");
   };
 
   const onSubmit = async (data) => {
     setApiLoading(true);
+    setUploadProgress("Preparing upload...");
 
-    const parsedFleetId =
-      selectedFleetId !== "" && Number(selectedFleetId) > 0
-        ? Number(selectedFleetId)
-        : null;
+    try {
+      const driverId = modalData?.id || null;
+      let finalProfilePhoto = profilePhoto || null;
 
-    const formattedLicenseExpiry = data.license_expiry
-      ? moment(data.license_expiry).format("YYYY-MM-DD")
-      : null;
-
-    const payload = {
-      driver_name: data.driver_name ? data.driver_name.trim() : "",
-      contact_number: data.contact_number ? data.contact_number.trim() : "",
-      alt_contact_number: data.alt_contact_number
-        ? data.alt_contact_number.trim()
-        : "",
-      license_number: data.license_number
-        ? data.license_number.toUpperCase().trim()
-        : "",
-      license_type: data.license_type || "",
-      license_expiry: formattedLicenseExpiry,
-      experience_years: data.experience_years
-        ? data.experience_years.trim()
-        : "",
-      blood_group: data.blood_group || "B+",
-      emergency_contact: data.emergency_contact
-        ? data.emergency_contact.trim()
-        : "",
-      status: data.status || "Active",
-      address: data.address ? data.address.trim() : "",
-      notes: data.notes ? data.notes.trim() : "",
-      profile_photo: profilePhoto || null,
-      supporting_documents:
-        supportingDocs.length > 0 ? JSON.stringify(supportingDocs) : null,
-      fleet_id: parsedFleetId,
-    };
-
-    let response;
-    if (isEdit) {
-      payload.id = modalData.id;
-      response = await postApiData("UPDATE_DRIVER", payload);
-    } else {
-      response = await postApiData("ADD_NEW_DRIVER", payload);
-    }
-
-    if (response && response.status) {
-      showToast(
-        response.message ||
-          (isEdit
-            ? "Driver updated successfully"
-            : "Driver added successfully"),
-        "success"
-      );
-
-      // Refresh synchronized context datasets
-      await refreshAll();
-
-      if (setDriverList) {
-        if (isEdit) {
-          setDriverList((prev) =>
-            prev.map((item) =>
-              item.id == modalData.id
-                ? {
-                    ...item,
-                    ...payload,
-                    id: modalData.id,
-                    fleet_id: parsedFleetId,
-                    assigned_vehicle: selectedFleet?.vehicle_number || null,
-                    vehicle_number: selectedFleet?.vehicle_number || null,
-                    vehicle_model: selectedFleet?.vehicle_model || null,
-                  }
-                : item
-            )
-          );
-        } else {
-          setDriverList((prev) => [
+      // 1. Upload new profile photo if selected
+      if (newProfileFile) {
+        setUploadProgress("Authorizing profile photo upload...");
+        const presignRes = await postApiData("PRESIGN_DRIVER_UPLOADS", {
+          driverId,
+          files: [
             {
-              ...payload,
-              id: response.id || Date.now(),
-              fleet_id: parsedFleetId,
-              assigned_vehicle: selectedFleet?.vehicle_number || null,
-              vehicle_number: selectedFleet?.vehicle_number || null,
-              vehicle_model: selectedFleet?.vehicle_model || null,
+              fileName: newProfileFile.name,
+              mimeType: newProfileFile.type || "image/jpeg",
+              fileSize: newProfileFile.size,
+              category: "profile",
             },
-            ...prev,
-          ]);
+          ],
+        });
+
+        if (!presignRes?.status || !Array.isArray(presignRes.data) || !presignRes.data[0]) {
+          throw new Error(presignRes?.message || "Failed to initialize profile photo upload.");
+        }
+
+        const presignedPhoto = presignRes.data[0];
+        setUploadProgress("Uploading profile photo to cloud storage...");
+
+        await uploadMediaFile({
+          uploadUrl: presignedPhoto.uploadUrl,
+          file: newProfileFile,
+          mimeType: newProfileFile.type || "image/jpeg",
+          s3Key: presignedPhoto.s3Key,
+        });
+
+        finalProfilePhoto = presignedPhoto.fileUrl;
+      }
+
+      // 2. Upload new supporting documents if any
+      const newDocsToUpload = supportingDocs.filter((d) => d.isNew && d.file);
+      const existingDocs = supportingDocs.filter((d) => !d.isNew);
+      const uploadedDocs = [];
+
+      if (newDocsToUpload.length > 0) {
+        setUploadProgress(`Authorizing ${newDocsToUpload.length} document(s)...`);
+
+        const presignDocsRes = await postApiData("PRESIGN_DRIVER_UPLOADS", {
+          driverId,
+          files: newDocsToUpload.map((d) => ({
+            fileName: d.name,
+            mimeType: d.type,
+            fileSize: d.size,
+            category: "documents",
+          })),
+        });
+
+        if (!presignDocsRes?.status || !Array.isArray(presignDocsRes.data)) {
+          throw new Error(presignDocsRes?.message || "Failed to initialize document uploads.");
+        }
+
+        const presignedDocMap = {};
+        presignDocsRes.data.forEach((p) => {
+          presignedDocMap[p.fileName] = p;
+        });
+
+        for (let i = 0; i < newDocsToUpload.length; i++) {
+          const doc = newDocsToUpload[i];
+          const presignedInfo = presignedDocMap[doc.name] || presignDocsRes.data[i];
+
+          if (!presignedInfo || !presignedInfo.uploadUrl) {
+            throw new Error(`Upload authorization missing for: ${doc.name}`);
+          }
+
+          setUploadProgress(`Uploading ${doc.name} (${i + 1} of ${newDocsToUpload.length}) to S3...`);
+
+          await uploadMediaFile({
+            uploadUrl: presignedInfo.uploadUrl,
+            file: doc.file,
+            mimeType: doc.type,
+            s3Key: presignedInfo.s3Key,
+          });
+
+          uploadedDocs.push({
+            id: doc.id,
+            name: doc.name,
+            size: doc.size,
+            type: doc.type,
+            dataUrl: presignedInfo.fileUrl,
+            url: presignedInfo.fileUrl,
+            s3Key: presignedInfo.s3Key,
+            uploadedAt: new Date().toISOString(),
+          });
         }
       }
 
-      handleClose();
-    } else {
-      showToast(response?.message || "Failed to save driver record", "error");
-    }
+      // Combined clean documents list (only S3 URLs and safe legacy URLs, no large file Blobs)
+      const finalSupportingDocs = [
+        ...existingDocs.map((d) => ({
+          id: d.id,
+          name: d.name,
+          size: d.size,
+          type: d.type,
+          dataUrl: d.dataUrl || d.url || null,
+          url: d.url || d.dataUrl || null,
+          s3Key: d.s3Key || null,
+          uploadedAt: d.uploadedAt || new Date().toISOString(),
+        })),
+        ...uploadedDocs,
+      ];
 
-    setApiLoading(false);
+      setUploadProgress("Saving driver details...");
+
+      const parsedFleetId =
+        selectedFleetId !== "" && Number(selectedFleetId) > 0
+          ? Number(selectedFleetId)
+          : null;
+
+      const formattedLicenseExpiry = data.license_expiry
+        ? moment(data.license_expiry).format("YYYY-MM-DD")
+        : null;
+
+      const payload = {
+        driver_name: data.driver_name ? data.driver_name.trim() : "",
+        contact_number: data.contact_number ? data.contact_number.trim() : "",
+        alt_contact_number: data.alt_contact_number
+          ? data.alt_contact_number.trim()
+          : "",
+        license_number: data.license_number
+          ? data.license_number.toUpperCase().trim()
+          : "",
+        license_type: data.license_type || "",
+        license_expiry: formattedLicenseExpiry,
+        experience_years: data.experience_years
+          ? data.experience_years.trim()
+          : "",
+        blood_group: data.blood_group || "B+",
+        emergency_contact: data.emergency_contact
+          ? data.emergency_contact.trim()
+          : "",
+        status: data.status || "Active",
+        address: data.address ? data.address.trim() : "",
+        notes: data.notes ? data.notes.trim() : "",
+        profile_photo: finalProfilePhoto,
+        supporting_documents:
+          finalSupportingDocs.length > 0 ? JSON.stringify(finalSupportingDocs) : null,
+        fleet_id: parsedFleetId,
+      };
+
+      let response;
+      if (isEdit) {
+        payload.id = modalData.id;
+        response = await postApiData("UPDATE_DRIVER", payload);
+      } else {
+        response = await postApiData("ADD_NEW_DRIVER", payload);
+      }
+
+      if (response && response.status) {
+        showToast(
+          response.message ||
+            (isEdit
+              ? "Driver updated successfully"
+              : "Driver added successfully"),
+          "success"
+        );
+
+        // Refresh synchronized context datasets
+        await refreshAll();
+
+        if (setDriverList) {
+          if (isEdit) {
+            setDriverList((prev) =>
+              prev.map((item) =>
+                item.id == modalData.id
+                  ? {
+                      ...item,
+                      ...payload,
+                      id: modalData.id,
+                      fleet_id: parsedFleetId,
+                      assigned_vehicle: selectedFleet?.vehicle_number || null,
+                      vehicle_number: selectedFleet?.vehicle_number || null,
+                      vehicle_model: selectedFleet?.vehicle_model || null,
+                    }
+                  : item
+              )
+            );
+          } else {
+            setDriverList((prev) => [
+              {
+                ...payload,
+                id: response.id || Date.now(),
+                fleet_id: parsedFleetId,
+                assigned_vehicle: selectedFleet?.vehicle_number || null,
+                vehicle_number: selectedFleet?.vehicle_number || null,
+                vehicle_model: selectedFleet?.vehicle_model || null,
+              },
+              ...prev,
+            ]);
+          }
+        }
+
+        handleClose();
+      } else {
+        showToast(response?.message || "Failed to save driver record", "error");
+      }
+    } catch (err) {
+      console.error("Error saving driver with S3 documents:", err);
+      showToast(err.message || "Failed to upload files or save driver.", "error");
+    } finally {
+      setApiLoading(false);
+      setUploadProgress("");
+    }
   };
 
   return (
@@ -404,12 +597,26 @@ export default function DriverForm({
           {/* Avatar / Photo preview */}
           <div className="relative group shrink-0">
             <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-2xl overflow-hidden bg-white border-2 border-white shadow-md flex items-center justify-center text-slate-400 relative">
-              {profilePhoto ? (
-                <img
-                  src={profilePhoto}
-                  alt="Driver Profile"
-                  className="w-full h-full object-cover"
-                />
+              {profilePreviewUrl || profilePhoto ? (
+                <>
+                  <img
+                    src={profilePreviewUrl || profilePhoto}
+                    alt="Driver Profile"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                      const fb = e.currentTarget.nextElementSibling;
+                      if (fb) fb.style.display = "flex";
+                    }}
+                    className="w-full h-full object-cover"
+                    
+                  />
+                  <div
+                    style={{ display: "none" }}
+                    className="w-full h-full bg-gradient-to-tr from-blue-500 to-indigo-600 items-center justify-center text-white text-2xl font-bold"
+                  >
+                    <FiUser className="w-8 h-8" />
+                  </div>
+                </>
               ) : (
                 <div className="w-full h-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
                   <FiUser className="w-8 h-8" />
@@ -438,9 +645,18 @@ export default function DriverForm({
               <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
                 Optional
               </span>
+              {newProfileFile ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                  Ready for S3 Upload
+                </span>
+              ) : profilePhoto ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  S3 Cloud Stored
+                </span>
+              ) : null}
             </div>
             <p className="text-xs text-slate-500 max-w-sm leading-relaxed">
-              Upload a clear frontal photo for identity badges and dispatch verification.
+              Upload a clear frontal photo for identity badges and dispatch verification (stored securely in S3 storage).
             </p>
             <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
               <input
@@ -456,13 +672,13 @@ export default function DriverForm({
                 onClick={() => profileInputRef.current?.click()}
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer"
               >
-                {profilePhoto ? "Change Photo" : "Upload Photo"}
+                {profilePreviewUrl || profilePhoto ? "Change Photo" : "Upload Photo"}
               </button>
-              {profilePhoto && (
+              {(profilePreviewUrl || profilePhoto) && (
                 <button
                   type="button"
                   tabIndex={-1}
-                  onClick={() => setProfilePhoto("")}
+                  onClick={handleRemoveProfilePhoto}
                   className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors cursor-pointer"
                 >
                   Remove
@@ -532,12 +748,30 @@ export default function DriverForm({
 
             {/* Blood Group */}
             <div data-field-container data-field="blood_group">
-              <FloatingSelect
-                id="driver_blood_group"
-                label="Blood Group"
-                options={DRIVER_BLOOD_GROUPS}
-                error={errors.blood_group}
-                {...register("blood_group")}
+              <Controller
+                name="blood_group"
+                control={control}
+                render={({ field }) => (
+                  <FloatingSelect
+                    id="driver_blood_group"
+                    name="blood_group"
+                    label="Blood Group"
+                    options={DRIVER_BLOOD_GROUPS}
+                    value={field.value || "B+"}
+                    selectedValue={field.value || "B+"}
+                    onChange={(val) => {
+                      const actualVal =
+                        val && typeof val === "object"
+                          ? val.value !== undefined
+                            ? val.value
+                            : val.target?.value
+                          : val;
+                      field.onChange(actualVal || "B+");
+                    }}
+                    onBlur={field.onBlur}
+                    error={errors.blood_group}
+                  />
+                )}
               />
             </div>
           </div>
@@ -579,15 +813,32 @@ export default function DriverForm({
 
             {/* License Type */}
             <div data-field-container data-field="license_type">
-              <FloatingSelect
-                id="driver_license_type"
-                label="License Category"
-                required
-                options={DRIVER_LICENSE_TYPES}
-                error={errors.license_type}
-                {...register("license_type", {
-                  required: "License Category is required",
-                })}
+              <Controller
+                name="license_type"
+                control={control}
+                rules={{ required: "License Category is required" }}
+                render={({ field }) => (
+                  <FloatingSelect
+                    id="driver_license_type"
+                    name="license_type"
+                    label="License Category"
+                    required
+                    options={DRIVER_LICENSE_TYPES}
+                    value={field.value || DRIVER_LICENSE_TYPES[0]}
+                    selectedValue={field.value || DRIVER_LICENSE_TYPES[0]}
+                    onChange={(val) => {
+                      const actualVal =
+                        val && typeof val === "object"
+                          ? val.value !== undefined
+                            ? val.value
+                            : val.target?.value
+                          : val;
+                      field.onChange(actualVal || DRIVER_LICENSE_TYPES[0]);
+                    }}
+                    onBlur={field.onBlur}
+                    error={errors.license_type}
+                  />
+                )}
               />
             </div>
 
@@ -699,16 +950,23 @@ export default function DriverForm({
           {/* Uploaded Documents List */}
           {supportingDocs.length > 0 && (
             <div className="space-y-2 pt-1">
-              <div className="text-xs font-bold text-slate-700">
-                Attached Documents:
+              <div className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                <span>Attached Documents ({supportingDocs.length}):</span>
+                <span className="text-[11px] text-slate-400 font-normal">
+                  S3 Cloud Storage Enabled
+                </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {supportingDocs.map((doc) => {
+                  const docUrl = resolveMediaUrl(doc.previewUrl || doc.dataUrl || doc.url);
                   const isImage =
                     doc.type?.startsWith("image/") ||
-                    doc.dataUrl?.startsWith("data:image/");
+                    docUrl?.startsWith("data:image/") ||
+                    /\.(jpg|jpeg|png|webp|gif)$/i.test(doc.name || "");
                   const isPdf =
-                    doc.type === "application/pdf" || doc.name?.endsWith(".pdf");
+                    doc.type === "application/pdf" ||
+                    doc.name?.toLowerCase().endsWith(".pdf") ||
+                    docUrl?.startsWith("data:application/pdf");
 
                   return (
                     <div
@@ -716,13 +974,24 @@ export default function DriverForm({
                       className="flex items-center justify-between p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-2xs hover:shadow-xs transition-shadow"
                     >
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        {isImage ? (
-                          <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-50">
+                        {isImage && docUrl ? (
+                          <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-50 flex items-center justify-center">
                             <img
-                              src={doc.dataUrl}
+                              src={docUrl}
                               alt={doc.name}
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                const fb = e.currentTarget.nextElementSibling;
+                                if (fb) fb.style.display = "flex";
+                              }}
                               className="w-full h-full object-cover"
                             />
+                            <div
+                              style={{ display: "none" }}
+                              className="w-full h-full bg-purple-50 text-purple-600 font-bold text-xs items-center justify-center"
+                            >
+                              <FiFile className="w-4 h-4" />
+                            </div>
                           </div>
                         ) : (
                           <div
@@ -742,15 +1011,26 @@ export default function DriverForm({
                           >
                             {doc.name}
                           </p>
-                          <p className="text-[10px] text-slate-400 font-medium">
-                            {formatFileSize(doc.size)}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              {formatFileSize(doc.size)}
+                            </span>
+                            {doc.isNew ? (
+                              <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                                Ready for S3
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                Cloud Stored
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       {/* View & Remove actions */}
                       <div className="flex items-center gap-1 shrink-0 ml-2">
-                        {doc.dataUrl && (
+                        {docUrl && (
                           <button
                             type="button"
                             tabIndex={-1}
@@ -882,12 +1162,30 @@ export default function DriverForm({
 
             {/* Operational Status */}
             <div data-field-container data-field="status">
-              <FloatingSelect
-                id="driver_status"
-                label="Operational Status"
-                options={DRIVER_STATUS_OPTIONS}
-                error={errors.status}
-                {...register("status")}
+              <Controller
+                name="status"
+                control={control}
+                render={({ field }) => (
+                  <FloatingSelect
+                    id="driver_status"
+                    name="status"
+                    label="Operational Status"
+                    options={DRIVER_STATUS_OPTIONS}
+                    value={field.value || "Active"}
+                    selectedValue={field.value || "Active"}
+                    onChange={(val) => {
+                      const actualVal =
+                        val && typeof val === "object"
+                          ? val.value !== undefined
+                            ? val.value
+                            : val.target?.value
+                          : val;
+                      field.onChange(actualVal || "Active");
+                    }}
+                    onBlur={field.onBlur}
+                    error={errors.status}
+                  />
+                )}
               />
             </div>
 
@@ -946,7 +1244,7 @@ export default function DriverForm({
             {apiLoading ? (
               <>
                 <ImSpinner9 className="w-4 h-4 animate-spin" />
-                <span>Saving Driver...</span>
+                <span>{uploadProgress || (isEdit ? "Updating Driver..." : "Saving Driver...")}</span>
               </>
             ) : (
               <>
@@ -983,38 +1281,63 @@ export default function DriverForm({
             </div>
 
             <div className="max-h-[60vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-xl p-2">
-              {previewDoc.type?.startsWith("image/") ||
-              previewDoc.dataUrl?.startsWith("data:image/") ? (
-                <img
-                  src={previewDoc.dataUrl}
-                  alt={previewDoc.name}
-                  className="max-h-[55vh] object-contain rounded-lg"
-                />
-              ) : previewDoc.type === "application/pdf" ||
-                previewDoc.name?.endsWith(".pdf") ? (
-                <iframe
-                  src={previewDoc.dataUrl}
-                  title={previewDoc.name}
-                  className="w-full h-96 rounded-lg border border-slate-200"
-                />
-              ) : (
-                <div className="text-center py-12 text-slate-500">
-                  <FiFile className="w-12 h-12 mx-auto mb-2 text-slate-400" />
-                  <p className="text-xs font-semibold">
-                    Preview not supported for this file format.
-                  </p>
-                </div>
-              )}
+              {(() => {
+                const targetUrl = resolveMediaUrl(previewDoc.previewUrl || previewDoc.dataUrl || previewDoc.url);
+                const isImage =
+                  previewDoc.type?.startsWith("image/") ||
+                  targetUrl?.startsWith("data:image/") ||
+                  /\.(jpg|jpeg|png|webp|gif)$/i.test(previewDoc.name || "") ||
+                  /\.(jpg|jpeg|png|webp|gif)$/i.test((targetUrl || "").split("?")[0]);
+                const isPdf =
+                  previewDoc.type === "application/pdf" ||
+                  previewDoc.name?.toLowerCase().endsWith(".pdf") ||
+                  targetUrl?.startsWith("data:application/pdf") ||
+                  /\.pdf$/i.test((targetUrl || "").split("?")[0]);
+
+                if (isImage && targetUrl) {
+                  return (
+                    <img
+                      src={targetUrl}
+                      alt={previewDoc.name}
+                      className="max-h-[55vh] object-contain rounded-lg"
+                    />
+                  );
+                }
+                if (isPdf && targetUrl) {
+                  return (
+                    <iframe
+                      src={targetUrl}
+                      title={previewDoc.name}
+                      className="w-full h-96 rounded-lg border border-slate-200"
+                    />
+                  );
+                }
+                return (
+                  <div className="text-center py-12 text-slate-500">
+                    <FiFile className="w-12 h-12 mx-auto mb-2 text-slate-400" />
+                    <p className="text-xs font-semibold">
+                      Preview not supported for this file format.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex justify-end pt-2">
-              <a
-                href={previewDoc.dataUrl}
-                download={previewDoc.name}
-                className="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors"
-              >
-                Download Document
-              </a>
+              {(() => {
+                const downloadUrl = resolveMediaUrl(previewDoc.previewUrl || previewDoc.dataUrl || previewDoc.url);
+                return (
+                  <a
+                    href={downloadUrl}
+                    download={previewDoc.name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors"
+                  >
+                    Download Document
+                  </a>
+                );
+              })()}
             </div>
           </div>
         </div>

@@ -1,7 +1,15 @@
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { FiMenu, FiSearch, FiBell, FiChevronDown, FiLogOut, FiSettings, FiUser } from "react-icons/fi";
+import {
+  FiMenu,
+  FiSearch,
+  FiBell,
+  FiChevronDown,
+  FiLogOut,
+  FiSettings,
+  FiUser,
+} from "react-icons/fi";
 import { postApiData } from "@/utilities/services/apiService";
 import CommonModal from "../common/commonModal";
 import ResetConfirmation from "../common/items/commonConfirmation";
@@ -35,7 +43,8 @@ export default function TopHeader({
 
   const showBrandName = isMobile ? !isMobileOpen : isCollapsed;
 
-  const rawUserName = pageData?.user?.name || pageData?.user?.firstName || "User";
+  const rawUserName =
+    pageData?.user?.name || pageData?.user?.firstName || "User";
   const userName = convertFirstLetterCapital(rawUserName) || "User";
   const userInitial = userName.charAt(0).toUpperCase() || "S";
 
@@ -52,8 +61,6 @@ export default function TopHeader({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -130,15 +137,21 @@ export default function TopHeader({
           {notificationsOpen && (
             <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 p-4 z-50 animate-dropdown">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <span className="font-semibold text-sm text-slate-800">Notifications</span>
+                <span className="font-semibold text-sm text-slate-800">
+                  Notifications
+                </span>
                 <span className="text-xs bg-blue-50 text-blue-600 font-medium px-2 py-0.5 rounded-full">
                   1 New
                 </span>
               </div>
               <div className="py-3 text-xs text-slate-600 space-y-2">
                 <div className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100/80 transition-colors">
-                  <p className="font-medium text-slate-800">Vehicle PUC Expiry Alert</p>
-                  <p className="text-slate-500 text-[11px] mt-0.5">MH 03 CD 5678 PUC expires soon.</p>
+                  <p className="font-medium text-slate-800">
+                    Vehicle PUC Expiry Alert
+                  </p>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    MH 03 CD 5678 PUC expires soon.
+                  </p>
                 </div>
               </div>
             </div>
@@ -158,15 +171,20 @@ export default function TopHeader({
             <span className="hidden sm:inline-block text-sm font-semibold text-slate-800">
               {userName}
             </span>
-            <FiChevronDown className={`w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""
-              }`} />
+            <FiChevronDown
+              className={`w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ${
+                dropdownOpen ? "rotate-180" : ""
+              }`}
+            />
           </button>
 
           {/* Profile Dropdown */}
           {dropdownOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-dropdown">
               <div className="px-4 py-2.5 border-b border-slate-100">
-                <p className="text-sm font-semibold text-slate-900">{userName}</p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {userName}
+                </p>
                 <p className="text-xs text-slate-400 mt-0.5 truncate">
                   {pageData?.user?.email || "admin@cargodesk.com"}
                 </p>
@@ -198,8 +216,6 @@ export default function TopHeader({
           )}
         </div>
       </div>
-
-
     </header>
   );
 }

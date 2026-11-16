@@ -22,7 +22,7 @@ export default function Drivers({ pageData }) {
 export const getServerSideProps = withUserSsr(async (context, { user }) => {
   const pageData = {};
   try {
-    const driversRes = await getAllDriversController();
+    const driversRes = await getAllDriversController({}, user);
     if (driversRes?.status && Array.isArray(driversRes.data)) {
       pageData.drivers = driversRes.data;
     }

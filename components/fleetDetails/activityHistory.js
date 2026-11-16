@@ -73,56 +73,67 @@ export default function ActivityHistory({
   }, []);
 
   // Fetch activities from API
-  const fetchActivities = React.useCallback(async (currentPage = 1, category = activeCategory) => {
-    if (!fleetId) return;
-    setLoading(true);
-    try {
-      const payload = {
-        fleetId: String(fleetId),
-        page: currentPage,
-        limit,
-      };
+  const fetchActivities = React.useCallback(
+    async (currentPage = 1, category = activeCategory) => {
+      if (!fleetId) return;
+      setLoading(true);
+      try {
+        const payload = {
+          fleetId: String(fleetId),
+          page: currentPage,
+          limit,
+        };
 
-      if (category && category !== "all") {
-        payload.type = category.toUpperCase();
-      }
-
-      if (searchTerm.trim()) {
-        payload.search = searchTerm.trim();
-      }
-
-      // Date range filtering
-      if (datePreset === "last_30_days") {
-        payload.fromDate = moment().subtract(30, "days").format("YYYY-MM-DD");
-        payload.toDate = moment().format("YYYY-MM-DD");
-      } else if (datePreset === "last_90_days") {
-        payload.fromDate = moment().subtract(90, "days").format("YYYY-MM-DD");
-        payload.toDate = moment().format("YYYY-MM-DD");
-      } else if (datePreset === "this_year") {
-        payload.fromDate = moment().startOf("year").format("YYYY-MM-DD");
-        payload.toDate = moment().format("YYYY-MM-DD");
-      } else if (datePreset === "custom" && customFromDate) {
-        payload.fromDate = customFromDate;
-        if (customToDate) payload.toDate = customToDate;
-      }
-
-      const result = await postApiData("GET_FLEET_HISTORY", payload);
-
-      if (result?.status && Array.isArray(result.data)) {
-        setActivities(result.data);
-        if (result.pagination) {
-          setPagination(result.pagination);
+        if (category && category !== "all") {
+          payload.type = category.toUpperCase();
         }
-        if (result.summary) {
-          setSummary(result.summary);
+
+        if (searchTerm.trim()) {
+          payload.search = searchTerm.trim();
         }
+
+        // Date range filtering
+        if (datePreset === "last_30_days") {
+          payload.fromDate = moment().subtract(30, "days").format("YYYY-MM-DD");
+          payload.toDate = moment().format("YYYY-MM-DD");
+        } else if (datePreset === "last_90_days") {
+          payload.fromDate = moment().subtract(90, "days").format("YYYY-MM-DD");
+          payload.toDate = moment().format("YYYY-MM-DD");
+        } else if (datePreset === "this_year") {
+          payload.fromDate = moment().startOf("year").format("YYYY-MM-DD");
+          payload.toDate = moment().format("YYYY-MM-DD");
+        } else if (datePreset === "custom" && customFromDate) {
+          payload.fromDate = customFromDate;
+          if (customToDate) payload.toDate = customToDate;
+        }
+
+        const result = await postApiData("GET_FLEET_HISTORY", payload);
+
+        if (result?.status && Array.isArray(result.data)) {
+          setActivities(result.data);
+          if (result.pagination) {
+            setPagination(result.pagination);
+          }
+          if (result.summary) {
+            setSummary(result.summary);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching fleet activity history:", err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Error fetching fleet activity history:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [fleetId, activeCategory, limit, searchTerm, datePreset, customFromDate, customToDate]);
+    },
+    [
+      fleetId,
+      activeCategory,
+      limit,
+      searchTerm,
+      datePreset,
+      customFromDate,
+      customToDate,
+    ],
+  );
 
   useEffect(() => {
     fetchActivities(page, activeCategory);
@@ -164,7 +175,13 @@ export default function ActivityHistory({
     const act = (action || "").toUpperCase();
     const entity = (entityType || "").toUpperCase();
 
-    if (type === "DOCUMENT" || entity.includes("DOCUMENT") || entity === "INSURANCE" || entity === "PUC" || entity === "RC") {
+    if (
+      type === "DOCUMENT" ||
+      entity.includes("DOCUMENT") ||
+      entity === "INSURANCE" ||
+      entity === "PUC" ||
+      entity === "RC"
+    ) {
       return {
         icon: FiFileText,
         bgColor: "bg-purple-50",
@@ -191,7 +208,11 @@ export default function ActivityHistory({
         dotColor: "bg-pink-500 ring-pink-100",
       };
     }
-    if (type === "MAINTENANCE" || entity.includes("MAINTENANCE") || act.includes("SERVICE")) {
+    if (
+      type === "MAINTENANCE" ||
+      entity.includes("MAINTENANCE") ||
+      act.includes("SERVICE")
+    ) {
       return {
         icon: FiTool,
         bgColor: "bg-blue-50",
@@ -200,7 +221,12 @@ export default function ActivityHistory({
         dotColor: "bg-blue-500 ring-blue-100",
       };
     }
-    if (type === "STATUS" || act === "ACTIVATE" || act === "DEACTIVATE" || entity === "STATUS_CHANGE") {
+    if (
+      type === "STATUS" ||
+      act === "ACTIVATE" ||
+      act === "DEACTIVATE" ||
+      entity === "STATUS_CHANGE"
+    ) {
       return {
         icon: FiActivity,
         bgColor: "bg-amber-50",
@@ -223,10 +249,19 @@ export default function ActivityHistory({
   // Status/Action Badge Styles
   const getActionBadge = (action) => {
     const a = (action || "").toUpperCase();
-    if (a === "CREATE" || a === "ASSIGN" || a === "UPLOADED" || a === "UPLOAD") {
+    if (
+      a === "CREATE" ||
+      a === "ASSIGN" ||
+      a === "UPLOADED" ||
+      a === "UPLOAD"
+    ) {
       return (
         <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          {action === "ASSIGN" ? "Assigned" : action === "UPLOAD" ? "Uploaded" : "Created"}
+          {action === "ASSIGN"
+            ? "Assigned"
+            : action === "UPLOAD"
+              ? "Uploaded"
+              : "Created"}
         </span>
       );
     }
@@ -261,9 +296,12 @@ export default function ActivityHistory({
   //   { id: "status", label: "Status", count: summary.status || 0 },
   // ];
 
-
   const categoryTabs = [
-    { id: "all", label: "All Activities", count: activities.length || summary.all || 0 },
+    {
+      id: "all",
+      label: "All Activities",
+      count: activities.length || summary.all || 0,
+    },
   ];
 
   const dateFilterLabels = {
@@ -271,7 +309,9 @@ export default function ActivityHistory({
     last_30_days: "Last 30 Days",
     last_90_days: "Last 90 Days",
     this_year: "This Year",
-    custom: customFromDate ? `${customFromDate} - ${customToDate || "Now"}` : "Custom Date Range",
+    custom: customFromDate
+      ? `${customFromDate} - ${customToDate || "Now"}`
+      : "Custom Date Range",
   };
 
   return (
@@ -445,7 +485,9 @@ export default function ActivityHistory({
           className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
           title="Refresh activities"
         >
-          <FiRefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-blue-600" : ""}`} />
+          <FiRefreshCw
+            className={`w-4 h-4 ${loading ? "animate-spin text-blue-600" : ""}`}
+          />
         </button>
       </div>
 
@@ -474,9 +516,12 @@ export default function ActivityHistory({
             <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3.5 shadow-xs">
               <FiClock className="w-8 h-8" />
             </div>
-            <h3 className="text-base font-bold text-slate-900">No activity yet</h3>
+            <h3 className="text-base font-bold text-slate-900">
+              No activity yet
+            </h3>
             <p className="text-xs sm:text-sm text-slate-500 max-w-sm mt-1 leading-relaxed">
-              Fleet activity will appear here when documents, drivers, EMI, maintenance, or vehicle details are changed.
+              Fleet activity will appear here when documents, drivers, EMI,
+              maintenance, or vehicle details are changed.
             </p>
           </div>
         ) : (
@@ -503,13 +548,15 @@ export default function ActivityHistory({
                 {/* Activity Cards List */}
                 <div className="pl-6 sm:pl-7 space-y-3">
                   {group.items.map((activity) => {
+                    const { description = "", title = "" } = activity;
                     const style = getCategoryStyles(
                       activity.operationType,
                       activity.action,
-                      activity.entityType
+                      activity.entityType,
                     );
                     const CategoryIcon = style.icon;
-                    const rawTimestamp = activity.performedAt || activity.createdAt;
+                    const rawTimestamp =
+                      activity.performedAt || activity.createdAt;
                     const formattedTime = rawTimestamp
                       ? moment.utc(rawTimestamp).local().format("hh:mm A")
                       : "";
@@ -533,17 +580,19 @@ export default function ActivityHistory({
                           <div
                             className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl ${style.bgColor} ${style.borderColor} border flex items-center justify-center shrink-0 shadow-2xs`}
                           >
-                            <CategoryIcon className={`w-5 h-5 ${style.iconColor}`} />
+                            <CategoryIcon
+                              className={`w-5 h-5 ${style.iconColor}`}
+                            />
                           </div>
 
                           <div className="min-w-0">
-                            <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
-                              {activity.title}
-                            </h4>
+                            {description && <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                              {description}
+                            </h4>}
 
-                            {activity.description && (
+                            {title && (
                               <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">
-                                {activity.description}
+                                {title}
                               </p>
                             )}
 
@@ -551,7 +600,9 @@ export default function ActivityHistory({
                             <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
                               {/* Avatar Initials */}
                               <div className="w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold">
-                                {(activity.performedByName || "A").charAt(0).toUpperCase()}
+                                {(activity.performedByName || "A")
+                                  .charAt(0)
+                                  .toUpperCase()}
                               </div>
                               <span className="text-slate-600">
                                 By{" "}
@@ -561,7 +612,9 @@ export default function ActivityHistory({
                               </span>
                               <span className="text-slate-300">•</span>
                               <span className="text-slate-500 capitalize">
-                                {activity.source || activity.operationType || "System"}
+                                {activity.source ||
+                                  activity.operationType ||
+                                  "System"}
                               </span>
                             </div>
                           </div>
@@ -614,7 +667,8 @@ export default function ActivityHistory({
         <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
           <div>
             Showing Page <strong>{pagination.page}</strong> of{" "}
-            <strong>{pagination.totalPages}</strong> ({pagination.total} total items)
+            <strong>{pagination.totalPages}</strong> ({pagination.total} total
+            items)
           </div>
 
           <div className="flex items-center gap-2">
@@ -629,7 +683,9 @@ export default function ActivityHistory({
             <button
               type="button"
               disabled={pagination.page >= pagination.totalPages || loading}
-              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+              onClick={() =>
+                setPage((p) => Math.min(pagination.totalPages, p + 1))
+              }
               className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors"
             >
               Next

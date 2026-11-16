@@ -24,6 +24,7 @@ import {
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 import Image from "next/image";
+import { useFleetDriver } from "@/context/fleetDriverContext";
 
 export default function MaintenanceSupervisorPage({ pageData }) {
   const user = pageData?.user || null;
@@ -31,6 +32,9 @@ export default function MaintenanceSupervisorPage({ pageData }) {
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
   const [lastSubmittedRecord, setLastSubmittedRecord] = useState(null);
+
+
+  const { toggleLogoutModal } = useFleetDriver() || {};
 
   // Fetch latest 5 maintenance records
   const fetchRecentRecords = useCallback(async () => {
@@ -55,17 +59,6 @@ export default function MaintenanceSupervisorPage({ pageData }) {
   const handleRecordSuccess = (record) => {
     setLastSubmittedRecord(record);
     fetchRecentRecords();
-  };
-
-  // Sign out handler
-  const handleLogout = async () => {
-    try {
-      await postApiData("LOGOUT_USER");
-    } catch (err) {
-      console.error("Logout error:", err);
-    } finally {
-      window.location.href = "/login";
-    }
   };
 
   const getStatusBadge = (status) => {
@@ -132,7 +125,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
 
               <button
                 type="button"
-                onClick={handleLogout}
+                onClick={toggleLogoutModal}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 text-xs font-bold border border-rose-200 transition-all cursor-pointer min-h-[42px]"
                 title="Logout from CargoDesk"
                 aria-label="Logout"

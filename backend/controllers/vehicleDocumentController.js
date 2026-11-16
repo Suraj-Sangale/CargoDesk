@@ -30,16 +30,18 @@ export function addNewVehicleDocumentController(request, authUser = null) {
   });
 }
 
-export function getAllVehicleDocumentsController(authUser) {
+export function getAllVehicleDocumentsController(request, authUser = null) {
   return new Promise((resolve, reject) => {
     const response = {
       status: false,
     };
 
-    getAllVehicleDocuments(authUser)
+    getAllVehicleDocuments(request, authUser)
       .then((result) => {
         response.status = true;
         response.data = result.data;
+        response.pagination = result.pagination;
+        response.total = result.total;
         response.message = "Data retrieved successfully";
         resolve(response);
       })

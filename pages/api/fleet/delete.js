@@ -1,9 +1,11 @@
 import { deleteFleetController } from "@/backend/controllers/fleetController";
+import { getAuthUserFromReq } from "@/utilities/authServer";
 
 export default function handler(req, res) {
   return new Promise((resolve) => {
     const { ids } = req.body || {};
-    deleteFleetController(ids)
+    const authUser = getAuthUserFromReq(req);
+    deleteFleetController(ids, authUser)
       .then((result) => {
         res.status(200).json(result);
         resolve(result);

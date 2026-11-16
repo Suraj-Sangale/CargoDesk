@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
   FiEdit,
@@ -19,6 +19,7 @@ import {
   FiCheck,
 } from "react-icons/fi";
 import StatusBadge from "../statusBadge";
+import { resolveMediaUrl } from "@/utilities/services/apiService";
 import {
   convertToUpperCase,
   formatDate,
@@ -122,21 +123,36 @@ const renderAvatarCell = (value, row) => {
   const name = row?.driver_name || row?.name || row?.title || "U";
   const initials = name
     .split(" ")
+    .filter(Boolean)
     .map((n) => n[0])
     .join("")
     .substring(0, 2)
-    .toUpperCase();
+    .toUpperCase() || "DR";
 
-  const photoUrl = value || row?.profile_photo || row?.photo || row?.avatar;
+  const rawPhoto = value || row?.profile_photo || row?.photo || row?.avatar;
+  const photoUrl = resolveMediaUrl(rawPhoto);
 
   return (
     <div className="relative shrink-0 w-9 h-9">
       {photoUrl ? (
-        <img
-          src={photoUrl}
-          alt={name}
-          className="w-9 h-9 rounded-xl object-cover border border-slate-200 shadow-2xs"
-        />
+        <>
+          <img
+            src={photoUrl}
+            alt={name}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+              const fb = e.currentTarget.nextElementSibling;
+              if (fb) fb.style.display = "flex";
+            }}
+            className="w-9 h-9 rounded-xl object-cover border border-slate-200 shadow-2xs"
+          />
+          <div
+            style={{ display: "none" }}
+            className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs items-center justify-center shadow-2xs"
+          >
+            {initials}
+          </div>
+        </>
       ) : (
         <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-2xs">
           {initials}
@@ -929,6 +945,9 @@ export default function DocumentTable({
   defaultSortBy,
   defaultSortOrder = "asc",
   tableName = "",
+  pagination = null,
+  onPageChange = null,
+  onRowsPerPageChange = null,
 }) {
   const isTableLoading = isLoading || loading;
   const [order, setOrder] = useState(defaultSortOrder);
@@ -1019,39 +1038,136 @@ export default function DocumentTable({
     [headCells, orderBy],
   );
 
-  const comparator = (a, b) => {
-    let aVal = a[orderBy] ?? "";
-    let bVal = b[orderBy] ?? "";
+  const comparator = useCallback(
+    (a, b) => {
+      let aVal = a[orderBy] ?? "";
+      let bVal = b[orderBy] ?? "";
 
-    if (
-      activeSortCell?.sortValue &&
-      typeof activeSortCell.sortValue === "function"
-    ) {
-      aVal = activeSortCell.sortValue(a);
-      bVal = activeSortCell.sortValue(b);
+      if (
+        activeSortCell?.sortValue &&
+        typeof activeSortCell.sortValue === "function"
+      ) {
+        aVal = activeSortCell.sortValue(a);
+        bVal = activeSortCell.sortValue(b);
+      } else {
+        if (typeof aVal === "string") aVal = aVal.toLowerCase();
+        if (typeof bVal === "string") bVal = bVal.toLowerCase();
+      }
+
+      if (bVal < aVal) return order === "desc" ? -1 : 1;
+      if (bVal > aVal) return order === "desc" ? 1 : -1;
+      return 0;
+    },
+    [orderBy, activeSortCell, order],
+  );
+
+  // Server-side vs Client-side pagination detection
+  const isServerPagination = Boolean(
+    pagination &&
+      (pagination.totalRecords !== undefined ||
+        pagination.totalPages !== undefined ||
+        pagination.total !== undefined ||
+        typeof onPageChange === "function"),
+  );
+
+  const activePage = isServerPagination
+    ? Math.max(1, parseInt(pagination?.page, 10) || 1)
+    : page + 1;
+
+  const currentLimit = isServerPagination
+    ? Math.max(1, parseInt(pagination?.limit, 10) || rowsPerPage)
+    : rowsPerPage;
+
+  const totalCount = isServerPagination
+    ? Number(pagination?.totalRecords ?? pagination?.total ?? rows.length)
+    : rows.length;
+
+  const pageCount = isServerPagination
+    ? Math.max(
+        1,
+        parseInt(pagination?.totalPages, 10) ||
+          Math.ceil(totalCount / currentLimit) ||
+          1,
+      )
+    : Math.max(1, Math.ceil(rows.length / rowsPerPage));
+
+  const canPrev = isServerPagination
+    ? pagination?.hasPrevPage !== undefined
+      ? Boolean(pagination.hasPrevPage)
+      : activePage > 1
+    : page > 0;
+
+  const canNext = isServerPagination
+    ? pagination?.hasNextPage !== undefined
+      ? Boolean(pagination.hasNextPage)
+      : activePage < pageCount
+    : page < pageCount - 1;
+
+  const handlePageClick = (newPageNum) => {
+    if (isTableLoading) return;
+    if (newPageNum < 1 || newPageNum > pageCount) return;
+    if (newPageNum === activePage) return; // Ignore clicks on already active page
+
+    if (isServerPagination) {
+      if (onPageChange) {
+        onPageChange(newPageNum, currentLimit);
+      }
     } else {
-      if (typeof aVal === "string") aVal = aVal.toLowerCase();
-      if (typeof bVal === "string") bVal = bVal.toLowerCase();
+      setPage(newPageNum - 1);
     }
-
-    if (bVal < aVal) return order === "desc" ? -1 : 1;
-    if (bVal > aVal) return order === "desc" ? 1 : -1;
-    return 0;
   };
 
+  const handleRowsPerPageSelect = (newLimit) => {
+    if (newLimit === currentLimit) return; // Ignore if same limit
+    if (onRowsPerPageChange) {
+      onRowsPerPageChange(newLimit);
+    } else if (isServerPagination && onPageChange) {
+      onPageChange(1, newLimit);
+    } else {
+      setRowsPerPage(newLimit);
+      setPage(0);
+    }
+  };
+
+  const pageNumbers = useMemo(() => {
+    if (pageCount <= 7) {
+      return Array.from({ length: pageCount }, (_, i) => i + 1);
+    }
+    const items = [];
+    const start = Math.max(1, activePage - 2);
+    const end = Math.min(pageCount, activePage + 2);
+
+    if (start > 1) {
+      items.push(1);
+      if (start > 2) items.push("...");
+    }
+    for (let i = start; i <= end; i++) {
+      items.push(i);
+    }
+    if (end < pageCount) {
+      if (end < pageCount - 1) items.push("...");
+      items.push(pageCount);
+    }
+    return items;
+  }, [pageCount, activePage]);
+
   const visibleRows = useMemo(() => {
+    if (isServerPagination) {
+      // In server pagination, rows is already the paginated slice from the API
+      return rows;
+    }
     return [...rows]
       .sort(comparator)
       .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-  }, [rows, order, orderBy, page, rowsPerPage]);
+  }, [rows, isServerPagination, comparator, page, rowsPerPage]);
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
   const isAllSelected = rows.length > 0 && selected.length === rows.length;
   const isPartiallySelected =
     selected.length > 0 && selected.length < rows.length;
 
-  const startRecord = rows.length === 0 ? 0 : page * rowsPerPage + 1;
-  const endRecord = Math.min((page + 1) * rowsPerPage, rows.length);
+  const startRecord =
+    totalCount === 0 ? 0 : (activePage - 1) * currentLimit + 1;
+  const endRecord = Math.min(activePage * currentLimit, totalCount);
 
   return (
     <div className="w-full">
@@ -1379,8 +1495,29 @@ export default function DocumentTable({
           {isTableLoading ? (
             <div className="h-4 w-44 bg-slate-200/80 rounded-md animate-pulse" />
           ) : (
-            <div>
-              Showing {startRecord} to {endRecord} of {rows.length} records
+            <div className="flex items-center gap-3">
+              <div>
+                Showing <span className="font-semibold text-slate-700">{startRecord}</span> to{" "}
+                <span className="font-semibold text-slate-700">{endRecord}</span> of{" "}
+                <span className="font-semibold text-slate-700">{totalCount}</span> records
+              </div>
+              {rowsPerPageOptions && rowsPerPageOptions.length > 1 && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-slate-400">Rows:</span>
+                  <select
+                    value={currentLimit}
+                    onChange={(e) => handleRowsPerPageSelect(Number(e.target.value))}
+                    disabled={isTableLoading}
+                    className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-50"
+                  >
+                    {rowsPerPageOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 
@@ -1395,8 +1532,8 @@ export default function DocumentTable({
             <div className="flex items-center gap-1.5">
               {/* Previous Button */}
               <button
-                onClick={() => setPage(Math.max(0, page - 1))}
-                disabled={page === 0}
+                onClick={() => handlePageClick(activePage - 1)}
+                disabled={!canPrev || isTableLoading}
                 className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
                 aria-label="Previous page"
               >
@@ -1404,27 +1541,38 @@ export default function DocumentTable({
               </button>
 
               {/* Page Numbers */}
-              {Array.from({ length: totalPages }, (_, i) => i).map((pgNum) => {
-                const isCurrent = pgNum === page;
+              {pageNumbers.map((pgItem, idx) => {
+                if (pgItem === "...") {
+                  return (
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="px-1.5 text-xs font-bold text-slate-400 select-none"
+                    >
+                      ...
+                    </span>
+                  );
+                }
+                const isCurrent = pgItem === activePage;
                 return (
                   <button
-                    key={pgNum}
-                    onClick={() => setPage(pgNum)}
-                    className={`min-w-[32px] h-8 px-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    key={pgItem}
+                    onClick={() => handlePageClick(pgItem)}
+                    disabled={isTableLoading || isCurrent}
+                    className={`min-w-[32px] h-8 px-2.5 rounded-lg text-xs font-bold transition-all ${
                       isCurrent
-                        ? "bg-blue-100 text-blue-700 shadow-2xs"
-                        : "border border-slate-200 text-slate-700 hover:bg-slate-50"
+                        ? "bg-blue-600 text-white shadow-xs cursor-default"
+                        : "border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
                     }`}
                   >
-                    {pgNum + 1}
+                    {pgItem}
                   </button>
                 );
               })}
 
               {/* Next Button */}
               <button
-                onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-                disabled={page >= totalPages - 1}
+                onClick={() => handlePageClick(activePage + 1)}
+                disabled={!canNext || isTableLoading}
                 className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
                 aria-label="Next page"
               >

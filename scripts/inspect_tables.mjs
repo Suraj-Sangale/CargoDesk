@@ -34,12 +34,24 @@ async function main() {
   const docCols = await db.query('DESCRIBE vehicle_documents');
   console.log('VEHICLE_DOCUMENTS COLS:', docCols.map(c => `${c.Field} (${c.Type})`));
 
-  try {
-    const maintCols = await db.query('DESCRIBE fleet_maintenance');
-    console.log('FLEET_MAINTENANCE COLS:', maintCols);
-  } catch (e) {
-    console.log('fleet_maintenance table does not exist yet');
-  }
+  // Check if orgId exists on drivers, backfill null orgId
+  const colRows = await db.query("SHOW COLUMNS FROM drivers LIKE 'orgId'");
+  console.log("DRIVER orgId col:", colRows);
+  await db.query(`
+    UPDATE drivers d 
+    LEFT JOIN fleets f ON d.fleet_id = f.id 
+    SET d.orgId = COALESCE(f.orgId, 1) 
+    WHERE d.orgId IS NULL OR d.orgId = 0
+  `);
+
+  const updatedDrivers = await db.query(`
+    SELECT 
+      d.id, d.driver_name, d.orgId, o.orgName, d.fleet_id, f.vehicle_number
+    FROM drivers d
+    LEFT JOIN organizations o ON o.orgId = d.orgId
+    LEFT JOIN fleets f ON d.fleet_id = f.id
+  `);
+  console.log("UPDATED DRIVERS WITH ORG:", updatedDrivers);
 
   try {
     const mediaCols = await db.query('DESCRIBE fleet_maintenance_media');

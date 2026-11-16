@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import CommonModal from "../common/commonModal";
 import { postApiData } from "@/utilities/services/apiService";
 import DocumentsSection from "../layouts/documentsSection";
@@ -15,6 +15,69 @@ export default function DocumetsWrapper({ pageData }) {
   const [documentTableData, setDocumentTableData] = useState(
     pageData?.documents || []
   );
+  const [pagination, setPagination] = useState(pageData?.pagination || {});
+  const [tableLoading, setTableLoading] = useState(false);
+
+  const pageCacheRef = useRef(new Map());
+
+  useEffect(() => {
+    if (pageData?.documents && pageData?.pagination) {
+      const p = pageData.pagination.page || 1;
+      const l = pageData.pagination.limit || 10;
+      pageCacheRef.current.set(`${p}_${l}`, {
+        data: pageData.documents,
+        pagination: pageData.pagination,
+      });
+    }
+  }, [pageData]);
+
+  const fetchDocuments = async (
+    page = 1,
+    limit = pagination.limit || 10,
+    force = false,
+  ) => {
+    const cacheKey = `${page}_${limit}`;
+
+    if (
+      !force &&
+      page === pagination.page &&
+      limit === pagination.limit &&
+      documentTableData.length > 0
+    ) {
+      return;
+    }
+
+    if (!force && pageCacheRef.current.has(cacheKey)) {
+      const cached = pageCacheRef.current.get(cacheKey);
+      setDocumentTableData(cached.data);
+      if (cached.pagination) {
+        setPagination(cached.pagination);
+      }
+      return;
+    }
+
+    setTableLoading(true);
+    try {
+      const response = await postApiData("GET_ALL_VEHICALE_DOCUMENTS", {
+        page,
+        limit,
+      });
+      if (response?.status && Array.isArray(response.data)) {
+        pageCacheRef.current.set(cacheKey, {
+          data: response.data,
+          pagination: response.pagination,
+        });
+        setDocumentTableData(response.data);
+        if (response.pagination) {
+          setPagination(response.pagination);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching vehicle documents:", err);
+    } finally {
+      setTableLoading(false);
+    }
+  };
 
   const onClickAddReminder = () => {
     setIsEdit(false);
@@ -36,17 +99,8 @@ export default function DocumetsWrapper({ pageData }) {
     try {
       const response = await postApiData("ADD_NEW_VEHICALE_DOCUMENTS", payload);
       if (response.status || response.success) {
-        const docId = response.id || response.data?.id;
-        const LatestData = [
-          ...documentTableData,
-          {
-            ...data,
-            id: docId,
-            fleet_id: response.fleet_id || data.fleet_id || data.fleetId,
-            vehicleNo: response.vehicleNo || data.vehicleNo,
-          },
-        ];
-        setDocumentTableData(LatestData);
+        pageCacheRef.current.clear();
+        await fetchDocuments(1, pagination.limit || 10, true);
         setReminderModal(false);
       }
     } catch (error) {
@@ -100,6 +154,13 @@ export default function DocumetsWrapper({ pageData }) {
         setTableData={setDocumentTableData}
         onClickAddDocument={onClickAddReminder}
         rowsPerPageOptions={[5, 10, 25, 50]}
+        isLoading={tableLoading}
+        pagination={pagination}
+        onPageChange={fetchDocuments}
+        onDeleteSuccess={() => {
+          pageCacheRef.current.clear();
+          fetchDocuments(pagination.page || 1, pagination.limit || 10, true);
+        }}
       />
 
       <CommonModal

@@ -175,11 +175,12 @@ When filtering `fleet_activity_history` by category in `getFleetActivityHistoryM
 * `type = "VEHICLE_DETAILS"` / `"FLEET"` -> matches `operation_type = 'FLEET'`
 * `type = "STATUS"` -> matches `operation_type = 'STATUS' OR action IN ('ACTIVATE', 'DEACTIVATE')`
 
-### 4.3 Self-Healing Auto-Sync in `getFleetByIdModel`
-To ensure existing / seeded records appear in the audit trail without manual intervention, `getFleetByIdModel` automatically checks and backfills missing activity records for:
+### 4.3 Self-Healing Auto-Sync in `getFleetByIdModel` and `getFleetActivityHistoryModel`
+To ensure existing / seeded records appear in the audit trail without manual intervention, `getFleetByIdModel` and `getFleetActivityHistoryModel` automatically check and backfill missing activity records for:
 1. Assigned drivers
 2. Uploaded documents
 3. Active EMI financing plans
+4. Vehicle maintenance records (including breakdown logs by maintenance supervisors)
 
 ---
 

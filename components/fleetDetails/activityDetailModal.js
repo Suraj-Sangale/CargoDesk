@@ -19,12 +19,11 @@ import {
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 import CommonModal from "../common/commonModal";
-import { postApiData } from "@/utilities/services/apiService";
+import { postApiData, resolveMediaUrl } from "@/utilities/services/apiService";
 
 export default function ActivityDetailModal({ activity, isOpen, onClose }) {
   const [maintenanceMedia, setMaintenanceMedia] = useState([]);
   const [loadingMedia, setLoadingMedia] = useState(false);
-  const [previewMedia, setPreviewMedia] = useState(null);
 
   const {
     title = "",
@@ -111,16 +110,23 @@ export default function ActivityDetailModal({ activity, isOpen, onClose }) {
     return <span className="font-semibold text-slate-800">{String(val)}</span>;
   };
 
+  const handleOpenMedia = (m) => {
+    const targetUrl =
+      m?.signedUrl ||
+      resolveMediaUrl(m?.s3_key || m?.url || m?.key || m?.file_url);
+    if (!targetUrl) return;
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  };
+
   if (!activity) return null;
 
   return (
-    <>
-      <CommonModal
-        modalOpen={isOpen}
-        setModalOpen={onClose}
-        modalTitle="Activity Audit Details"
-        modalSize="w-11/12 md:w-[620px]"
-      >
+    <CommonModal
+      modalOpen={isOpen}
+      setModalOpen={onClose}
+      modalTitle="Activity Audit Details"
+      modalSize="w-11/12 md:w-[620px]"
+    >
         <div className="p-5 sm:p-6 space-y-5 text-xs sm:text-sm">
           {/* 1. Header Summary Box */}
           <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-4 flex items-start gap-3.5">
@@ -194,15 +200,21 @@ export default function ActivityDetailModal({ activity, isOpen, onClose }) {
                     return (
                       <div
                         key={m.id || idx}
-                        onClick={() => setPreviewMedia(m)}
+                        onClick={() => handleOpenMedia(m)}
+                        title={`Click to open ${m.file_name || "evidence"} in a new tab`}
                         className="group relative rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs hover:shadow-xs hover:border-blue-400 transition-all cursor-pointer"
                       >
                         {isVideo ? (
-                          <div className="aspect-video w-full bg-slate-900 text-white flex flex-col items-center justify-center gap-1.5 p-3">
+                          <div className="aspect-video w-full bg-slate-900 text-white flex flex-col items-center justify-center gap-1.5 p-3 relative">
                             <FiVideo className="w-6 h-6 text-blue-400" />
                             <span className="text-[10px] text-slate-300 font-medium truncate max-w-full">
                               {m.file_name}
                             </span>
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                              <span className="p-2 rounded-full bg-white/95 text-slate-800 shadow-md">
+                                <FiExternalLink className="w-4 h-4" />
+                              </span>
+                            </div>
                           </div>
                         ) : (
                           <div
@@ -226,7 +238,7 @@ export default function ActivityDetailModal({ activity, isOpen, onClose }) {
                             )}
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                               <span className="p-2 rounded-full bg-white/95 text-slate-800 shadow-md">
-                                <FiEye className="w-4 h-4" />
+                                <FiExternalLink className="w-4 h-4" />
                               </span>
                             </div>
                           </div>
@@ -238,11 +250,14 @@ export default function ActivityDetailModal({ activity, isOpen, onClose }) {
                           >
                             {m.file_name || `Evidence #${idx + 1}`}
                           </p>
-                          {m.file_size && (
-                            <span className="text-[10px] text-slate-400 shrink-0 ml-1">
-                              {(m.file_size / 1024).toFixed(0)} KB
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1 shrink-0 ml-1">
+                            {m.file_size && (
+                              <span className="text-[10px] text-slate-400">
+                                {(m.file_size / 1024).toFixed(0)} KB
+                              </span>
+                            )}
+                            <FiExternalLink className="w-3 h-3 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                          </div>
                         </div>
                       </div>
                     );
@@ -364,54 +379,5 @@ export default function ActivityDetailModal({ activity, isOpen, onClose }) {
           </div>
         </div>
       </CommonModal>
-
-      {/* Lightbox / Zoom Modal for Clicked Image */}
-      {previewMedia && (
-        <div
-          className="fixed inset-0 z-60 bg-black/85 flex items-center justify-center p-4 backdrop-blur-xs animate-fadeIn"
-          onClick={() => setPreviewMedia(null)}
-        >
-          <div
-            className="relative max-w-3xl w-full bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-800"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-3.5 bg-slate-900 border-b border-slate-800 text-white">
-              <div className="min-w-0">
-                <h4 className="text-sm font-bold truncate">
-                  {previewMedia.file_name}
-                </h4>
-                <p className="text-[11px] text-slate-400">
-                  Maintenance Evidence
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewMedia(null)}
-                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
-              >
-                <FiX className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-3 flex items-center justify-center bg-black/60 max-h-[75vh] overflow-hidden">
-              {previewMedia.media_type === "video" ||
-              previewMedia.mime_type?.startsWith("video/") ? (
-                <video
-                  src={previewMedia.signedUrl}
-                  controls
-                  autoPlay
-                  className="max-h-[70vh] w-auto rounded-lg shadow-lg"
-                />
-              ) : (
-                <img
-                  src={previewMedia.signedUrl}
-                  alt={previewMedia.file_name}
-                  className="max-h-[70vh] w-auto object-contain rounded-lg shadow-lg"
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
+    );
 }

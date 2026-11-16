@@ -2,13 +2,22 @@ import { getAllVehicleDocumentsController } from "@/backend/controllers/vehicleD
 import { getAuthUserFromReq } from "@/utilities/authServer";
 
 export default function handler(req, res) {
-  return new Promise((resolve, reject) => {
-    const request = req.body;
+  return new Promise((resolve) => {
     const response = {
       status: false,
     };
-     const authUser = getAuthUserFromReq(req);
-    
+
+    let requestBody = {};
+    if (req.body) {
+      try {
+        requestBody = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      } catch (e) {
+        requestBody = {};
+      }
+    }
+
+    const request = { ...(req.query || {}), ...(requestBody || {}) };
+    const authUser = getAuthUserFromReq(req);
 
     getAllVehicleDocumentsController(request, authUser)
       .then((result) => {
@@ -16,8 +25,8 @@ export default function handler(req, res) {
         resolve(result);
       })
       .catch((error) => {
-        response.error = error;
-        res.status(200).json(response);
+        response.error = error?.message || error;
+        res.status(500).json(response);
         resolve();
       });
   });

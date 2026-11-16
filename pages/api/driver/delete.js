@@ -1,9 +1,11 @@
 import { deleteDriverController } from "@/backend/controllers/driverController";
+import { getAuthUserFromReq } from "@/utilities/authServer";
 
 export default function handler(req, res) {
   return new Promise((resolve) => {
     const { ids } = req.body || {};
-    deleteDriverController(ids)
+    const authUser = getAuthUserFromReq(req);
+    deleteDriverController(ids, authUser)
       .then((result) => {
         res.status(200).json(result);
         resolve(result);

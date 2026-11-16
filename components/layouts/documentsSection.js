@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { checkExpiryCounts, getConstant } from "@/utilities/utils";
 import DocumentTable from "../common/tabels/documentTable";
 import { docTableHeadCells } from "@/utilities/masterData";
@@ -16,8 +16,12 @@ export default function DocumentsSection({
   tableData = [],
   setTableData,
   onClickAddDocument = () => {},
-  rowsPerPageOptions = [5, 10, 25],
+  rowsPerPageOptions = [2, 10, 25],
   isLoading = false,
+  pagination = {},
+  onPageChange = null,
+  onRowsPerPageChange = null,
+  onDeleteSuccess = null,
 }) {
   const [documentsTypeList, setDocumentsTypeList] = useState([]);
   const [deletePopup, setDeletePopup] = useState(false);
@@ -50,15 +54,18 @@ export default function DocumentsSection({
       const response = await postApiData("DELETE_VEHICALE_DOCUMENTS", payload);
       if (response.status) {
         setTableData((prev) =>
-          prev.filter((item) => !targetIds.includes(item.id))
+          prev.filter((item) => !targetIds.includes(item.id)),
         );
         setDeletePopup(false);
         setSelected([]);
+        if (onDeleteSuccess) {
+          onDeleteSuccess(targetIds);
+        }
       }
     } catch (error) {
       console.error("Error occurred during document deletion:", error);
       setDeleteError(
-        "Error occurred while deleting record. Please try again later."
+        "Error occurred while deleting record. Please try again later.",
       );
     }
     setDeleteLoad(false);
@@ -73,7 +80,7 @@ export default function DocumentsSection({
     setAppliedFilter((prev) =>
       prev.includes(value)
         ? prev.filter((val) => val !== value)
-        : [...prev, value]
+        : [...prev, value],
     );
   };
 
@@ -88,7 +95,7 @@ export default function DocumentsSection({
     // Filter by document type
     if (appliedFilter.length > 0) {
       result = result.filter((item) =>
-        appliedFilter.includes((item.documentType || "").toLowerCase())
+        appliedFilter.includes((item.documentType || "").toLowerCase()),
       );
     }
 
@@ -110,6 +117,43 @@ export default function DocumentsSection({
     return result;
   }, [tableData, appliedFilter, searchTerm]);
 
+  const { page, limit, totalRecords, totalPages, hasNextPage, hasPrevPage } =
+    pagination;
+
+  const fallbackCacheRef = useRef(new Map());
+
+  const handlePageChange = (newPage, newLimit) => {
+    if (onPageChange) {
+      onPageChange(newPage, newLimit || limit);
+      return;
+    }
+
+    const targetLimit = newLimit || limit || 10;
+    const cacheKey = `${newPage}_${targetLimit}_${searchTerm.trim()}_${appliedFilter.join(",")}`;
+
+    if (fallbackCacheRef.current.has(cacheKey)) {
+      const cached = fallbackCacheRef.current.get(cacheKey);
+      if (setTableData) setTableData(cached);
+      return;
+    }
+
+    postApiData("GET_ALL_VEHICALE_DOCUMENTS", {
+      page: newPage,
+      limit: targetLimit,
+      search: searchTerm.trim() || undefined,
+      documentType: appliedFilter[0] || undefined,
+    })
+      .then((res) => {
+        if (res?.status && Array.isArray(res.data)) {
+          fallbackCacheRef.current.set(cacheKey, res.data);
+          if (setTableData) setTableData(res.data);
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching vehicle documents:", err);
+      });
+  };
+
   return (
     <div className="space-y-6">
       {/* 5 Summary Cards Grid */}
@@ -129,7 +173,7 @@ export default function DocumentsSection({
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-5 md:p-6 space-y-5">
         {/* Header Toolbar: Search, Filter, + Add Document */}
         <RecordsToolbar
-          totalCount={finalDisplayData.length}
+          totalCount={totalRecords || finalDisplayData.length}
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
           onAddDocument={onClickAddDocument}
@@ -138,7 +182,7 @@ export default function DocumentsSection({
           documentsTypeList={documentsTypeList}
           onFilterClick={onFilterClick}
           isLoading={isLoading}
-        />
+          />
 
         {/* Modern Document Data Table */}
         <DocumentTable
@@ -154,6 +198,9 @@ export default function DocumentsSection({
           searchTerm={searchTerm}
           rowsPerPageOptions={rowsPerPageOptions}
           isLoading={isLoading}
+          pagination={pagination}
+          onPageChange={handlePageChange}
+          onRowsPerPageChange={onRowsPerPageChange}
         />
       </div>
 
@@ -166,7 +213,11 @@ export default function DocumentsSection({
       >
         <div className="px-5 text-center space-y-4">
           <p className="text-sm font-medium text-slate-700">
-            Are you sure you want to delete {selected.length > 1 ? `these ${selected.length} records` : "this document"}?
+            Are you sure you want to delete{" "}
+            {selected.length > 1
+              ? `these ${selected.length} records`
+              : "this document"}
+            ?
           </p>
           <div className="flex items-center justify-center gap-3 pt-2">
             <button

@@ -1,9 +1,12 @@
 import { addNewFleetController } from "@/backend/controllers/fleetController";
+import { getAuthUserFromReq } from "@/utilities/authServer";
 
 export default function handler(req, res) {
   return new Promise((resolve) => {
     const request = req.body;
-    addNewFleetController(request)
+    const authUser = getAuthUserFromReq(req);
+
+    addNewFleetController(request, authUser)
       .then((result) => {
         res.status(200).json(result);
         resolve(result);

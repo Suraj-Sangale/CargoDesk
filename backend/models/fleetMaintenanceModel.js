@@ -167,7 +167,9 @@ export async function createMaintenanceRecordModel(data, authUser = null) {
         media: savedMedia,
       },
       changedFields: ["maintenance_type", "cost", "status", "maintenance_date"],
+      performedBy: userId ? String(userId) : null,
       performedByName: userName,
+      performedAt: new Date(),
       source: "maintenance",
       metadata: {
         vehicle_number: vehicle.vehicle_number,
@@ -486,7 +488,9 @@ export async function updateMaintenanceRecordModel(id, data, authUser = null) {
       oldValue: { status: current.status, cost: current.cost },
       newValue: { status: updatedRecord.status, cost: updatedRecord.cost },
       changedFields: updates.map((u) => u.split(" ")[0]),
+      performedBy: authUser?.userId ? String(authUser.userId) : null,
       performedByName: userName,
+      performedAt: new Date(),
       source: "maintenance",
       metadata: {
         vehicle_number: current.vehicle_number,
@@ -553,7 +557,9 @@ export async function deleteMaintenanceRecordModel(id, authUser = null) {
       oldValue: { id: mid, maintenance_type: record.maintenance_type },
       newValue: null,
       changedFields: ["id"],
+      performedBy: authUser?.userId ? String(authUser.userId) : null,
       performedByName: userName,
+      performedAt: new Date(),
       source: "maintenance",
       metadata: {
         vehicle_number: record.vehicle_number,

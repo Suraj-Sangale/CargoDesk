@@ -269,10 +269,10 @@ export async function compressImageFile(file, options = {}) {
  * @param {string} params.s3Key - Safe storage key for proxy fallback
  * @returns {Promise<{ status: boolean, mode: string }>}
  */
-export async function uploadMediaFile({ uploadUrl, file, mimeType, s3Key }) {
+export async function uploadMediaFile({ uploadUrl, file, mimeType, s3Key, proxyEndpoint = null }) {
   // If image is larger than 500 KB, compress it before network transmission
   let uploadFile = file;
-  let uploadMime = mimeType;
+  let uploadMime = mimeType || file?.type || "application/octet-stream";
   if (file && file.type && file.type.startsWith("image/") && file.size > 500 * 1024) {
     try {
       uploadFile = await compressImageFile(file);
@@ -302,8 +302,11 @@ export async function uploadMediaFile({ uploadUrl, file, mimeType, s3Key }) {
 
   // 2. Fallback: Upload via server proxy if direct upload was blocked
   if (s3Key) {
-    const proxyEndpoint = apiList.PROXY_MAINTENANCE_UPLOAD || "/api/maintenance/uploads/proxy";
-    const proxyUrl = `${proxyEndpoint}?s3Key=${encodeURIComponent(s3Key)}&mimeType=${encodeURIComponent(uploadMime)}`;
+    const defaultProxy = s3Key.startsWith("drivers/")
+      ? (apiList.PROXY_DRIVER_UPLOAD || "/api/driver/uploads/proxy")
+      : (apiList.PROXY_MAINTENANCE_UPLOAD || "/api/maintenance/uploads/proxy");
+    const targetProxy = proxyEndpoint || defaultProxy;
+    const proxyUrl = `${targetProxy}?s3Key=${encodeURIComponent(s3Key)}&mimeType=${encodeURIComponent(uploadMime)}`;
     const proxyRes = await fetch(proxyUrl, {
       method: "POST",
       headers: {
@@ -340,4 +343,45 @@ export async function uploadMediaFile({ uploadUrl, file, mimeType, s3Key }) {
   }
 
   throw new Error("Missing upload configuration for media file.");
+}
+
+/**
+ * Universal client/server URL resolver for stored media.
+ * Automatically wraps private S3 keys and direct AWS S3 URLs into
+ * the secure authorized /api/media/view endpoint so they never return 403 Forbidden.
+ * Leaves blob:, data:, and relative URLs intact.
+ */
+export function resolveMediaUrl(urlOrKey) {
+  if (!urlOrKey || typeof urlOrKey !== "string") return "";
+  let raw = decodeURIComponent(urlOrKey).trim();
+  if (raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
+
+  // 1. If it's already a proxy view URL: e.g. /api/media/view?key=drivers/...
+  if (raw.includes("/api/media/view") && raw.includes("key=")) {
+    try {
+      const parsed = new URL(raw, "http://localhost");
+      const k = parsed.searchParams.get("key");
+      if (k) return `/api/media/view?key=${encodeURIComponent(decodeURIComponent(k).trim())}`;
+    } catch (_) {}
+    return raw;
+  }
+
+  // 2. If key contains a known prefix anywhere in path, match from that prefix
+  const prefixMatch = raw.match(/(drivers\/[^\s?#]+|fleet\/[^\s?#]+|documents\/[^\s?#]+|uploads\/[^\s?#]+)/i);
+  if (prefixMatch && prefixMatch[1]) {
+    return `/api/media/view?key=${encodeURIComponent(prefixMatch[1].replace(/^\/+/, ""))}`;
+  }
+
+  // 3. If it's a full URL, parse path
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    try {
+      const urlObj = new URL(raw);
+      const cleanPath = urlObj.pathname.replace(/^\/+/, "").split("?")[0];
+      if (cleanPath) {
+        return `/api/media/view?key=${encodeURIComponent(cleanPath)}`;
+      }
+    } catch (_) {}
+  }
+
+  return raw;
 }

@@ -31,7 +31,6 @@ export default function MaintenanceDetailsModal({
   onStatusChange,
   onRefresh,
 }) {
-  const [selectedMedia, setSelectedMedia] = useState(null);
   const [mediaSignedUrls, setMediaSignedUrls] = useState({});
   const [loadingMediaId, setLoadingMediaId] = useState(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -39,16 +38,16 @@ export default function MaintenanceDetailsModal({
 
   if (!record) return null;
 
-  // Fetch short-lived signed URL for viewing attachment
+  // Fetch short-lived signed URL and open attachment in a new browser tab
   const handleViewMedia = async (mediaItem) => {
-    if (mediaSignedUrls[mediaItem.id]) {
-      setSelectedMedia({
-        ...mediaItem,
-        signedUrl: mediaSignedUrls[mediaItem.id],
-      });
+    const cachedUrl = mediaSignedUrls[mediaItem.id] || mediaItem.signedUrl;
+    if (cachedUrl) {
+      window.open(cachedUrl, "_blank", "noopener,noreferrer");
       return;
     }
 
+    // Pre-open tab in click handler to avoid browser popup blockers
+    const newTab = window.open("", "_blank");
     setLoadingMediaId(mediaItem.id);
     try {
       const json = await postApiData("GET_MAINTENANCE_MEDIA_URL", {
@@ -60,14 +59,17 @@ export default function MaintenanceDetailsModal({
           ...prev,
           [mediaItem.id]: json.data.signedUrl,
         }));
-        setSelectedMedia({
-          ...mediaItem,
-          signedUrl: json.data.signedUrl,
-        });
+        if (newTab) {
+          newTab.location.href = json.data.signedUrl;
+        } else {
+          window.open(json.data.signedUrl, "_blank", "noopener,noreferrer");
+        }
       } else {
+        if (newTab) newTab.close();
         showToast({ message: json?.message || "Failed to load secure media URL", type: "error" });
       }
     } catch (err) {
+      if (newTab) newTab.close();
       console.error("Error fetching signed URL:", err);
       showToast({ message: "Network error loading attachment preview", type: "error" });
     } finally {
@@ -90,9 +92,6 @@ export default function MaintenanceDetailsModal({
       });
       if (json?.status) {
         showToast({ message: "Attachment deleted successfully", type: "success" });
-        if (selectedMedia?.id === mediaItem.id) {
-          setSelectedMedia(null);
-        }
         if (onRefresh) onRefresh();
       } else {
         showToast({ message: json?.message || "Failed to delete attachment", type: "error" });
@@ -257,6 +256,7 @@ export default function MaintenanceDetailsModal({
                 <div
                   key={item.id}
                   onClick={() => handleViewMedia(item)}
+                  title={`Click to open ${item.file_name || "attachment"} in a new tab`}
                   className="group relative rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs cursor-pointer hover:border-blue-400 hover:shadow-xs transition-all"
                 >
                   <div className="w-full h-28 bg-slate-900 flex items-center justify-center relative overflow-hidden">
@@ -268,6 +268,13 @@ export default function MaintenanceDetailsModal({
                         <FiPlay className="w-5 h-5 ml-0.5" />
                       </div>
                     )}
+
+                    {/* Hover action overlay */}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                      <span className="p-2 rounded-full bg-white/95 text-slate-800 shadow-md">
+                        <FiExternalLink className="w-4 h-4" />
+                      </span>
+                    </div>
 
                     {/* Loading overlay */}
                     {isLoadingThis && (
@@ -287,20 +294,21 @@ export default function MaintenanceDetailsModal({
                       type="button"
                       onClick={(e) => handleDeleteMedia(item, e)}
                       disabled={isDeletingMedia}
-                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-600/90 hover:bg-rose-700 text-white flex items-center justify-center transition-all shadow-xs cursor-pointer opacity-0 group-hover:opacity-100"
+                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-600/90 hover:bg-rose-700 text-white flex items-center justify-center transition-all shadow-xs cursor-pointer opacity-0 group-hover:opacity-100 z-10"
                       title="Delete attachment"
                     >
                       <FiTrash2 className="w-3 h-3" />
                     </button>
                   </div>
 
-                  <div className="p-2 bg-slate-50 border-t border-slate-100">
+                  <div className="p-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                     <p className="text-[11px] font-semibold text-slate-800 truncate" title={item.file_name}>
                       {item.file_name}
                     </p>
-                    <span className="text-[10px] text-blue-600 font-medium group-hover:underline">
-                      Click to view
-                    </span>
+                    <div className="flex items-center gap-1 text-[10px] text-blue-600 font-medium group-hover:underline shrink-0 ml-1">
+                      <span>Open</span>
+                      <FiExternalLink className="w-3 h-3" />
+                    </div>
                   </div>
                 </div>
               );
@@ -312,62 +320,6 @@ export default function MaintenanceDetailsModal({
           </div>
         )}
       </div>
-
-      {/* Lightbox / Media Viewer Modal */}
-      {selectedMedia && (
-        <div
-          className="fixed inset-0 z-60 bg-black/85 flex flex-col items-center justify-center p-4 backdrop-blur-xs animate-in fade-in"
-          onClick={() => setSelectedMedia(null)}
-        >
-          <div
-            className="relative max-w-4xl max-h-[90vh] bg-slate-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Lightbox Header */}
-            <div className="flex items-center justify-between px-4 py-3 bg-slate-950 text-white border-b border-slate-800">
-              <span className="text-xs font-semibold truncate max-w-md">
-                {selectedMedia.file_name}
-              </span>
-              <div className="flex items-center gap-2">
-                <a
-                  href={selectedMedia.signedUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                  title="Open in new window"
-                >
-                  <FiExternalLink className="w-4 h-4" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setSelectedMedia(null)}
-                  className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                >
-                  <FiX className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Media Content */}
-            <div className="p-2 flex items-center justify-center bg-black max-h-[75vh]">
-              {selectedMedia.media_type === "image" || selectedMedia.mime_type?.startsWith("image/") ? (
-                <img
-                  src={selectedMedia.signedUrl}
-                  alt={selectedMedia.file_name}
-                  className="max-h-[70vh] max-w-full object-contain rounded-lg"
-                />
-              ) : (
-                <video
-                  src={selectedMedia.signedUrl}
-                  controls
-                  autoPlay
-                  className="max-h-[70vh] max-w-full rounded-lg"
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Footer Actions */}
       <div className="flex items-center justify-between pt-4 border-t border-slate-100">

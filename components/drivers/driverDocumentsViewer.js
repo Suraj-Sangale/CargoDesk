@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { resolveMediaUrl } from "@/utilities/services/apiService";
 import {
   FiFileText,
   FiFile,
@@ -25,19 +26,33 @@ export default function DriverDocumentsViewer({
   if (!driver) return null;
 
   // Safe parsing of supporting documents
-  let docs = [];
+  let rawDocs = [];
   if (driver.supporting_documents) {
     if (Array.isArray(driver.supporting_documents)) {
-      docs = driver.supporting_documents;
+      rawDocs = driver.supporting_documents;
     } else if (typeof driver.supporting_documents === "string") {
       try {
         const parsed = JSON.parse(driver.supporting_documents);
-        docs = Array.isArray(parsed) ? parsed : [driver.supporting_documents];
+        rawDocs = Array.isArray(parsed) ? parsed : [driver.supporting_documents];
       } catch (_) {
-        docs = [{ name: "Supporting Document", dataUrl: driver.supporting_documents }];
+        rawDocs = [{ name: "Supporting Document", dataUrl: driver.supporting_documents }];
       }
     }
   }
+
+  // Ensure all doc URLs are resolved through authorized media endpoint
+  const docs = rawDocs.map((d) => {
+    if (typeof d === "string") {
+      const resolved = resolveMediaUrl(d);
+      return { name: "Supporting Document", dataUrl: resolved, url: resolved };
+    }
+    const resolvedUrl = resolveMediaUrl(d.dataUrl || d.url || "");
+    return {
+      ...d,
+      dataUrl: resolvedUrl,
+      url: resolvedUrl,
+    };
+  });
 
   // Helper to format file size
   const formatFileSize = (bytes) => {
@@ -49,16 +64,28 @@ export default function DriverDocumentsViewer({
   };
 
   const activeDoc = docs[selectedDocIndex] || docs[0];
+  const activeDocUrl = activeDoc ? resolveMediaUrl(activeDoc.dataUrl || activeDoc.url || "") : "";
 
   const getDocType = (doc) => {
     if (!doc) return "other";
     const type = doc.type || "";
     const name = doc.name || "";
-    const dataUrl = doc.dataUrl || "";
-    if (type.startsWith("image/") || dataUrl.startsWith("data:image/") || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(name)) {
+    const dataUrl = doc.dataUrl || doc.url || "";
+    const cleanUrl = dataUrl.split("?")[0].toLowerCase();
+    if (
+      type.startsWith("image/") ||
+      dataUrl.startsWith("data:image/") ||
+      /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(name) ||
+      /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(cleanUrl)
+    ) {
       return "image";
     }
-    if (type === "application/pdf" || name.toLowerCase().endsWith(".pdf") || dataUrl.startsWith("data:application/pdf")) {
+    if (
+      type === "application/pdf" ||
+      name.toLowerCase().endsWith(".pdf") ||
+      dataUrl.startsWith("data:application/pdf") ||
+      cleanUrl.endsWith(".pdf")
+    ) {
       return "pdf";
     }
     return "other";
@@ -67,25 +94,33 @@ export default function DriverDocumentsViewer({
   const activeDocType = activeDoc ? getDocType(activeDoc) : "other";
 
   const handleDownload = (doc) => {
-    if (!doc || !doc.dataUrl) return;
+    const docUrl = doc ? (doc.dataUrl || doc.url) : null;
+    if (!doc || !docUrl) return;
     const link = document.createElement("a");
-    link.href = doc.dataUrl;
+    link.href = docUrl;
     link.download = doc.name || "driver_document";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   const handleOpenNewTab = (doc) => {
-    if (!doc || !doc.dataUrl) return;
+    const docUrl = doc ? (doc.dataUrl || doc.url) : null;
+    if (!doc || !docUrl) return;
+    if (docUrl.startsWith("http://") || docUrl.startsWith("https://")) {
+      window.open(docUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
     const win = window.open();
     if (win) {
       if (getDocType(doc) === "image") {
-        win.document.write(`<title>${doc.name || "Document"}</title><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#0f172a;min-height:100vh;"><img src="${doc.dataUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;"/></body>`);
+        win.document.write(`<title>${doc.name || "Document"}</title><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#0f172a;min-height:100vh;"><img src="${docUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;"/></body>`);
       } else if (getDocType(doc) === "pdf") {
-        win.document.write(`<title>${doc.name || "Document"}</title><body style="margin:0;height:100vh;"><iframe src="${doc.dataUrl}" style="width:100%;height:100%;border:none;"></iframe></body>`);
+        win.document.write(`<title>${doc.name || "Document"}</title><body style="margin:0;height:100vh;"><iframe src="${docUrl}" style="width:100%;height:100%;border:none;"></iframe></body>`);
       } else {
-        win.location.href = doc.dataUrl;
+        win.location.href = docUrl;
       }
     }
   };
@@ -98,15 +133,35 @@ export default function DriverDocumentsViewer({
           {/* Driver Avatar */}
           <div className="relative shrink-0">
             {driver.profile_photo ? (
-              <img
-                src={driver.profile_photo}
-                alt={driver.driver_name || "Driver"}
-                className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-2xs"
-              />
+              <>
+                <img
+                  src={resolveMediaUrl(driver.profile_photo)}
+                  alt={driver.driver_name || "Driver"}
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                    const fb = e.currentTarget.nextElementSibling;
+                    if (fb) fb.style.display = "flex";
+                  }}
+                  className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-2xs"
+                />
+                <div
+                  style={{ display: "none" }}
+                  className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-base items-center justify-center shadow-2xs"
+                >
+                  {(driver.driver_name || "D")
+                    .split(" ")
+                    .filter(Boolean)
+                    .map((n) => n[0])
+                    .join("")
+                    .substring(0, 2)
+                    .toUpperCase()}
+                </div>
+              </>
             ) : (
               <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-base flex items-center justify-center shadow-2xs">
                 {(driver.driver_name || "D")
                   .split(" ")
+                  .filter(Boolean)
                   .map((n) => n[0])
                   .join("")
                   .substring(0, 2)
@@ -292,7 +347,7 @@ export default function DriverDocumentsViewer({
 
               {/* Action Buttons: New Tab & Download */}
               <div className="flex items-center gap-2 shrink-0">
-                {activeDoc?.dataUrl && (
+                {activeDocUrl && (
                   <>
                     <button
                       type="button"
@@ -319,11 +374,11 @@ export default function DriverDocumentsViewer({
 
             {/* Document Live Preview Area */}
             <div className="p-3 sm:p-4 flex items-center justify-center min-h-[260px] max-h-[58vh] overflow-auto bg-slate-900/5">
-              {activeDoc?.dataUrl ? (
+              {activeDocUrl ? (
                 activeDocType === "image" ? (
                   <div className="relative flex items-center justify-center w-full">
                     <img
-                      src={activeDoc.dataUrl}
+                      src={activeDocUrl}
                       alt={activeDoc.name || "Driver Document"}
                       className="max-h-[52vh] max-w-full object-contain rounded-xl shadow-md border border-slate-200 bg-white"
                     />
@@ -331,7 +386,7 @@ export default function DriverDocumentsViewer({
                 ) : activeDocType === "pdf" ? (
                   <div className="w-full h-[52vh] rounded-xl overflow-hidden border border-slate-200 bg-white shadow-xs">
                     <iframe
-                      src={activeDoc.dataUrl}
+                      src={activeDocUrl}
                       title={activeDoc.name || "PDF Document"}
                       className="w-full h-full border-none"
                     />

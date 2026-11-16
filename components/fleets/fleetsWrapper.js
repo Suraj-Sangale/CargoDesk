@@ -23,7 +23,11 @@ import {
 import { ImSpinner9 } from "react-icons/im";
 
 export default function FleetsWrapper({ pageData }) {
-  const { fleets: contextFleets, loading: contextLoading, refreshAll } = useFleetDriver();
+  const {
+    fleets: contextFleets,
+    loading: contextLoading,
+    refreshAll,
+  } = useFleetDriver();
   const [fleetList, setFleetList] = useState(pageData?.fleets || []);
   const [fleetModal, setFleetModal] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -35,7 +39,9 @@ export default function FleetsWrapper({ pageData }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(!pageData?.fleets && !contextFleets.length);
+  const [isLoading, setIsLoading] = useState(
+    !pageData?.fleets && !contextFleets.length,
+  );
 
   // Sync with context fleets whenever updated
   useEffect(() => {
@@ -92,10 +98,14 @@ export default function FleetsWrapper({ pageData }) {
     if (statusFilter !== "all") {
       result = result.filter((item) => {
         const s = (item.status || "").toLowerCase();
-        if (statusFilter === "active") return s === "active" || item.status === 1;
-        if (statusFilter === "in_transit") return s === "in transit" || s === "in_transit";
-        if (statusFilter === "maintenance") return s === "maintenance" || s === "in maintenance";
-        if (statusFilter === "inactive") return s === "inactive" || s === "closed" || item.status === 0;
+        if (statusFilter === "active")
+          return s === "active" || item.status === 1;
+        if (statusFilter === "in_transit")
+          return s === "in transit" || s === "in_transit";
+        if (statusFilter === "maintenance")
+          return s === "maintenance" || s === "in maintenance";
+        if (statusFilter === "inactive")
+          return s === "inactive" || s === "closed" || item.status === 0;
         return true;
       });
     }
@@ -154,23 +164,79 @@ export default function FleetsWrapper({ pageData }) {
       const response = await postApiData("DELETE_FLEETS", { ids: targetIds });
       if (response && response.status) {
         setFleetList((prev) =>
-          prev.filter((item) => !targetIds.includes(item.id))
+          prev.filter((item) => !targetIds.includes(item.id)),
         );
         showToast(
           response.message ||
             `${targetIds.length} vehicle(s) deleted successfully`,
-          "success"
+          "success",
         );
         setDeletePopup(false);
         setSelected([]);
       } else {
-        showToast(response?.message || "Failed to delete fleet vehicles", "error");
+        showToast(
+          response?.message || "Failed to delete fleet vehicles",
+          "error",
+        );
       }
     } catch (error) {
       console.error("Error deleting fleet:", error);
       showToast("Error occurred while deleting fleet record.", "error");
     }
     setDeleteLoad(false);
+  };
+
+  const fleetStatsCards = [
+    {
+      label: "Total Fleet",
+      value: stats.total,
+      filter: "all",
+      description: "All registered vehicles",
+      icon: FiTruck,
+      color: "blue",
+    },
+    {
+      label: "Active / Ready",
+      value: stats.active,
+      filter: "active",
+      description: "Available for dispatch",
+      icon: FiCheckCircle,
+      color: "emerald",
+    },
+    {
+      label: "In Transit",
+      value: stats.inTransit,
+      filter: "in_transit",
+      description: "On delivery route",
+      icon: FiActivity,
+      color: "blue",
+    },
+    {
+      label: "In Maintenance",
+      value: stats.maintenance,
+      filter: "maintenance",
+      description: "Servicing or repairs",
+      icon: FiTool,
+      color: "amber",
+    },
+  ];
+
+  const colorStyles = {
+    blue: {
+      text: "text-blue-600",
+      bg: "bg-blue-50",
+      active: "border-blue-500 ring-blue-500/10",
+    },
+    emerald: {
+      text: "text-emerald-600",
+      bg: "bg-emerald-50",
+      active: "border-emerald-500 ring-emerald-500/10",
+    },
+    amber: {
+      text: "text-amber-600",
+      bg: "bg-amber-50",
+      active: "border-amber-500 ring-amber-500/10",
+    },
   };
 
   return (
@@ -184,106 +250,49 @@ export default function FleetsWrapper({ pageData }) {
       />
 
       {/* 4 Metric Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Fleets Card */}
-        <div
-          onClick={() => setStatusFilter("all")}
-          className={`bg-white rounded-2xl p-4 md:p-5 border transition-all cursor-pointer shadow-2xs hover:shadow-md ${
-            statusFilter === "all"
-              ? "border-blue-500 ring-2 ring-blue-500/10"
-              : "border-slate-200/80 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Total Fleet
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <FiTruck className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl md:text-3xl font-extrabold text-slate-900 mt-2">
-            {stats.total}
-          </div>
-          <span className="text-[11px] font-semibold text-slate-400 mt-1 block">
-            All registered vehicles
-          </span>
-        </div>
+      <div className="grid grid-cols-4 gap-1 md:gap-4">
+        {fleetStatsCards.map((card) => {
+          const Icon = card.icon;
+          const colors = colorStyles[card.color];
+          const isActive = statusFilter === card.filter;
+          return (
+            <button
+              key={card.filter}
+              type="button"
+              onClick={() => setStatusFilter(card.filter)}
+              aria-pressed={isActive}
+              className={`w-full text-left bg-white rounded-2xl p-2 md:p-5 border transition-all duration-200 shadow-2xs hover:shadow-md focus-visible:outline-none overflow-hidden focus-visible:ring-2 focus-visible:ring-offset-2 ${
+                isActive
+                  ? `${colors.active} ring-2`
+                  : "border-slate-200/80 hover:border-slate-300"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={`text-[9px] md:text-xs font-bold uppercase tracking-wider ${
+                    colors.text
+                  }`}
+                >
+                  {card.label}
+                </span>
 
-        {/* Active Fleets Card */}
-        <div
-          onClick={() => setStatusFilter("active")}
-          className={`bg-white rounded-2xl p-4 md:p-5 border transition-all cursor-pointer shadow-2xs hover:shadow-md ${
-            statusFilter === "active"
-              ? "border-emerald-500 ring-2 ring-emerald-500/10"
-              : "border-slate-200/80 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
-              Active / Ready
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <FiCheckCircle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl md:text-3xl font-extrabold text-slate-900 mt-2">
-            {stats.active}
-          </div>
-          <span className="text-[11px] font-semibold text-emerald-600 mt-1 block">
-            Available for dispatch
-          </span>
-        </div>
+                <div
+                  className={`desktopOnly w-9 h-9 shrink-0 rounded-xl ${colors.bg} ${colors.text} flex items-center justify-center`}
+                >
+                  <Icon className="w-4 h-4 " />
+                </div>
+              </div>
 
-        {/* In Transit Card */}
-        <div
-          onClick={() => setStatusFilter("in_transit")}
-          className={`bg-white rounded-2xl p-4 md:p-5 border transition-all cursor-pointer shadow-2xs hover:shadow-md ${
-            statusFilter === "in_transit"
-              ? "border-blue-500 ring-2 ring-blue-500/10"
-              : "border-slate-200/80 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
-              In Transit
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <FiActivity className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl md:text-3xl font-extrabold text-slate-900 mt-2">
-            {stats.inTransit}
-          </div>
-          <span className="text-[11px] font-semibold text-blue-600 mt-1 block">
-            On delivery route
-          </span>
-        </div>
+              <div className="text-2xl md:text-3xl font-extrabold text-slate-900 mt-3 tabular-nums">
+                {card.value}
+              </div>
 
-        {/* In Maintenance Card */}
-        <div
-          onClick={() => setStatusFilter("maintenance")}
-          className={`bg-white rounded-2xl p-4 md:p-5 border transition-all cursor-pointer shadow-2xs hover:shadow-md ${
-            statusFilter === "maintenance"
-              ? "border-amber-500 ring-2 ring-amber-500/10"
-              : "border-slate-200/80 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">
-              In Maintenance
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <FiTool className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl md:text-3xl font-extrabold text-slate-900 mt-2">
-            {stats.maintenance}
-          </div>
-          <span className="text-[11px] font-semibold text-amber-600 mt-1 block">
-            Servicing or repairs
-          </span>
-        </div>
+              <span className="desktopOnly text-[10px] md:text-[11px] font-semibold text-slate-400 mt-1 block">
+                {card.description}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Main White Container: Toolbar + DocumentTable */}
@@ -343,12 +352,12 @@ export default function FleetsWrapper({ pageData }) {
                   {statusFilter === "all"
                     ? "Filter Status"
                     : statusFilter === "active"
-                    ? "Active"
-                    : statusFilter === "in_transit"
-                    ? "In Transit"
-                    : statusFilter === "maintenance"
-                    ? "Maintenance"
-                    : "Inactive"}
+                      ? "Active"
+                      : statusFilter === "in_transit"
+                        ? "In Transit"
+                        : statusFilter === "maintenance"
+                          ? "Maintenance"
+                          : "Inactive"}
                 </span>
                 {statusFilter !== "all" && (
                   <span className="w-2 h-2 rounded-full bg-blue-600" />
@@ -403,7 +412,9 @@ export default function FleetsWrapper({ pageData }) {
         {/* Active Filter Chips */}
         {(statusFilter !== "all" || searchTerm) && (
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <span className="text-xs font-medium text-slate-400">Active filters:</span>
+            <span className="text-xs font-medium text-slate-400">
+              Active filters:
+            </span>
             {statusFilter !== "all" && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                 <span>Status: {statusFilter}</span>
@@ -488,7 +499,11 @@ export default function FleetsWrapper({ pageData }) {
               Delete Fleet Vehicle{selected.length > 1 ? "s" : ""}?
             </h4>
             <p className="text-xs text-slate-500 mt-1">
-              Are you sure you want to delete {selected.length > 1 ? `${selected.length} selected vehicles` : "this fleet vehicle"}? This action cannot be undone.
+              Are you sure you want to delete{" "}
+              {selected.length > 1
+                ? `${selected.length} selected vehicles`
+                : "this fleet vehicle"}
+              ? This action cannot be undone.
             </p>
           </div>
           <div className="flex items-center justify-center gap-3 pt-2">

@@ -31,9 +31,20 @@ export const getServerSideProps = withUserSsr(async (context, { user }) => {
 
   const pageData = { user };
   pageData.documentsList = [];
-  const documentsResponse = await getAllVehicleDocumentsController(user);
-  if (documentsResponse?.data && documentsResponse?.status == true) {
-    pageData.documentsList = documentsResponse?.data;
+  // const documentsResponse = await getAllVehicleDocumentsController({}, user);
+  const documentsResponse = await getAllVehicleDocumentsController(
+    {
+      page: 1,
+      limit: 2,
+      // totalRecords: 35,
+      // totalPages: 4,
+      hasNextPage: true,
+      hasPrevPage: true,
+    },
+    user,
+  );
+  if (documentsResponse && documentsResponse?.status == true) {
+    pageData.responseData = documentsResponse;
   }
 
   return { props: { pageData } };

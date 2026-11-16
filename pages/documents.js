@@ -13,12 +13,15 @@ export const getServerSideProps = withUserSsr(async (context, { user }) => {
 
   try {
     const [documents, fleetsRes] = await Promise.all([
-      getAllVehicleDocumentsController(user),
+      getAllVehicleDocumentsController({}, user),
       getAllFleetsController(),
     ]);
 
     if (documents?.status && Array.isArray(documents.data)) {
       pageData.documents = documents.data;
+      if (documents.pagination) {
+        pageData.pagination = documents.pagination;
+      }
     }
     if (fleetsRes?.status && Array.isArray(fleetsRes.data)) {
       pageData.fleets = fleetsRes.data;

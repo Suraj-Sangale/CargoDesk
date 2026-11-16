@@ -106,10 +106,241 @@ export const ALLOWED_VIDEO_TYPES = new Set([
   "video/x-msvideo",
 ]);
 
+export const ALLOWED_DOCUMENT_TYPES = new Set([
+  "application/pdf",
+]);
+
 export const MAX_ATTACHMENTS_PER_ENTRY = 10;
 export const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
+export const MAX_DOCUMENT_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 export const URL_EXPIRATION_SECONDS = 900; // 15 minutes
+
+/**
+ * Extracts storage S3 key from a full URL, proxy URL, or raw key string.
+ */
+export function extractS3Key(urlOrKey) {
+  if (!urlOrKey || typeof urlOrKey !== "string") return "";
+  let raw = decodeURIComponent(urlOrKey).trim();
+  if (raw.startsWith("data:") || raw.startsWith("blob:")) return "";
+
+  // 1. If it's a proxy view URL: e.g. /api/media/view?key=drivers/...
+  if (raw.includes("/api/media/view") && raw.includes("key=")) {
+    try {
+      const parsed = new URL(raw, "http://localhost");
+      const k = parsed.searchParams.get("key");
+      if (k) raw = decodeURIComponent(k).trim();
+    } catch (_) {}
+  }
+
+  // 2. If key contains a known prefix anywhere in path, match from that prefix
+  const prefixMatch = raw.match(/(drivers\/[^\s?#]+|fleet\/[^\s?#]+|documents\/[^\s?#]+|uploads\/[^\s?#]+)/i);
+  if (prefixMatch && prefixMatch[1]) {
+    return prefixMatch[1].replace(/^\/+/, "");
+  }
+
+  // 3. If it's a full URL, parse path
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    try {
+      const urlObj = new URL(raw);
+      const cleanPath = urlObj.pathname.replace(/^\/+/, "");
+      return cleanPath.split("?")[0];
+    } catch (_) {}
+  }
+
+  return raw.split("?")[0].replace(/^\/+/, "");
+}
+
+/**
+ * Returns authenticated media viewing proxy URL (or CDN URL if configured).
+ * Resolves private S3 bucket 403 Forbidden issues across all browsers and devices.
+ */
+export function getMediaProxyUrl(s3Key) {
+  if (!s3Key || typeof s3Key !== "string") {
+    return "";
+  }
+  const cleanKey = extractS3Key(s3Key) || s3Key.replace(/^\/+/, "");
+  if (!cleanKey) return "";
+
+  const customDomain = process.env.NEXT_PUBLIC_S3_CUSTOM_DOMAIN || process.env.S3_PUBLIC_DOMAIN;
+  if (customDomain && customDomain.trim() !== "") {
+    const cleanDomain = customDomain.trim().replace(/\/+$/, "");
+    return `${cleanDomain}/${cleanKey}`;
+  }
+
+  return `/api/media/view?key=${encodeURIComponent(cleanKey)}`;
+}
+
+/**
+ * Resolves public or direct storage object URL (CloudFront, Cloudflare R2, or AWS S3).
+ */
+export function getStorageObjectUrl(s3Key) {
+  if (!s3Key || typeof s3Key !== "string") {
+    return "";
+  }
+  const customDomain = process.env.NEXT_PUBLIC_S3_CUSTOM_DOMAIN || process.env.S3_PUBLIC_DOMAIN;
+  if (customDomain && customDomain.trim() !== "") {
+    const cleanDomain = customDomain.trim().replace(/\/+$/, "");
+    return `${cleanDomain}/${s3Key}`;
+  }
+
+  const endpoint = getEndpoint();
+  const bucketName = getBucketName();
+  const region = getRegion();
+
+  if (endpoint) {
+    return `${endpoint.replace(/\/+$/, "")}/${bucketName}/${s3Key}`;
+  }
+
+  return `https://${bucketName}.s3.${region}.amazonaws.com/${s3Key}`;
+}
+
+/**
+ * Validates driver file (profile photo or supporting document).
+ */
+export function validateDriverFile({ fileName, mimeType, fileSize, category = "documents" }) {
+  if (!fileName || typeof fileName !== "string") {
+    return { valid: false, error: "Invalid file name" };
+  }
+
+  const normalizedMime = (mimeType || "").toLowerCase().trim();
+  const size = Number(fileSize);
+
+  if (isNaN(size) || size <= 0) {
+    return { valid: false, error: "Invalid file size" };
+  }
+
+  const isImage = ALLOWED_IMAGE_TYPES.has(normalizedMime);
+  const isDoc = ALLOWED_DOCUMENT_TYPES.has(normalizedMime);
+
+  if (category === "profile") {
+    if (!isImage) {
+      return {
+        valid: false,
+        error: `Unsupported image format (${mimeType}). Supported formats: JPEG, PNG, WEBP, GIF.`,
+      };
+    }
+    if (size > MAX_IMAGE_SIZE_BYTES) {
+      return {
+        valid: false,
+        error: `Profile photo exceeds 10 MB limit (${(size / (1024 * 1024)).toFixed(1)} MB).`,
+      };
+    }
+    return { valid: true, mediaType: "image" };
+  }
+
+  if (!isImage && !isDoc) {
+    return {
+      valid: false,
+      error: `Unsupported file format (${mimeType}). Supported formats: JPEG, PNG, WEBP, GIF, PDF.`,
+    };
+  }
+
+  if (isImage && size > MAX_IMAGE_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `Image ${fileName} exceeds 10 MB limit (${(size / (1024 * 1024)).toFixed(1)} MB).`,
+    };
+  }
+
+  if (isDoc && size > MAX_DOCUMENT_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `Document ${fileName} exceeds 15 MB limit (${(size / (1024 * 1024)).toFixed(1)} MB).`,
+    };
+  }
+
+  return {
+    valid: true,
+    mediaType: isImage ? "image" : "document",
+  };
+}
+
+/**
+ * Generates safe random S3 key for driver uploads:
+ * drivers/{driverId}/{category}/{randomUuid}.{ext}
+ */
+export function generateDriverObjectKey(driverId, fileName, category = "documents") {
+  const ext = path.extname(fileName || "").toLowerCase().replace(/[^a-z0-9.]/g, "") || ".bin";
+  const randomId = crypto.randomUUID();
+  const cleanDriverId = driverId && !isNaN(Number(driverId)) && Number(driverId) > 0 ? String(driverId) : "uploads";
+  const cleanCategory = category === "profile" ? "profile" : "documents";
+
+  return `drivers/${cleanDriverId}/${cleanCategory}/${randomId}${ext}`;
+}
+
+/**
+ * Generates presigned PUT URL for driver file direct upload to S3/R2.
+ */
+export async function generateDriverPresignedUploadUrl({
+  driverId,
+  fileName,
+  mimeType,
+  fileSize,
+  category = "documents",
+}) {
+  const validation = validateDriverFile({ fileName, mimeType, fileSize, category });
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+
+  const s3Key = generateDriverObjectKey(driverId, fileName, category);
+  const fileUrl = getMediaProxyUrl(s3Key);
+  const directS3Url = getStorageObjectUrl(s3Key);
+  const bucketName = getBucketName();
+  const currentRegion = getRegion();
+  const client = getS3Client();
+
+  const command = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: s3Key,
+    ContentType: mimeType,
+  });
+
+  try {
+    const uploadUrl = await getSignedUrl(client, command, {
+      expiresIn: URL_EXPIRATION_SECONDS,
+    });
+
+    return {
+      uploadUrl,
+      s3Key,
+      fileUrl,
+      directS3Url,
+      bucket: bucketName,
+      region: currentRegion,
+      mediaType: validation.mediaType,
+      expiresIn: URL_EXPIRATION_SECONDS,
+      requiredHeaders: {
+        "Content-Type": mimeType,
+      },
+    };
+  } catch (error) {
+    if (
+      error.name === "CredentialsProviderError" ||
+      error.message?.includes("credentials") ||
+      error.message?.includes("AccessKeyId")
+    ) {
+      console.warn("Storage credentials not configured locally. Providing safe development presigned URL.");
+      const mockUploadUrl = `https://${bucketName}.s3.${currentRegion}.amazonaws.com/${s3Key}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=mock&X-Amz-Date=20261025T000000Z&X-Amz-Expires=900&X-Amz-Signature=mock_development_signature`;
+      return {
+        uploadUrl: mockUploadUrl,
+        s3Key,
+        fileUrl,
+        directS3Url,
+        bucket: bucketName,
+        region: currentRegion,
+        mediaType: validation.mediaType,
+        expiresIn: URL_EXPIRATION_SECONDS,
+        requiredHeaders: {
+          "Content-Type": mimeType,
+        },
+      };
+    }
+    console.error("Error generating driver presigned upload URL:", error);
+    throw new Error("Failed to initialize secure upload. Please check storage credentials.");
+  }
+}
 
 /**
  * Validates file metadata before generating presigned URL.

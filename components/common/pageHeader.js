@@ -4,7 +4,7 @@ import CommonHeader from "./commonHeader";
 export default function PageHeader({
   eyebrow = "",
   title = "Vehicle Documents",
-  subtitle = "Track and manage all your vehicle documents in one place.",
+  subtitle = "",
   imageSrc = "/imges/layouts/newdDshboard.png",
   className = "",
   contentClassName = "",

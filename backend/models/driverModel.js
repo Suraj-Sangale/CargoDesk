@@ -1,5 +1,6 @@
 import executeQuery, { executeTransaction } from "@/helpers/dbConnection";
 import { logFleetActivity } from "./fleetActivityModel";
+import { getMediaProxyUrl, extractS3Key } from "../services/s3Service";
 
 let isTableInitialized = false;
 
@@ -124,6 +125,7 @@ export async function ensureDriverTable() {
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS drivers (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        orgId INT NULL,
         driver_name VARCHAR(100) NOT NULL,
         contact_number VARCHAR(30) NOT NULL,
         alt_contact_number VARCHAR(30) NULL,
@@ -146,6 +148,20 @@ export async function ensureDriverTable() {
     `;
     await executeQuery(createTableQuery);
 
+    // Ensure orgId column exists if table existed previously without it
+    const colRows = await executeQuery(`SHOW COLUMNS FROM drivers LIKE 'orgId'`);
+    if (!colRows || colRows.length === 0) {
+      await executeQuery(`ALTER TABLE drivers ADD COLUMN orgId INT NULL AFTER id`);
+    }
+
+    // Backfill any existing legacy drivers without an orgId to their assigned fleet's orgId or default org 1
+    await executeQuery(`
+      UPDATE drivers d 
+      LEFT JOIN fleets f ON d.fleet_id = f.id 
+      SET d.orgId = COALESCE(f.orgId, 1) 
+      WHERE d.orgId IS NULL OR d.orgId = 0
+    `);
+
     // Check count, seed default records if table is brand new/empty
     const countRes = await executeQuery(`SELECT COUNT(*) as total FROM drivers`);
     const count = countRes?.[0]?.total || 0;
@@ -164,13 +180,70 @@ export async function ensureDriverTable() {
   }
 }
 
-export function getAllDriversModel() {
+export function getAllDriversModel(requestOrUser = {}, authUser = null) {
   return new Promise(async (resolve) => {
     try {
-      // await ensureDriverTable();
+      await ensureDriverTable();
+
+      // 1. Resolve request payload and authUser whether passed as:
+      //    - getAllDriversModel(request, authUser) -> API route
+      //    - getAllDriversModel({}, user)          -> SSR with user as 2nd arg
+      //    - getAllDriversModel(user)              -> SSR with user as sole arg
+      let request = {};
+      let user = null;
+
+      if (authUser) {
+        request = requestOrUser || {};
+        user = authUser;
+      } else if (requestOrUser?.user) {
+        user = requestOrUser.user;
+        request = requestOrUser;
+      } else if (requestOrUser?.userId || requestOrUser?.role) {
+        user = requestOrUser;
+        request = {};
+      } else {
+        request = requestOrUser || {};
+      }
+
+      let orgId = user?.orgId ? Number(user.orgId) : null;
+      if (!orgId && user?.userId) {
+        const uRows = await executeQuery(
+          "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
+          [user.userId],
+        );
+        if (uRows?.[0]?.orgId) {
+          orgId = Number(uRows[0].orgId);
+        }
+      }
+
+      const isSuperAdmin =
+        user?.role === "super_admin" || user?.email === "suraj@agnibyte.com";
+
+      const whereClauses = [];
+      const params = [];
+
+      // Multi-tenant organization scoping (strictly matches fleetModel logic)
+      if (!isSuperAdmin) {
+        if (orgId) {
+          whereClauses.push("d.orgId = ?");
+          params.push(orgId);
+        } else {
+          whereClauses.push("d.orgId IS NULL");
+        }
+      } else if (request?.orgId) {
+        whereClauses.push("d.orgId = ?");
+        params.push(Number(request.orgId));
+      }
+
+      const whereSQL =
+        whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
       const selectQuery = `
         SELECT 
           d.*,
+          o.orgName AS organization_name,
+          o.orgName AS orgName,
+          o.orgCode AS orgCode,
           d.fleet_id AS fleet_id,
           f.id AS assigned_fleet_id,
           f.vehicle_number AS assigned_vehicle,
@@ -179,13 +252,55 @@ export function getAllDriversModel() {
           f.capacity AS assigned_vehicle_capacity,
           f.status AS assigned_vehicle_status
         FROM drivers d
+        LEFT JOIN organizations o ON o.orgId = d.orgId
         LEFT JOIN fleets f ON d.fleet_id = f.id
+        ${whereSQL}
         ORDER BY d.id DESC
       `;
-      const rows = await executeQuery(selectQuery);
+      const rows = await executeQuery(selectQuery, params);
+
+      const processedRows = (Array.isArray(rows) ? rows : []).map((row, idx) => {
+        let photo = row.profile_photo;
+        if (photo && typeof photo === "string") {
+          const s3Key = extractS3Key(photo);
+          if (s3Key) {
+            photo = getMediaProxyUrl(s3Key);
+          }
+        }
+
+        let docs = row.supporting_documents;
+        if (docs && typeof docs === "string" && docs.trim().startsWith("[")) {
+          try {
+            const parsedDocs = JSON.parse(docs);
+            if (Array.isArray(parsedDocs)) {
+              docs = parsedDocs.map((d) => {
+                const s3Key = d.s3Key || extractS3Key(d.dataUrl || d.url);
+                if (s3Key) {
+                  const mediaUrl = getMediaProxyUrl(s3Key);
+                  return {
+                    ...d,
+                    s3Key,
+                    dataUrl: mediaUrl,
+                    url: mediaUrl,
+                  };
+                }
+                return d;
+              });
+            }
+          } catch (_) {}
+        }
+
+        return {
+          ...row,
+          sr_no: idx + 1,
+          profile_photo: photo,
+          supporting_documents: docs,
+        };
+      });
+
       resolve({
         status: true,
-        data: Array.isArray(rows) ? rows : [],
+        data: processedRows,
         message: "Drivers fetched successfully",
       });
     } catch (error) {
@@ -199,10 +314,58 @@ export function getAllDriversModel() {
   });
 }
 
-export function addNewDriverModel(data) {
+export function addNewDriverModel(data, authUser = null) {
   return new Promise(async (resolve) => {
     try {
       // await ensureDriverTable();
+
+      // 1. Resolve Organization ID securely from server session
+      let orgId = authUser?.orgId ? Number(authUser.orgId) : null;
+
+      if (!orgId && authUser?.userId) {
+        const uRows = await executeQuery(
+          "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
+          [authUser.userId],
+        );
+        if (uRows?.[0]?.orgId) {
+          orgId = Number(uRows[0].orgId);
+        }
+      }
+
+      const isSuperAdmin =
+        authUser?.role === "super_admin" ||
+        authUser?.email === "suraj@agnibyte.com";
+
+      // 2. Organization Validation:
+      // Super Admin can assign driver to an organization via orgId / organization_id
+      // Non-Super Admin MUST belong to an organization and cannot spoof/override it
+      const targetOrg = data?.orgId || data?.organization_id || data?.org_id;
+      if (isSuperAdmin) {
+        if (targetOrg && Number(targetOrg) > 0) {
+          orgId = Number(targetOrg);
+        }
+      } else {
+        if (!orgId) {
+          return resolve({
+            status: false,
+            message: "Organization ID is required. Your user account is not associated with an organization.",
+          });
+        }
+      }
+
+      // If orgId is resolved, verify the organization exists
+      if (orgId) {
+        const orgRows = await executeQuery(
+          "SELECT orgId, status FROM organizations WHERE orgId = ? LIMIT 1",
+          [orgId]
+        );
+        if (!orgRows || orgRows.length === 0) {
+          return resolve({
+            status: false,
+            message: "The specified organization does not exist.",
+          });
+        }
+      }
 
       const {
         driver_name,
@@ -227,7 +390,29 @@ export function addNewDriverModel(data) {
           ? Number(fleet_id)
           : null;
 
+      // 3. Cross-tenant fleet assignment validation
+      if (parsedFleetId) {
+        const fleetRows = await executeQuery(
+          "SELECT id, orgId, vehicle_number FROM fleets WHERE id = ? LIMIT 1",
+          [parsedFleetId]
+        );
+        if (!fleetRows || fleetRows.length === 0) {
+          return resolve({
+            status: false,
+            message: "Selected fleet vehicle does not exist.",
+          });
+        }
+        const fleetRecord = fleetRows[0];
+        if (orgId && fleetRecord.orgId && Number(fleetRecord.orgId) !== Number(orgId)) {
+          return resolve({
+            status: false,
+            message: "Cannot assign a fleet vehicle belonging to a different organization.",
+          });
+        }
+      }
+
       const payload = {
+        orgId: orgId || null,
         driver_name: driver_name ? driver_name.trim() : null,
         contact_number: contact_number ? contact_number.trim() : null,
         alt_contact_number: alt_contact_number ? alt_contact_number.trim() : null,
@@ -309,137 +494,270 @@ export function addNewDriverModel(data) {
   });
 }
 
-export function updateDriverModel(id, data) {
-  return new Promise(async (resolve) => {
+
+export const updateDriverModel = (id, data, authUser = null) => {
+  return new Promise(async (resolve, reject) => {
     try {
-      // await ensureDriverTable();
+      // 1. Validate driver ID
+      const driverId = Number(id);
 
-      const parsedFleetId =
-        data.fleet_id !== undefined
-          ? data.fleet_id !== null && data.fleet_id !== "" && Number(data.fleet_id) > 0
-            ? Number(data.fleet_id)
-            : null
-          : undefined;
+      if (!Number.isInteger(driverId) || driverId <= 0) {
+        return reject(new Error("Invalid driver ID"));
+      }
 
-      const updateData = {
-        driver_name: data.driver_name ? data.driver_name.trim() : undefined,
-        contact_number: data.contact_number ? data.contact_number.trim() : undefined,
-        alt_contact_number: data.alt_contact_number ? data.alt_contact_number.trim() : undefined,
-        license_number: data.license_number ? data.license_number.toUpperCase().trim() : undefined,
-        license_type: data.license_type,
-        license_expiry: data.license_expiry,
-        experience_years: data.experience_years,
-        blood_group: data.blood_group,
-        emergency_contact: data.emergency_contact ? data.emergency_contact.trim() : undefined,
-        status: data.status,
-        profile_photo: data.profile_photo !== undefined ? data.profile_photo : undefined,
-        supporting_documents:
-          data.supporting_documents !== undefined
-            ? typeof data.supporting_documents === "string"
-              ? data.supporting_documents
-              : JSON.stringify(data.supporting_documents)
-            : undefined,
-        fleet_id: parsedFleetId,
-        address: data.address,
-        notes: data.notes,
-      };
+      // 2. Resolve logged-in user's organization
+      let orgId = authUser?.orgId || null;
 
-      // Clean undefined keys
-      Object.keys(updateData).forEach(
-        (key) => updateData[key] === undefined && delete updateData[key]
+      if (!orgId && authUser?.userId) {
+        const userRows = await executeQuery(
+          `SELECT orgId FROM users WHERE userId = ? LIMIT 1`,
+          [authUser.userId]
+        );
+
+        orgId = userRows?.[0]?.orgId || null;
+      }
+
+      // Use trusted server-side role information.
+      const isSuperAdmin =
+        authUser?.role === "super_admin" ||
+        authUser?.email === "suraj@agnibyte.com";
+
+      // 3. Fetch existing driver
+      const oldDriverRows = await executeQuery(
+        `SELECT * FROM drivers WHERE id = ? LIMIT 1`,
+        [driverId]
       );
 
-      // Fetch previous driver details for diffing
-      const oldDriverRows = await executeQuery(`SELECT id, driver_name, fleet_id FROM drivers WHERE id = ?`, [id]);
-      const oldDriver = Array.isArray(oldDriverRows) && oldDriverRows.length > 0 ? oldDriverRows[0] : null;
+      if (!oldDriverRows?.length) {
+        return reject(new Error("Driver not found"));
+      }
 
-      // Perform transaction to maintain 1-to-1 relationship
-      await executeTransaction(async (queryFn) => {
-        if (parsedFleetId !== undefined) {
-          if (parsedFleetId) {
-            // Unassign other drivers currently on this fleet
-            await queryFn(`UPDATE drivers SET fleet_id = NULL WHERE fleet_id = ? AND id != ?`, [
-              parsedFleetId,
-              id,
-            ]);
-          }
+      const oldDriver = oldDriverRows[0];
+
+      // 4. Organization access validation
+      if (!isSuperAdmin) {
+        if (!orgId || Number(oldDriver.orgId) !== Number(orgId)) {
+          return reject(
+            new Error("You are not authorized to update this driver")
+          );
+        }
+      }
+
+      // 5. Resolve target organization
+      const orgFields = ["orgId", "organization_id", "org_id"];
+      const orgField = orgFields.find((field) =>
+        Object.prototype.hasOwnProperty.call(data, field)
+      );
+
+      let newOrgId = oldDriver.orgId;
+
+      if (orgField) {
+        if (!isSuperAdmin) {
+          return reject(
+            new Error("Only Super Admin can change driver organization")
+          );
         }
 
-        await queryFn(`UPDATE drivers SET ? WHERE id = ?`, [updateData, id]);
+        const rawOrgId = data[orgField];
+
+        if (rawOrgId === null || rawOrgId === "") {
+          return reject(new Error("Invalid organization ID"));
+        }
+
+        newOrgId = Number(rawOrgId);
+
+        if (!Number.isInteger(newOrgId) || newOrgId <= 0) {
+          return reject(new Error("Invalid organization ID"));
+        }
+
+        const organizationRows = await executeQuery(
+          `SELECT id FROM organizations WHERE id = ? LIMIT 1`,
+          [newOrgId]
+        );
+
+        if (!organizationRows?.length) {
+          return reject(new Error("Organization not found"));
+        }
+      }
+
+      const effectiveOrgId = Number(newOrgId || orgId);
+
+      // 6. Validate fleet ID
+      let parsedFleetId = oldDriver.fleet_id ?? null;
+
+      if (data.fleet_id !== undefined) {
+        if (
+          data.fleet_id === null ||
+          data.fleet_id === ""
+        ) {
+          parsedFleetId = null;
+        } else {
+          parsedFleetId = Number(data.fleet_id);
+
+          if (
+            !Number.isInteger(parsedFleetId) ||
+            parsedFleetId <= 0
+          ) {
+            return reject(new Error("Invalid fleet ID"));
+          }
+        }
+      }
+
+      // 7. Validate selected fleet belongs to target organization
+      if (parsedFleetId !== null) {
+        if (!effectiveOrgId) {
+          return reject(
+            new Error("Organization is required to assign a fleet")
+          );
+        }
+
+        const fleetRows = await executeQuery(
+          `SELECT id FROM fleets WHERE id = ? AND orgId = ? LIMIT 1`,
+          [parsedFleetId, effectiveOrgId]
+        );
+
+        if (!fleetRows?.length) {
+          return reject(
+            new Error("Selected fleet does not belong to this organization")
+          );
+        }
+      }
+
+      // 8. Prepare update data
+      const updateData = {
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        phone: data.phone,
+        license_number:
+          data.license_number !== undefined
+            ? data.license_number?.toUpperCase().trim() || null
+            : undefined,
+        license_type: data.license_type,
+        license_expiry: data.license_expiry,
+        address: data.address,
+        profile_photo: data.profile_photo,
+        supporting_documents:
+          data.supporting_documents !== undefined
+            ? JSON.stringify(data.supporting_documents)
+            : undefined,
+        fleet_id: parsedFleetId,
+        orgId: orgField ? newOrgId : undefined,
+      };
+
+      // Remove undefined fields
+      Object.keys(updateData).forEach((key) => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
       });
 
-      // Centralized Activity Logging for driver fleet change
-      if (oldDriver && parsedFleetId !== undefined) {
-        const prevFleetId = oldDriver.fleet_id ? Number(oldDriver.fleet_id) : null;
-        const newFleetId = parsedFleetId ? Number(parsedFleetId) : null;
+      if (!Object.keys(updateData).length) {
+        return reject(new Error("No fields provided for update"));
+      }
 
-        if (prevFleetId !== newFleetId) {
-          const currentDriverName = updateData.driver_name || oldDriver.driver_name || "Driver";
+      const fleetChanged =
+        Number(oldDriver.fleet_id || 0) !== Number(parsedFleetId || 0);
 
-          // 1. If previously assigned to another fleet, log unassignment
-          if (prevFleetId) {
-            await logFleetActivity({
-              fleetId: prevFleetId,
-              operationType: "DRIVER",
-              entityType: "DRIVER_ALLOCATION",
-              entityId: String(id),
-              action: "UNASSIGN",
-              title: "Driver removed",
-              description: `${currentDriverName} unassigned from fleet vehicle`,
-              oldValue: { driver_id: id, driver_name: currentDriverName },
-              newValue: null,
-              changedFields: ["driver_id"],
-              performedByName: data.performedByName || "Admin User",
-              source: "driver",
-            });
-          }
-
-          // 2. If assigned to a new fleet, log assignment
-          if (newFleetId) {
-            await logFleetActivity({
-              fleetId: newFleetId,
-              operationType: "DRIVER",
-              entityType: "DRIVER_ALLOCATION",
-              entityId: String(id),
-              action: "ASSIGN",
-              title: "Driver assigned",
-              description: `Driver: ${currentDriverName}`,
-              oldValue: null,
-              newValue: { driver_id: id, driver_name: currentDriverName },
-              changedFields: ["driver_id", "driver_name"],
-              performedByName: data.performedByName || "Admin User",
-              source: "driver",
-            });
-          }
+      // 9. Update driver inside transaction
+      await executeTransaction(async (queryFn) => {
+        // Unassign other drivers from this fleet within the same organization
+        if (parsedFleetId && fleetChanged) {
+          await queryFn(
+            `UPDATE drivers
+             SET fleet_id = NULL
+             WHERE fleet_id = ?
+               AND orgId = ?
+               AND id != ?`,
+            [parsedFleetId, effectiveOrgId, driverId]
+          );
         }
+
+        await queryFn(
+          `UPDATE drivers SET ? WHERE id = ?`,
+          [updateData, driverId]
+        );
+      });
+
+      // 10. Log fleet activity after successful transaction
+      const performedBy =
+        authUser?.name ||
+        authUser?.userName ||
+        "System";
+
+      if (oldDriver.fleet_id && fleetChanged) {
+        await logFleetActivity({
+          fleet_id: oldDriver.fleet_id,
+          activity_type: "DRIVER_UNASSIGNED",
+          description: `Driver ${oldDriver.first_name} ${oldDriver.last_name} was unassigned`,
+          performed_by: performedBy,
+        });
       }
 
-      resolve({ status: true, message: "Driver updated successfully" });
-    } catch (error) {
-      console.error("Error updating driver:", error);
-      if (error.code === "ER_DUP_ENTRY") {
-        resolve({
-          status: false,
-          message: "A driver with this driving license number already exists.",
-        });
-      } else {
-        resolve({
-          status: false,
-          message: "Database error while updating driver",
+      if (parsedFleetId && fleetChanged) {
+        await logFleetActivity({
+          fleet_id: parsedFleetId,
+          activity_type: "DRIVER_ASSIGNED",
+          description: `Driver ${data.first_name || oldDriver.first_name} ${
+            data.last_name || oldDriver.last_name
+          } was assigned`,
+          performed_by: performedBy,
         });
       }
+
+      resolve({
+        success: true,
+        message: "Driver updated successfully",
+      });
+    } catch (error) {
+      console.error("updateDriverModel Error:", error);
+
+      if (error.code === "ER_DUP_ENTRY") {
+        return reject(
+          new Error("Driver with this email or license number already exists")
+        );
+      }
+
+      reject(error);
     }
   });
-}
+};
 
-export function deleteDriverModel(ids) {
+export function deleteDriverModel(ids, authUser = null) {
   return new Promise(async (resolve) => {
     try {
       if (!Array.isArray(ids) || ids.length === 0) {
         return resolve({ status: false, message: "No driver IDs provided for deletion" });
       }
 
-      // await ensureDriverTable();
+      let orgId = authUser?.orgId ? Number(authUser.orgId) : null;
+      if (!orgId && authUser?.userId) {
+        const uRows = await executeQuery(
+          "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
+          [authUser.userId]
+        );
+        if (uRows?.[0]?.orgId) {
+          orgId = Number(uRows[0].orgId);
+        }
+      }
+
+      const isSuperAdmin =
+        authUser?.role === "super_admin" ||
+        authUser?.email === "suraj@agnibyte.com";
+
+      if (authUser && !isSuperAdmin && orgId) {
+        const forbiddenDrivers = await executeQuery(
+          `SELECT id FROM drivers WHERE id IN (?) AND (orgId IS NOT NULL AND orgId != ?)`,
+          [ids, orgId]
+        );
+        if (forbiddenDrivers && forbiddenDrivers.length > 0) {
+          return resolve({
+            status: false,
+            message: "Unauthorized: Cannot delete drivers belonging to another organization.",
+          });
+        }
+      }
+
       const deleteQuery = `DELETE FROM drivers WHERE id IN (?)`;
       const result = await executeQuery(deleteQuery, [ids]);
 
