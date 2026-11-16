@@ -1,9 +1,26 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import { showToast } from "@/utilities/toastService";
-import { postApiData, uploadMediaFile, compressImageFile } from "@/utilities/services/apiService";
-import { watermarkCapturedPhoto, preloadLocation, getCurrentLocationDetails, checkLocationPermissionState, setManualLocation, isSecureOrigin } from "@/utilities/photoWatermark";
+import {
+  postApiData,
+  uploadMediaFile,
+  compressImageFile,
+} from "@/utilities/services/apiService";
+import {
+  watermarkCapturedPhoto,
+  preloadLocation,
+  getCurrentLocationDetails,
+  checkLocationPermissionState,
+  setManualLocation,
+  isSecureOrigin,
+} from "@/utilities/photoWatermark";
 import {
   FiCamera,
   FiUploadCloud,
@@ -20,8 +37,11 @@ import {
   FiCheckCircle,
   FiSearch,
   FiChevronDown,
+  FiRefreshCcw,
+  FiSlash,
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
+import EnableLocationPopup from "./enableLocationPopup";
 
 const MAX_ATTACHMENTS = 10;
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -35,7 +55,10 @@ const SUPPORTED_LANGUAGES = [
 
 const QUICK_PROBLEM_CHIPS = [
   { label: "🚨 Breakdown", text: "Vehicle breakdown / stopped on road" },
-  { label: "🛑 Brake Issue", text: "Brakes not working properly / strange noise" },
+  {
+    label: "🛑 Brake Issue",
+    text: "Brakes not working properly / strange noise",
+  },
   { label: "🛞 Flat Tyre", text: "Tyre puncture / flat tyre" },
   { label: "💧 Oil Leak", text: "Engine oil or coolant leakage" },
   { label: "🔋 Battery Dead", text: "Battery dead / vehicle not starting" },
@@ -64,8 +87,8 @@ export default function MaintenanceFormV2({
     preselectedVehicle?.id
       ? String(preselectedVehicle.id)
       : initialData?.vehicle_id
-      ? String(initialData.vehicle_id)
-      : ""
+        ? String(initialData.vehicle_id)
+        : "",
   );
   const [vehicleSearchQuery, setVehicleSearchQuery] = useState("");
   const [isVehicleDropdownOpen, setIsVehicleDropdownOpen] = useState(false);
@@ -74,7 +97,9 @@ export default function MaintenanceFormV2({
   const vehicleInputRef = useRef(null);
 
   // 2. Problem Description & Voice State
-  const [problemDescription, setProblemDescription] = useState(initialData?.description || "");
+  const [problemDescription, setProblemDescription] = useState(
+    initialData?.description || "",
+  );
   const [isListening, setIsListening] = useState(false);
   const [selectedLang, setSelectedLang] = useState("en-IN");
   const [speechSupported, setSpeechSupported] = useState(true);
@@ -85,9 +110,11 @@ export default function MaintenanceFormV2({
   const [fileError, setFileError] = useState(null);
   const [isProcessingMedia, setIsProcessingMedia] = useState(false);
   const [mediaProcessingText, setMediaProcessingText] = useState("");
-  const [showPermissionModal, setShowPermissionModal] = useState(false);
-  const [permissionModalReason, setPermissionModalReason] = useState("");
   const [showManualModal, setShowManualModal] = useState(false);
+  const [showEnableLocationPopup, setShowEnableLocationPopup] = useState(false);
+  const [skipWatermark, setSkipWatermark] = useState(false);
+  const [pendingCaptureType, setPendingCaptureType] = useState(null); // 'camera' | 'file' | null
+  const hasAutoPromptedRef = useRef(false);
   const [manualCoordsInput, setManualCoordsInput] = useState({
     lat: "19.0596",
     lng: "72.8895",
@@ -120,13 +147,36 @@ export default function MaintenanceFormV2({
   useEffect(() => {
     let isMounted = true;
     async function initLocation() {
-      if (typeof window === "undefined" || !navigator.geolocation) return;
+      if (typeof window === "undefined" || !navigator.geolocation) {
+        if (isMounted) {
+          setLocationStatus({
+            loading: false,
+            resolved: false,
+            address: "",
+            placeName: "",
+            coordStr: "",
+            latitude: null,
+            longitude: null,
+            error: "unsupported",
+          });
+        }
+        return;
+      }
 
       try {
         const permState = await checkLocationPermissionState();
         if (permState === "denied") {
           if (isMounted) {
-            setLocationStatus({ loading: false, resolved: false, address: "", error: "denied" });
+            setLocationStatus({
+              loading: false,
+              resolved: false,
+              address: "",
+              error: "denied",
+            });
+            if (!hasAutoPromptedRef.current) {
+              hasAutoPromptedRef.current = true;
+              setShowEnableLocationPopup(true);
+            }
           }
           return;
         }
@@ -160,6 +210,13 @@ export default function MaintenanceFormV2({
             longitude: null,
             error: loc?.error || "unavailable",
           });
+          if (
+            (loc?.permissionDenied || loc?.error === "denied") &&
+            !hasAutoPromptedRef.current
+          ) {
+            hasAutoPromptedRef.current = true;
+            setShowEnableLocationPopup(true);
+          }
         }
       }
     }
@@ -175,7 +232,11 @@ export default function MaintenanceFormV2({
     if (e && e.preventDefault) e.preventDefault();
     if (e && e.stopPropagation) e.stopPropagation();
 
-    const loc = await setManualLocation("19.0596", "72.8895", "Chembur, Mumbai");
+    const loc = await setManualLocation(
+      "19.0596",
+      "72.8895",
+      "Chembur, Mumbai",
+    );
     if (loc) {
       setLocationStatus({
         loading: false,
@@ -188,9 +249,17 @@ export default function MaintenanceFormV2({
         source: "manual",
         error: null,
       });
+      setSkipWatermark(false);
       showToast({ message: `Location set: ${loc.address}`, type: "success" });
-      setShowPermissionModal(false);
       setShowManualModal(false);
+      setShowEnableLocationPopup(false);
+      if (pendingCaptureType === "camera") {
+        cameraInputRef.current?.click();
+        setPendingCaptureType(null);
+      } else if (pendingCaptureType === "file") {
+        fileInputRef.current?.click();
+        setPendingCaptureType(null);
+      }
     }
   };
 
@@ -202,7 +271,10 @@ export default function MaintenanceFormV2({
     const area = manualCoordsInput.area.trim();
 
     if (!lat || !lng || isNaN(Number(lat)) || isNaN(Number(lng))) {
-      showToast({ message: "Please enter valid numeric latitude and longitude", type: "error" });
+      showToast({
+        message: "Please enter valid numeric latitude and longitude",
+        type: "error",
+      });
       return;
     }
 
@@ -219,16 +291,25 @@ export default function MaintenanceFormV2({
         source: "manual",
         error: null,
       });
-      showToast({ message: `Coordinates updated: ${loc.address}`, type: "success" });
+      setSkipWatermark(false);
+      showToast({
+        message: `Coordinates updated: ${loc.address}`,
+        type: "success",
+      });
       setShowManualModal(false);
-      setShowPermissionModal(false);
+      setShowEnableLocationPopup(false);
     }
   };
 
   // Request or retry enabling location
   const handleRequestLocation = async (e) => {
     if (e && e.stopPropagation) e.stopPropagation();
-    setLocationStatus({ loading: true, resolved: false, address: "", error: null });
+    setLocationStatus({
+      loading: true,
+      resolved: false,
+      address: "",
+      error: null,
+    });
 
     try {
       const loc = await getCurrentLocationDetails({ forceRefresh: true });
@@ -243,7 +324,9 @@ export default function MaintenanceFormV2({
           longitude: loc.longitude,
           error: null,
         });
+        setSkipWatermark(false);
         showToast({ message: `GPS Acquired: ${loc.address}`, type: "success" });
+        return true;
       } else {
         setLocationStatus({
           loading: false,
@@ -257,18 +340,59 @@ export default function MaintenanceFormV2({
         });
         if (loc?.permissionDenied || loc?.error === "denied") {
           showToast({
-            message: "Location blocked. Please allow location in your browser site settings.",
+            message:
+              "Location blocked. Please allow location in your browser site settings.",
             type: "error",
           });
         } else {
           showToast({
-            message: "Please turn on your phone GPS / Location service and try again.",
+            message:
+              "Please turn on your phone GPS / Location service and try again.",
             type: "error",
           });
         }
+        return false;
       }
     } catch (_) {
-      setLocationStatus({ loading: false, resolved: false, address: "", error: "unavailable" });
+      setLocationStatus({
+        loading: false,
+        resolved: false,
+        address: "",
+        error: "unavailable",
+      });
+      return false;
+    }
+  };
+
+  // Handlers for EnableLocationPopup
+  const handleEnableFromPopup = async () => {
+    const success = await handleRequestLocation();
+    if (success) {
+      setShowEnableLocationPopup(false);
+      if (pendingCaptureType === "camera") {
+        cameraInputRef.current?.click();
+        setPendingCaptureType(null);
+      } else if (pendingCaptureType === "file") {
+        fileInputRef.current?.click();
+        setPendingCaptureType(null);
+      }
+    }
+  };
+
+  const handleSkipFromPopup = () => {
+    setSkipWatermark(true);
+    setShowEnableLocationPopup(false);
+    showToast({
+      message:
+        "Watermark skipped. Photos will be uploaded without GPS watermark.",
+      type: "info",
+    });
+    if (pendingCaptureType === "camera") {
+      cameraInputRef.current?.click();
+      setPendingCaptureType(null);
+    } else if (pendingCaptureType === "file") {
+      fileInputRef.current?.click();
+      setPendingCaptureType(null);
     }
   };
 
@@ -300,7 +424,9 @@ export default function MaintenanceFormV2({
   const selectedVehicle = useMemo(() => {
     if (preselectedVehicle) return preselectedVehicle;
     if (!selectedVehicleId) return null;
-    return vehicles.find((v) => String(v.id) === String(selectedVehicleId)) || null;
+    return (
+      vehicles.find((v) => String(v.id) === String(selectedVehicleId)) || null
+    );
   }, [vehicles, selectedVehicleId, preselectedVehicle]);
 
   // Sync input text when preselectedVehicle or selectedVehicle changes
@@ -318,7 +444,10 @@ export default function MaintenanceFormV2({
     if (!query) return vehicles;
 
     // If query matches currently selected vehicle number, show all vehicles so user can pick another
-    if (selectedVehicle && selectedVehicle.vehicle_number.toLowerCase() === query) {
+    if (
+      selectedVehicle &&
+      selectedVehicle.vehicle_number.toLowerCase() === query
+    ) {
       return vehicles;
     }
 
@@ -326,14 +455,19 @@ export default function MaintenanceFormV2({
       const num = (v.vehicle_number || "").toLowerCase();
       const model = (v.vehicle_model || "").toLowerCase();
       const type = (v.vehicle_type || "").toLowerCase();
-      return num.includes(query) || model.includes(query) || type.includes(query);
+      return (
+        num.includes(query) || model.includes(query) || type.includes(query)
+      );
     });
   }, [vehicles, vehicleSearchQuery, selectedVehicle]);
 
   // Close dropdown on outside click and restore selected vehicle number if valid
   useEffect(() => {
     function handleClickOutside(event) {
-      if (vehicleDropdownRef.current && !vehicleDropdownRef.current.contains(event.target)) {
+      if (
+        vehicleDropdownRef.current &&
+        !vehicleDropdownRef.current.contains(event.target)
+      ) {
         setIsVehicleDropdownOpen(false);
         if (selectedVehicle) {
           setVehicleSearchQuery(selectedVehicle.vehicle_number);
@@ -379,12 +513,12 @@ export default function MaintenanceFormV2({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlightedVehicleIndex((prev) =>
-        prev < filteredVehicles.length - 1 ? prev + 1 : 0
+        prev < filteredVehicles.length - 1 ? prev + 1 : 0,
       );
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightedVehicleIndex((prev) =>
-        prev > 0 ? prev - 1 : filteredVehicles.length - 1
+        prev > 0 ? prev - 1 : filteredVehicles.length - 1,
       );
     } else if (e.key === "Enter") {
       if (isVehicleDropdownOpen && filteredVehicles[highlightedVehicleIndex]) {
@@ -403,7 +537,9 @@ export default function MaintenanceFormV2({
         {
           value: String(preselectedVehicle.id),
           label: `${preselectedVehicle.vehicle_number} — ${
-            preselectedVehicle.vehicle_model || preselectedVehicle.vehicle_type || "Vehicle"
+            preselectedVehicle.vehicle_model ||
+            preselectedVehicle.vehicle_type ||
+            "Vehicle"
           }`,
         },
       ];
@@ -468,13 +604,18 @@ export default function MaintenanceFormV2({
           if (res.isFinal) {
             finalTranscript += (finalTranscript ? " " : "") + transcript.trim();
           } else {
-            interimTranscript += (interimTranscript ? " " : "") + transcript.trim();
+            interimTranscript +=
+              (interimTranscript ? " " : "") + transcript.trim();
           }
         }
 
-        const sessionSpeech = (finalTranscript + (interimTranscript ? " " + interimTranscript : "")).trim();
+        const sessionSpeech = (
+          finalTranscript + (interimTranscript ? " " + interimTranscript : "")
+        ).trim();
         if (sessionSpeech) {
-          const base = speechBaseTextRef.current ? speechBaseTextRef.current.trim() : "";
+          const base = speechBaseTextRef.current
+            ? speechBaseTextRef.current.trim()
+            : "";
           const combined = base ? `${base} ${sessionSpeech}` : sessionSpeech;
           setProblemDescription(combined);
           setFormError(null);
@@ -484,7 +625,9 @@ export default function MaintenanceFormV2({
       recognition.onerror = (event) => {
         console.warn("Speech recognition error:", event.error);
         if (event.error === "not-allowed") {
-          setSpeechError("Microphone permission denied. Please allow microphone in browser.");
+          setSpeechError(
+            "Microphone permission denied. Please allow microphone in browser.",
+          );
         } else if (event.error === "network") {
           setSpeechError("Network error during speech recognition.");
         } else if (event.error !== "no-speech") {
@@ -560,7 +703,7 @@ export default function MaintenanceFormV2({
       setMediaProcessingText(
         isCameraCapture
           ? "Stamping date, time and location onto photo..."
-          : "Processing media file..."
+          : "Processing media file...",
       );
 
       try {
@@ -572,23 +715,31 @@ export default function MaintenanceFormV2({
           const isVideo = file.type.startsWith("video/");
 
           if (!isImage && !isVideo) {
-            setFileError(`"${file.name}" is not supported. Please select photos or videos.`);
+            setFileError(
+              `"${file.name}" is not supported. Please select photos or videos.`,
+            );
             continue;
           }
 
           // Camera Capture: automatically embed date, time & location watermark in bottom-left corner
-          if (isCameraCapture && isImage) {
+          if (isCameraCapture && isImage && !skipWatermark) {
             try {
-              setMediaProcessingText("Stamping date, time and location onto photo...");
+              setMediaProcessingText(
+                "Stamping date, time and location onto photo...",
+              );
               const captureTime =
-                file.lastModified && Math.abs(Date.now() - file.lastModified) < 24 * 60 * 60 * 1000
+                file.lastModified &&
+                Math.abs(Date.now() - file.lastModified) < 24 * 60 * 60 * 1000
                   ? new Date(file.lastModified)
                   : new Date();
 
               // Use a manually chosen location if the user set one; otherwise get the
               // CURRENT device location (cached max 60s) instead of the one from page load.
-              const isManual = locationStatus.resolved && locationStatus.source === "manual";
-              let locDetails = isManual ? locationStatus : await getCurrentLocationDetails();
+              const isManual =
+                locationStatus.resolved && locationStatus.source === "manual";
+              let locDetails = isManual
+                ? locationStatus
+                : await getCurrentLocationDetails();
 
               if (locDetails && locDetails.latitude && locDetails.longitude) {
                 if (!isManual) {
@@ -609,12 +760,18 @@ export default function MaintenanceFormV2({
                 locDetails = locationStatus;
               }
 
-              file = await watermarkCapturedPhoto(file, { captureTime, locDetails });
+              file = await watermarkCapturedPhoto(file, {
+                captureTime,
+                locDetails,
+              });
             } catch (watermarkErr) {
-              console.warn("Watermarking failed, using original photo:", watermarkErr);
+              console.warn(
+                "Watermarking failed, using original photo:",
+                watermarkErr,
+              );
             }
           } else if (isImage) {
-            // Optimize regular uploaded images
+            // Optimize regular uploaded images (or camera captures when watermark is skipped)
             try {
               file = await compressImageFile(file);
             } catch (_) {}
@@ -631,7 +788,9 @@ export default function MaintenanceFormV2({
           }
 
           const isDuplicate = attachedFiles.some(
-            (existing) => existing.file?.name === file.name && existing.file?.size === file.size
+            (existing) =>
+              existing.file?.name === file.name &&
+              existing.file?.size === file.size,
           );
           if (isDuplicate) continue;
 
@@ -654,13 +813,15 @@ export default function MaintenanceFormV2({
         }
       } catch (err) {
         console.error("Error processing media files:", err);
-        setFileError("An error occurred while processing the photo. Please try again.");
+        setFileError(
+          "An error occurred while processing the photo. Please try again.",
+        );
       } finally {
         setIsProcessingMedia(false);
         setMediaProcessingText("");
       }
     },
-    [attachedFiles, isProcessingMedia, locationStatus]
+    [attachedFiles, isProcessingMedia, locationStatus, skipWatermark],
   );
 
   // Remove attached file
@@ -704,15 +865,22 @@ export default function MaintenanceFormV2({
     }
 
     if (!problemDescription || problemDescription.trim() === "") {
-      setFormError("Please describe the problem or use the microphone to speak.");
+      setFormError(
+        "Please describe the problem or use the microphone to speak.",
+      );
       showToast({ message: "Please describe the problem", type: "error" });
       return;
     }
 
     if (attachedFiles.length === 0) {
-      setFileError("Photo or video evidence is compulsory. Please take a photo or upload a file.");
+      setFileError(
+        "Photo or video evidence is compulsory. Please take a photo or upload a file.",
+      );
       setFormError("Please take a photo or upload a file as evidence.");
-      showToast({ message: "Photo or video evidence is compulsory", type: "error" });
+      showToast({
+        message: "Photo or video evidence is compulsory",
+        type: "error",
+      });
       return;
     }
 
@@ -743,9 +911,15 @@ export default function MaintenanceFormV2({
           })),
         };
 
-        const presignJson = await postApiData("PRESIGN_MAINTENANCE_UPLOADS", presignPayload);
+        const presignJson = await postApiData(
+          "PRESIGN_MAINTENANCE_UPLOADS",
+          presignPayload,
+        );
         if (!presignJson?.status || !Array.isArray(presignJson.data)) {
-          throw new Error(presignJson?.message || "Failed to prepare file upload authorization.");
+          throw new Error(
+            presignJson?.message ||
+              "Failed to prepare file upload authorization.",
+          );
         }
 
         const presignedMap = {};
@@ -758,10 +932,14 @@ export default function MaintenanceFormV2({
           const presignedInfo = presignedMap[item.fileName];
 
           if (!presignedInfo || !presignedInfo.uploadUrl) {
-            throw new Error(`Upload authorization missing for file: ${item.fileName}`);
+            throw new Error(
+              `Upload authorization missing for file: ${item.fileName}`,
+            );
           }
 
-          setSubmissionProgress(`Uploading photo ${i + 1} of ${attachedFiles.length}...`);
+          setSubmissionProgress(
+            `Uploading photo ${i + 1} of ${attachedFiles.length}...`,
+          );
 
           await uploadMediaFile({
             uploadUrl: presignedInfo.uploadUrl,
@@ -807,7 +985,9 @@ export default function MaintenanceFormV2({
       }
 
       if (!saveJson?.status) {
-        throw new Error(saveJson?.message || "Failed to submit maintenance report.");
+        throw new Error(
+          saveJson?.message || "Failed to submit maintenance report.",
+        );
       }
 
       showToast({
@@ -842,7 +1022,10 @@ export default function MaintenanceFormV2({
       }
     } catch (err) {
       console.error("V2 submission error:", err);
-      setFormError(err.message || "Failed to submit report. Please check connection and try again.");
+      setFormError(
+        err.message ||
+          "Failed to submit report. Please check connection and try again.",
+      );
       showToast({
         message: err.message || "Failed to submit maintenance report.",
         type: "error",
@@ -856,7 +1039,10 @@ export default function MaintenanceFormV2({
   return (
     <div className="w-full">
       {/* Form Body */}
-      <form onSubmit={handleSubmit} className="w-full p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6"
+      >
         {/* Error Alert */}
         {formError && (
           <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-xs font-semibold text-rose-700 animate-fadeIn">
@@ -899,14 +1085,18 @@ export default function MaintenanceFormV2({
               <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
                 Locked to Current Fleet
               </span>
-            ) }
+            )}
           </div>
 
           <div className="relative w-full">
             {/* Direct Typeable Input with Embedded Search Icon */}
             <div
               onClick={() => {
-                if (!preselectedVehicle && !isSubmitting && vehicleInputRef.current) {
+                if (
+                  !preselectedVehicle &&
+                  !isSubmitting &&
+                  vehicleInputRef.current
+                ) {
                   vehicleInputRef.current.focus();
                   setIsVehicleDropdownOpen(true);
                 }
@@ -915,10 +1105,10 @@ export default function MaintenanceFormV2({
                 Boolean(preselectedVehicle) || isSubmitting
                   ? "bg-slate-100 opacity-70 cursor-not-allowed border-slate-200"
                   : isVehicleDropdownOpen
-                  ? "border-blue-600 ring-4 ring-blue-100/70"
-                  : selectedVehicleId
-                  ? "border-blue-500 bg-blue-50/20 hover:border-blue-600"
-                  : "border-slate-300 hover:border-blue-500"
+                    ? "border-blue-600 ring-4 ring-blue-100/70"
+                    : selectedVehicleId
+                      ? "border-blue-500 bg-blue-50/20 hover:border-blue-600"
+                      : "border-slate-300 hover:border-blue-500"
               }`}
             >
               <FiSearch className="w-5 h-5 text-blue-600 shrink-0" />
@@ -947,7 +1137,9 @@ export default function MaintenanceFormV2({
                   setIsVehicleDropdownOpen(true);
                   if (
                     selectedVehicle &&
-                    !selectedVehicle.vehicle_number.toLowerCase().includes(val.toLowerCase())
+                    !selectedVehicle.vehicle_number
+                      .toLowerCase()
+                      .includes(val.toLowerCase())
                   ) {
                     setSelectedVehicleId("");
                   }
@@ -958,17 +1150,19 @@ export default function MaintenanceFormV2({
               />
 
               {/* Clear button */}
-              {!preselectedVehicle && (vehicleSearchQuery || selectedVehicleId) && !isSubmitting && (
-                <button
-                  type="button"
-                  onClick={handleClearVehicle}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0 cursor-pointer"
-                  title="Clear search"
-                  aria-label="Clear vehicle search"
-                >
-                  <FiX className="w-4 h-4" />
-                </button>
-              )}
+              {!preselectedVehicle &&
+                (vehicleSearchQuery || selectedVehicleId) &&
+                !isSubmitting && (
+                  <button
+                    type="button"
+                    onClick={handleClearVehicle}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0 cursor-pointer"
+                    title="Clear search"
+                    aria-label="Clear vehicle search"
+                  >
+                    <FiX className="w-4 h-4" />
+                  </button>
+                )}
 
               {/* Toggle Dropdown Chevron */}
               {!preselectedVehicle && !isSubmitting && (
@@ -982,7 +1176,9 @@ export default function MaintenanceFormV2({
                     }
                   }}
                   className={`p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all shrink-0 cursor-pointer ${
-                    isVehicleDropdownOpen ? "rotate-180 text-blue-600 bg-blue-50" : ""
+                    isVehicleDropdownOpen
+                      ? "rotate-180 text-blue-600 bg-blue-50"
+                      : ""
                   }`}
                   title="Toggle vehicle list"
                   aria-label="Toggle vehicle list"
@@ -999,11 +1195,14 @@ export default function MaintenanceFormV2({
                 {loadingVehicles ? (
                   <div className="p-4 text-center text-slate-500 flex items-center justify-center gap-2">
                     <ImSpinner9 className="w-4 h-4 animate-spin text-blue-600" />
-                    <span className="text-xs font-semibold">Loading vehicles...</span>
+                    <span className="text-xs font-semibold">
+                      Loading vehicles...
+                    </span>
                   </div>
                 ) : filteredVehicles.length > 0 ? (
                   filteredVehicles.map((v, index) => {
-                    const isSelected = String(v.id) === String(selectedVehicleId);
+                    const isSelected =
+                      String(v.id) === String(selectedVehicleId);
                     const isHighlighted = index === highlightedVehicleIndex;
                     return (
                       <div
@@ -1014,8 +1213,8 @@ export default function MaintenanceFormV2({
                           isSelected
                             ? "bg-blue-50/80 text-blue-900"
                             : isHighlighted
-                            ? "bg-slate-50 text-slate-900"
-                            : "hover:bg-slate-50 text-slate-800"
+                              ? "bg-slate-50 text-slate-900"
+                              : "hover:bg-slate-50 text-slate-800"
                         }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -1061,7 +1260,8 @@ export default function MaintenanceFormV2({
                       No vehicles found
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      No vehicle matches &ldquo;{vehicleSearchQuery}&rdquo;. Try typing another registration number or model.
+                      No vehicle matches &ldquo;{vehicleSearchQuery}&rdquo;. Try
+                      typing another registration number or model.
                     </p>
                   </div>
                 )}
@@ -1130,75 +1330,105 @@ export default function MaintenanceFormV2({
 
           {/* Location Status & Enable Bar */}
           {locationStatus.resolved ? (
-            <div className="flex items-center justify-between px-3.5 py-2.5 bg-emerald-50/95 border border-emerald-200/90 rounded-2xl text-xs text-emerald-900 shadow-2xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="relative flex h-2.5 w-2.5 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
-                <span className="truncate">
-                  Photo GPS Stamp: <strong className="font-bold text-emerald-950">{locationStatus.address}</strong>
-                </span>
+            <div className="flex items-center justify-between gap-3 px-3.5 py-3 bg-emerald-50/55 border border-emerald-200 rounded-xl shadow-sm">
+              {/* GPS Status & Address */}
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-100 opacity-75 animate-ping" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                    GPS Location
+                  </p>
+                  <p
+                    className="text-xs font-semibold text-emerald-950 truncate"
+                    title={locationStatus.address || "Location unavailable"}
+                  >
+                    {locationStatus.address || "Location unavailable"}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowManualModal(true)}
-                  className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 hover:underline cursor-pointer"
-                  title="Edit or adjust coordinates"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRequestLocation}
-                  className="text-[11px] font-bold text-emerald-700 hover:text-emerald-950 hover:underline cursor-pointer"
-                  title="Refresh GPS from device"
-                >
-                  Refresh
-                </button>
-              </div>
+
+              {/* Refresh Location */}
+              <button
+                type="button"
+                onClick={handleRequestLocation}
+                title="Refresh GPS location"
+                aria-label="Refresh GPS location"
+                className="flex items-center justify-center w-9 h-9 shrink-0 rounded-lg text-emerald-700 hover:bg-emerald-100 hover:text-emerald-950 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              >
+                <FiRefreshCcw className="w-4 h-4" />
+              </button>
             </div>
           ) : locationStatus.loading ? (
             <div className="flex items-center justify-between px-3.5 py-2.5 bg-blue-50/90 border border-blue-200 rounded-2xl text-xs text-blue-900 shadow-2xs">
               <div className="flex items-center gap-2">
                 <ImSpinner9 className="w-3.5 h-3.5 animate-spin text-blue-600 shrink-0" />
-                <span className="font-medium">Acquiring accurate GPS coordinates for photo stamp...</span>
+                <span className="font-medium">
+                  Loading...
+                </span>
               </div>
-              <button
+              {/* <button
                 type="button"
                 onClick={handleSetChemburLocation}
                 className="text-[11px] font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 px-2.5 py-1 rounded-lg shrink-0 cursor-pointer"
               >
                 Use Chembur
-              </button>
+              </button> */}
+            </div>
+          ) : skipWatermark ? (
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-row sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-700 shadow-2xs">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <FiSlash className="w-4 h-4 text-slate-500 shrink-0 " />
+                <div className="min-w-0">
+                  <span className="font-bold block text-slate-900">
+                    GPS Watermark Skipped
+                  </span>
+                  {/* <span className="text-[11px] text-slate-500 block">
+                    Photos will be uploaded without location watermark. You can enable device location anytime.
+                  </span> */}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <button
+                  type="button"
+                  onClick={() => setShowEnableLocationPopup(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
+                >
+                  Enable Location
+                </button>
+              </div>
             </div>
           ) : (
             <div className="p-3.5 bg-amber-50/95 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-2xs">
               <div className="flex items-start gap-2.5 min-w-0">
                 <FiAlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="min-w-0">
-                  <span className="font-bold block">GPS Location needed for photo watermark</span>
-                  <span className="text-[11px] text-amber-800 block">
-                    Tap &ldquo;Enable Location&rdquo; to query device GPS, or use Chembur office coordinates.
+                  <span className="font-bold block">
+                    GPS Location needed for photo watermark
                   </span>
+                  {/* <span className="text-[11px] text-amber-800 block">
+                    Tap &ldquo;Enable&rdquo; to turn on device GPS, or &ldquo;Skip&rdquo; to upload without watermark.
+                  </span> */}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                 <button
                   type="button"
-                  onClick={handleSetChemburLocation}
+                  onClick={handleSkipFromPopup}
                   className="px-3 py-1.5 rounded-xl border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-semibold transition-all cursor-pointer"
-                  title="Quick-set Chembur office coordinates"
+                  title="Upload photos without watermark"
                 >
-                  Use Chembur Office
+                  Skip
                 </button>
                 <button
                   type="button"
-                  onClick={handleRequestLocation}
+                  onClick={() => setShowEnableLocationPopup(true)}
                   className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
                 >
-                  Enable Location
+                  Enable
                 </button>
               </div>
             </div>
@@ -1216,14 +1446,19 @@ export default function MaintenanceFormV2({
             <button
               type="button"
               onClick={() => {
-                if (!locationStatus.resolved) {
-                  handleRequestLocation();
-                } else {
-                  preloadLocation();
+                if (!locationStatus.resolved && !skipWatermark) {
+                  setPendingCaptureType("camera");
+                  setShowEnableLocationPopup(true);
+                  return;
                 }
+                preloadLocation();
                 cameraInputRef.current?.click();
               }}
-              disabled={isSubmitting || isProcessingMedia || attachedFiles.length >= MAX_ATTACHMENTS}
+              disabled={
+                isSubmitting ||
+                isProcessingMedia ||
+                attachedFiles.length >= MAX_ATTACHMENTS
+              }
               className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 text-blue-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
@@ -1246,8 +1481,19 @@ export default function MaintenanceFormV2({
             {/* Button B: Upload File */}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isSubmitting || isProcessingMedia || attachedFiles.length >= MAX_ATTACHMENTS}
+              onClick={() => {
+                if (!locationStatus.resolved && !skipWatermark) {
+                  setPendingCaptureType("file");
+                  setShowEnableLocationPopup(true);
+                  return;
+                }
+                fileInputRef.current?.click();
+              }}
+              disabled={
+                isSubmitting ||
+                isProcessingMedia ||
+                attachedFiles.length >= MAX_ATTACHMENTS
+              }
               className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/100 hover:bg-amber-50/40 text-amber-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="w-12 h-12 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
@@ -1268,7 +1514,10 @@ export default function MaintenanceFormV2({
           {isProcessingMedia && (
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-2.5 text-xs font-semibold text-blue-700 animate-fadeIn">
               <ImSpinner9 className="w-4 h-4 animate-spin text-blue-600 shrink-0" />
-              <span>{mediaProcessingText || "Processing photo with date, time and location..."}</span>
+              <span>
+                {mediaProcessingText ||
+                  "Processing photo with date, time and location..."}
+              </span>
             </div>
           )}
 
@@ -1283,8 +1532,12 @@ export default function MaintenanceFormV2({
           {attachedFiles.length > 0 && (
             <div className="mt-3">
               <div className="flex items-center justify-between text-xs text-slate-600 font-semibold mb-2">
-                <span>Attached Files ({attachedFiles.length}/{MAX_ATTACHMENTS})</span>
-                <span className="text-[11px] text-slate-400">Tap × to remove</span>
+                <span>
+                  Attached Files ({attachedFiles.length}/{MAX_ATTACHMENTS})
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Tap × to remove
+                </span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
@@ -1298,7 +1551,8 @@ export default function MaintenanceFormV2({
                         src={item.previewUrl}
                         alt={item.fileName}
                         onClick={() => {
-                          if (item.previewUrl) window.open(item.previewUrl, "_blank");
+                          if (item.previewUrl)
+                            window.open(item.previewUrl, "_blank");
                         }}
                         title="Click to view full photo"
                         className="w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity"
@@ -1306,7 +1560,9 @@ export default function MaintenanceFormV2({
                     ) : (
                       <div className="flex flex-col items-center justify-center gap-1 text-slate-500">
                         <FiPlay className="w-6 h-6 text-indigo-600" />
-                        <span className="text-[10px] font-bold">Video Clip</span>
+                        <span className="text-[10px] font-bold">
+                          Video Clip
+                        </span>
                       </div>
                     )}
 
@@ -1420,7 +1676,9 @@ export default function MaintenanceFormV2({
                       ? "bg-rose-600 text-white animate-pulse shadow-rose-500/40"
                       : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/25"
                   }`}
-                  title={isListening ? "Stop listening" : "Tap to speak problem"}
+                  title={
+                    isListening ? "Stop listening" : "Tap to speak problem"
+                  }
                 >
                   {isListening ? (
                     <FiMicOff className="w-5 h-5 animate-spin" />
@@ -1494,81 +1752,35 @@ export default function MaintenanceFormV2({
           )}
         </div>
 
-        {/* Permission Help Modal */}
-        {showPermissionModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-            <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
-                <FiAlertCircle className="w-6 h-6" />
-              </div>
-              <div className="text-center">
-                <h3 className="font-bold text-base text-slate-900">
-                  {permissionModalReason === "insecure" ? "HTTPS Required for GPS" : "Location Permission Blocked"}
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  {permissionModalReason === "insecure"
-                    ? "Browsers only permit hardware GPS over secure HTTPS connections. You can instantly use your Chembur office coordinates below."
-                    : "Your browser is currently blocking location access for this site."}
-                </p>
-              </div>
-
-              {permissionModalReason !== "insecure" && (
-                <div className="bg-slate-50 rounded-2xl p-3.5 space-y-2 text-xs text-slate-700">
-                  <div className="flex items-start gap-2">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
-                    <span>Tap the <strong>🔒 Lock</strong> or <strong>⚙️ Settings</strong> icon in your browser address bar.</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
-                    <span>Tap <strong>Site Settings</strong> → <strong>Location</strong> → <strong>Allow</strong>.</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
-                    <span>Return and tap <strong>Try GPS Again</strong>.</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleSetChemburLocation}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
-                >
-                  Use Chembur Office (19.0596° N, 72.8895° E)
-                </button>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowPermissionModal(false)}
-                    className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
-                  >
-                    Close
-                  </button>
-                  {permissionModalReason !== "insecure" && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPermissionModal(false);
-                        handleRequestLocation();
-                      }}
-                      className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer"
-                    >
-                      Try GPS Again
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Enable Location Popup */}
+        <EnableLocationPopup
+          isOpen={showEnableLocationPopup}
+          onClose={() => {
+            setShowEnableLocationPopup(false);
+            setPendingCaptureType(null);
+          }}
+          onEnable={handleEnableFromPopup}
+          onSkip={handleSkipFromPopup}
+          isLoading={locationStatus.loading}
+          isPermissionDenied={locationStatus.error === "denied"}
+          errorMessage={
+            locationStatus.error === "unsupported"
+              ? "Geolocation is not supported by your browser."
+              : locationStatus.error === "unavailable"
+                ? "Unable to retrieve device GPS coordinates."
+                : null
+          }
+          onUseOfficeLocation={handleSetChemburLocation}
+        />
 
         {/* Manual Coordinates Modal */}
         {showManualModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
             <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-base text-slate-900">Set Photo GPS Stamp</h3>
+                <h3 className="font-bold text-base text-slate-900">
+                  Set Photo GPS Stamp
+                </h3>
                 <button
                   type="button"
                   onClick={() => setShowManualModal(false)}
@@ -1580,31 +1792,52 @@ export default function MaintenanceFormV2({
 
               <div className="space-y-3 text-xs">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Latitude</label>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Latitude
+                  </label>
                   <input
                     type="text"
                     value={manualCoordsInput.lat}
-                    onChange={(e) => setManualCoordsInput({ ...manualCoordsInput, lat: e.target.value })}
+                    onChange={(e) =>
+                      setManualCoordsInput({
+                        ...manualCoordsInput,
+                        lat: e.target.value,
+                      })
+                    }
                     className="w-full p-2.5 border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-blue-500"
                     placeholder="e.g. 19.0596"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Longitude</label>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Longitude
+                  </label>
                   <input
                     type="text"
                     value={manualCoordsInput.lng}
-                    onChange={(e) => setManualCoordsInput({ ...manualCoordsInput, lng: e.target.value })}
+                    onChange={(e) =>
+                      setManualCoordsInput({
+                        ...manualCoordsInput,
+                        lng: e.target.value,
+                      })
+                    }
                     className="w-full p-2.5 border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-blue-500"
                     placeholder="e.g. 72.8895"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Location Name / Suburb</label>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Location Name / Suburb
+                  </label>
                   <input
                     type="text"
                     value={manualCoordsInput.area}
-                    onChange={(e) => setManualCoordsInput({ ...manualCoordsInput, area: e.target.value })}
+                    onChange={(e) =>
+                      setManualCoordsInput({
+                        ...manualCoordsInput,
+                        area: e.target.value,
+                      })
+                    }
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500"
                     placeholder="e.g. Chembur, Mumbai"
                   />
@@ -1612,13 +1845,13 @@ export default function MaintenanceFormV2({
               </div>
 
               <div className="flex gap-2 pt-2">
-                <button
+                {/* <button
                   type="button"
                   onClick={handleSetChemburLocation}
                   className="flex-1 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
                 >
                   Reset Chembur
-                </button>
+                </button> */}
                 <button
                   type="button"
                   onClick={handleSaveManualCoords}
@@ -1634,4 +1867,3 @@ export default function MaintenanceFormV2({
     </div>
   );
 }
-
