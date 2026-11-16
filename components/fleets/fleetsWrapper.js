@@ -261,10 +261,10 @@ export default function FleetsWrapper({ pageData }) {
               type="button"
               onClick={() => setStatusFilter(card.filter)}
               aria-pressed={isActive}
-              className={`w-full text-left bg-white rounded-2xl p-2 md:p-5 border transition-all duration-200 shadow-2xs hover:shadow-md focus-visible:outline-none overflow-hidden focus-visible:ring-2 focus-visible:ring-offset-2 ${
+              className={`w-full text-left  rounded-2xl p-2 md:p-3 border transition-all duration-200 shadow-2xs hover:shadow-md focus-visible:outline-none overflow-hidden focus-visible:ring-2 focus-visible:ring-offset-2 ${
                 isActive
-                  ? `${colors.active} ring-2`
-                  : "border-slate-200/80 hover:border-slate-300"
+                  ? `${colors.active} ring-2 bg-gray-50`
+                  : "border-slate-200/80 hover:border-slate-300 bg-white"
               }`}
             >
               <div className="flex items-center justify-between gap-2">
