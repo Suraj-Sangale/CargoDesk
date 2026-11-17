@@ -8,7 +8,12 @@ export const database = mysql({
     user: process.env.MYSQL_USER || process.env.DB_USER || process.env.DB_USERNAME || "root",
     password: process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || "",
     timezone: "IST",
+    connectTimeout: 10000,
+    waitForConnections: true,
+    connectionLimit: 10,
   },
+  maxRetries: 2,
+  zombieMaxTimeout: 30,
 });
 
 export default function executeQuery(query, values = []) {

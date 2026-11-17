@@ -65,6 +65,12 @@ export function FleetDriverProvider({
 
   // Sync SSR data when available from pageProps, or fetch on initial mount once
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+      if (path === "/login" || path === "/reset-password" || path.startsWith("/auth")) {
+        return;
+      }
+    }
     if (initialFleets && initialFleets.length > 0) {
       setFleets(initialFleets);
       hasFetchedFleets.current = true;
@@ -75,6 +81,12 @@ export function FleetDriverProvider({
   }, [initialFleets, refreshFleets]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+      if (path === "/login" || path === "/reset-password" || path.startsWith("/auth")) {
+        return;
+      }
+    }
     if (initialDrivers && initialDrivers.length > 0) {
       setDrivers(initialDrivers);
       hasFetchedDrivers.current = true;

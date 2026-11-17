@@ -2,6 +2,18 @@ import { requireValidUser } from "@/utilities/authServer";
 import executeQuery from "@/helpers/dbConnection";
 import { getModuleIdFromPath, ALL_MODULE_IDS } from "@/utilities/organizationModules";
 
+// Fast in-memory cache to prevent redundant remote DB round-trips on every page navigation
+const orgCache = new Map();
+const ORG_CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+
+export function invalidateOrgSsrCache(orgId) {
+  if (orgId) {
+    orgCache.delete(Number(orgId));
+  } else {
+    orgCache.clear();
+  }
+}
+
 /**
  * Higher-order function for getServerSideProps that automatically enforces authentication,
  * extracts the verified user, loads organization module access, restricts blocked modules,
@@ -49,13 +61,27 @@ export function withUserSsr(handler, options = {}) {
     // For non-superadmin users with an assigned organization, check organization module permissions
     if (!isSuperAdmin && user?.orgId) {
       try {
-        const orgRows = await executeQuery(
-          "SELECT orgId, orgName, allowedModules, status FROM organizations WHERE orgId = ?",
-          [user.orgId]
-        );
+        const numericOrgId = Number(user.orgId);
+        const cached = orgCache.get(numericOrgId);
+        let org = null;
 
-        if (orgRows && orgRows.length > 0) {
-          const org = orgRows[0];
+        if (cached && cached.expiresAt > Date.now()) {
+          org = cached.data;
+        } else {
+          const orgRows = await executeQuery(
+            "SELECT orgId, orgName, allowedModules, status FROM organizations WHERE orgId = ?",
+            [numericOrgId]
+          );
+          if (orgRows && orgRows.length > 0) {
+            org = orgRows[0];
+            orgCache.set(numericOrgId, {
+              data: org,
+              expiresAt: Date.now() + ORG_CACHE_TTL_MS,
+            });
+          }
+        }
+
+        if (org) {
           user.orgName = org.orgName;
 
           let parsedModules = null;
