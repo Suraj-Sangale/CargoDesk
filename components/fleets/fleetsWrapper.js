@@ -4,7 +4,7 @@ import DocumentTable from "../common/tabels/documentTable";
 import CommonModal from "../common/commonModal";
 import FleetForm from "./fleetForm";
 import { fleetTableHeadCells } from "@/utilities/masterData";
-import { postApiData } from "@/utilities/services/apiService";
+import { postApiData, swrPostApiData } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
 import { useFleetDriver } from "@/context/fleetDriverContext";
 import { getConstant } from "@/utilities/utils";
@@ -51,11 +51,18 @@ export default function FleetsWrapper({ pageData }) {
     }
   }, [contextFleets]);
 
-  // Fetch fleets if not provided via SSR or context
+  // Fetch fleets if not provided via SSR or context (uses SWR caching)
   useEffect(() => {
     if (!pageData?.fleets && (!contextFleets || contextFleets.length === 0)) {
       setIsLoading(true);
-      postApiData("GET_ALL_FLEETS")
+      swrPostApiData("GET_ALL_FLEETS", {}, {
+        ttl: 60000,
+        onRevalidate: (freshRes) => {
+          if (freshRes?.status && Array.isArray(freshRes.data)) {
+            setFleetList(freshRes.data);
+          }
+        },
+      })
         .then((res) => {
           if (res?.status && Array.isArray(res.data)) {
             setFleetList(res.data);

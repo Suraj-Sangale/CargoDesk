@@ -5,7 +5,7 @@ import CommonModal from "../common/commonModal";
 import DriverForm from "./driverForm";
 import DriverDocumentsViewer from "./driverDocumentsViewer";
 import { driverTableHeadCells } from "@/utilities/masterData";
-import { postApiData } from "@/utilities/services/apiService";
+import { postApiData, swrPostApiData } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
 import { useFleetDriver } from "@/context/fleetDriverContext";
 import {
@@ -48,11 +48,18 @@ export default function DriversWrapper({ pageData }) {
     }
   }, [contextDrivers]);
 
-  // Fetch drivers if not provided via SSR or context
+  // Fetch drivers if not provided via SSR or context (uses SWR caching)
   useEffect(() => {
     if (!pageData?.drivers && (!contextDrivers || contextDrivers.length === 0)) {
       setIsLoading(true);
-      postApiData("GET_ALL_DRIVERS")
+      swrPostApiData("GET_ALL_DRIVERS", {}, {
+        ttl: 60000,
+        onRevalidate: (freshRes) => {
+          if (freshRes?.status && Array.isArray(freshRes.data)) {
+            setDriverList(freshRes.data);
+          }
+        },
+      })
         .then((res) => {
           if (res?.status && Array.isArray(res.data)) {
             setDriverList(res.data);

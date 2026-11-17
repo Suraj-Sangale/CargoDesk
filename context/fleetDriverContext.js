@@ -5,7 +5,11 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
-import { postApiData } from "@/utilities/services/apiService";
+import {
+  postApiData,
+  swrPostApiData,
+  invalidateApiCache,
+} from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
 import CommonModal from "@/components/common/commonModal";
 import CommonConfirmation from "@/components/common/items/commonConfirmation";
@@ -22,10 +26,18 @@ export function FleetDriverProvider({
   const [isLoading, setIsLoading] = useState(false);
   const [logoutModal, setLogoutModal] = useState(false);
 
-  // Fetch fleets from backend API
-  const refreshFleets = useCallback(async () => {
+  // Fetch fleets from backend API with SWR caching (0 ms instant response + silent revalidation)
+  const refreshFleets = useCallback(async (force = false) => {
     try {
-      const res = await postApiData("GET_ALL_FLEETS");
+      const res = await swrPostApiData("GET_ALL_FLEETS", {}, {
+        force,
+        ttl: 60000,
+        onRevalidate: (freshRes) => {
+          if (freshRes?.status && Array.isArray(freshRes.data)) {
+            setFleets(freshRes.data);
+          }
+        },
+      });
       if (res?.status && Array.isArray(res.data)) {
         setFleets(res.data);
         return res.data;
@@ -36,10 +48,18 @@ export function FleetDriverProvider({
     return [];
   }, []);
 
-  // Fetch drivers from backend API
-  const refreshDrivers = useCallback(async () => {
+  // Fetch drivers from backend API with SWR caching (0 ms instant response + silent revalidation)
+  const refreshDrivers = useCallback(async (force = false) => {
     try {
-      const res = await postApiData("GET_ALL_DRIVERS");
+      const res = await swrPostApiData("GET_ALL_DRIVERS", {}, {
+        force,
+        ttl: 60000,
+        onRevalidate: (freshRes) => {
+          if (freshRes?.status && Array.isArray(freshRes.data)) {
+            setDrivers(freshRes.data);
+          }
+        },
+      });
       if (res?.status && Array.isArray(res.data)) {
         setDrivers(res.data);
         return res.data;
@@ -50,11 +70,11 @@ export function FleetDriverProvider({
     return [];
   }, []);
 
-  // Refresh both datasets concurrently
-  const refreshAll = useCallback(async () => {
+  // Refresh both datasets concurrently (supports force refresh)
+  const refreshAll = useCallback(async (force = true) => {
     setIsLoading(true);
     try {
-      await Promise.all([refreshFleets(), refreshDrivers()]);
+      await Promise.all([refreshFleets(force), refreshDrivers(force)]);
     } finally {
       setIsLoading(false);
     }
@@ -177,8 +197,8 @@ export function FleetDriverProvider({
             response.message || "Driver assigned successfully",
             "success",
           );
-          // Refresh both datasets to ensure complete synchronization
-          await Promise.all([refreshFleets(), refreshDrivers()]);
+          // Force fresh fetch for both datasets to ensure complete synchronization
+          await Promise.all([refreshFleets(true), refreshDrivers(true)]);
           return { status: true, data: response.data };
         } else {
           showToast(response?.message || "Failed to assign driver", "error");
@@ -210,7 +230,7 @@ export function FleetDriverProvider({
             response.message || "Assignment removed successfully",
             "success",
           );
-          await Promise.all([refreshFleets(), refreshDrivers()]);
+          await Promise.all([refreshFleets(true), refreshDrivers(true)]);
           return { status: true };
         } else {
           showToast(
@@ -259,6 +279,7 @@ export function FleetDriverProvider({
     getAssignedFleet,
     getAvailableDrivers,
     getAvailableFleets,
+    invalidateCache: invalidateApiCache,
     toggleLogoutModal,
   };
 

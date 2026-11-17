@@ -41,12 +41,32 @@ export default async function handler(req, res) {
     return res.status(403).json({ status: false, message: "Unauthorized storage path." });
   }
 
-  try {
-    // Generate fresh signed GET URL valid for 1 hour (3600 seconds)
-    const signedUrl = await generateSignedGetUrl(s3Key, 3600);
+  // 1. Direct CDN / Custom Domain Bypass:
+  // If a public CDN (CloudFront / Cloudflare CDN / custom domain) is configured,
+  // permanently redirect (HTTP 308) to the edge domain with immutable caching.
+  const customDomain = process.env.NEXT_PUBLIC_S3_CUSTOM_DOMAIN || process.env.S3_PUBLIC_DOMAIN;
+  if (customDomain && customDomain.trim() !== "") {
+    const cleanDomain = customDomain.trim().replace(/\/+$/, "");
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=604800, s-maxage=2592000, stale-while-revalidate=2592000"
+    );
+    res.setHeader("CDN-Cache-Control", "public, max-age=2592000");
+    return res.redirect(308, `${cleanDomain}/${s3Key}`);
+  }
 
-    // Browser cache control: cache redirect for 30 minutes
-    res.setHeader("Cache-Control", "public, max-age=1800, stale-while-revalidate=86400");
+  try {
+    // Generate fresh signed GET URL valid for 2 hours (7200 seconds)
+    const signedUrl = await generateSignedGetUrl(s3Key, 7200);
+
+    // Browser and Edge CDN cache control:
+    // Browser caches for 24 hours; CDN edge (Cloudflare/CloudFront/Vercel) caches for 7 days.
+    // Stale-while-revalidate serves instantly while renewing in the background.
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=86400, s-maxage=604800, stale-while-revalidate=2592000"
+    );
+    res.setHeader("CDN-Cache-Control", "public, max-age=604800");
 
     // Redirect browser to authorized S3 URL
     return res.redirect(307, signedUrl);
