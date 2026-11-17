@@ -34,7 +34,16 @@ export async function ensureUsersTable() {
       } catch (_) {}
     }
 
-    // 4. Ensure suraj@agnibyte.com has role = 'super_admin'
+    // 4. Ensure index on orgId for fast multi-tenant lookups
+    try {
+      const idxRows = await executeQuery("SHOW INDEX FROM users");
+      const existingIndexes = new Set((idxRows || []).map((i) => i.Key_name));
+      if (!existingIndexes.has("idx_users_orgId")) {
+        await executeQuery("CREATE INDEX idx_users_orgId ON users(orgId)");
+      }
+    } catch (_) {}
+
+    // 5. Ensure suraj@agnibyte.com has role = 'super_admin'
     try {
       await executeQuery(
         "UPDATE users SET role = 'super_admin' WHERE email = 'suraj@agnibyte.com' OR userId = 2"

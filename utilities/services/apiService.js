@@ -1,9 +1,117 @@
 import { apiList } from "@/utilities/apiList";
 import getConfig from "next/config";
 
-const { publicRuntimeConfig } = getConfig();
+const nextConfig = getConfig();
+const publicRuntimeConfig = nextConfig?.publicRuntimeConfig || {};
 
 let isRedirectingUnauthorized = false;
+
+// Client-side in-memory SWR cache store: Map<cacheKey, { data, timestamp, inFlightPromise }>
+const clientApiCache = new Map();
+const cacheSubscribers = new Map(); // key -> Set<callback>
+
+// Mutation mapping to target query invalidations
+const MUTATION_INVALIDATION_RULES = {
+  // Drivers
+  ADD_NEW_DRIVER: ["GET_ALL_DRIVERS", "GET_AVAILABLE_DRIVERS"],
+  UPDATE_DRIVER: ["GET_ALL_DRIVERS", "GET_AVAILABLE_DRIVERS"],
+  DELETE_DRIVERS: ["GET_ALL_DRIVERS", "GET_AVAILABLE_DRIVERS"],
+  DELETE_DRIVER_DOCUMENT: ["GET_ALL_DRIVERS"],
+
+  // Fleets
+  ADD_NEW_FLEET: ["GET_ALL_FLEETS", "GET_VEHICLES_LIST", "GET_AVAILABLE_FLEETS"],
+  UPDATE_FLEET: ["GET_ALL_FLEETS", "GET_VEHICLES_LIST", "GET_AVAILABLE_FLEETS", "GET_FLEET_BY_ID"],
+  DELETE_FLEETS: ["GET_ALL_FLEETS", "GET_VEHICLES_LIST", "GET_AVAILABLE_FLEETS"],
+
+  // Fleet-Driver Assignment
+  ASSIGN_FLEET_DRIVER: ["GET_ALL_FLEETS", "GET_ALL_DRIVERS", "GET_VEHICLES_LIST"],
+  REMOVE_FLEET_DRIVER: ["GET_ALL_FLEETS", "GET_ALL_DRIVERS", "GET_VEHICLES_LIST"],
+
+  // Maintenance & History
+  ADD_NEW_MAINTENANCE: ["GET_VEHICLE_MAINTENANCE", "GET_FLEET_HISTORY", "GET_VEHICLES_LIST"],
+  CREATE_MAINTENANCE_RECORD: ["GET_VEHICLE_MAINTENANCE", "GET_FLEET_HISTORY", "GET_VEHICLES_LIST"],
+  LOG_FLEET_ACTIVITY: ["GET_FLEET_HISTORY", "GET_ALL_FLEETS"],
+};
+
+export function getCacheKey(action, payload = {}) {
+  try {
+    return `${action}:${JSON.stringify(payload || {})}`;
+  } catch (_) {
+    return `${action}`;
+  }
+}
+
+/**
+ * Invalidate client-side API cache by action name, substring pattern, or clear all.
+ */
+export function invalidateApiCache(targetPattern = null) {
+  if (!targetPattern) {
+    clientApiCache.clear();
+    return;
+  }
+  const needle = String(targetPattern).toUpperCase();
+  for (const key of clientApiCache.keys()) {
+    if (key.toUpperCase().includes(needle)) {
+      clientApiCache.delete(key);
+    }
+  }
+}
+
+/**
+ * Subscribe to cache updates for a given cache key.
+ */
+export function subscribeApiCache(cacheKey, callback) {
+  if (!cacheSubscribers.has(cacheKey)) {
+    cacheSubscribers.set(cacheKey, new Set());
+  }
+  cacheSubscribers.get(cacheKey).add(callback);
+  return () => {
+    const set = cacheSubscribers.get(cacheKey);
+    if (set) {
+      set.delete(callback);
+      if (set.size === 0) cacheSubscribers.delete(cacheKey);
+    }
+  };
+}
+
+function notifyCacheSubscribers(cacheKey, freshData) {
+  const subscribers = cacheSubscribers.get(cacheKey);
+  if (subscribers) {
+    for (const cb of subscribers) {
+      try {
+        cb(freshData);
+      } catch (err) {
+        console.error("Error in cache subscriber:", err);
+      }
+    }
+  }
+}
+
+// Window focus & tab visibility listener for silent stale cache revalidation
+if (typeof window !== "undefined") {
+  const handleFocusRevalidate = () => {
+    const now = Date.now();
+    for (const [key, entry] of clientApiCache.entries()) {
+      // If entry has active subscribers and is older than 45 seconds, revalidate quietly
+      if (entry?.data && cacheSubscribers.has(key) && now - entry.timestamp > 45000) {
+        const colonIdx = key.indexOf(":");
+        const action = colonIdx > -1 ? key.slice(0, colonIdx) : key;
+        const rawPayload = colonIdx > -1 ? key.slice(colonIdx + 1) : "{}";
+        try {
+          const payload = JSON.parse(rawPayload);
+          swrPostApiData(action, payload, { force: true });
+        } catch (_) {}
+      }
+    }
+  };
+
+  window.addEventListener("focus", handleFocusRevalidate, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      handleFocusRevalidate();
+    }
+  }, { passive: true });
+}
 
 function handleUnauthorizedClient() {
   if (typeof window === "undefined" || isRedirectingUnauthorized) return;
@@ -93,6 +201,13 @@ export function postApiData(action, payload = {}) {
           }
           try {
             const data = await response.json();
+            if (data && data.status) {
+              // Auto-invalidate read caches affected by this mutation
+              const invalidations = MUTATION_INVALIDATION_RULES[action];
+              if (invalidations && invalidations.length > 0) {
+                invalidations.forEach((target) => invalidateApiCache(target));
+              }
+            }
             resolve(data);
           } catch (_) {
             resolve({
@@ -111,6 +226,94 @@ export function postApiData(action, payload = {}) {
       });
     }
   });
+}
+
+/**
+ * Stale-While-Revalidate (SWR) Client API Caller:
+ * - Instant in-memory cache return (0 ms UI delay)
+ * - Background network revalidation when stale
+ * - In-flight request deduplication
+ * - Custom subscriber / callback notification
+ *
+ * @param {string} action - Action name from apiList
+ * @param {object} payload - API payload
+ * @param {object} options - SWR options { ttl: 60000, force: false, onRevalidate: fn }
+ */
+export async function swrPostApiData(action, payload = {}, options = {}) {
+  const { ttl = 60000, force = false, onRevalidate = null } = options;
+  const cacheKey = getCacheKey(action, payload);
+  const now = Date.now();
+  const cached = clientApiCache.get(cacheKey);
+
+  const fetchFreshData = async () => {
+    // Reuse in-flight promise to prevent duplicate concurrent network calls
+    if (cached?.inFlightPromise) {
+      return cached.inFlightPromise;
+    }
+
+    const inFlightPromise = postApiData(action, payload)
+      .then((res) => {
+        if (res && res.status) {
+          const entry = {
+            data: res,
+            timestamp: Date.now(),
+            inFlightPromise: null,
+          };
+          clientApiCache.set(cacheKey, entry);
+          notifyCacheSubscribers(cacheKey, res);
+          if (typeof onRevalidate === "function") {
+            try {
+              onRevalidate(res);
+            } catch (err) {
+              console.error("Error in onRevalidate:", err);
+            }
+          }
+        } else {
+          if (cached) cached.inFlightPromise = null;
+        }
+        return res;
+      })
+      .catch((err) => {
+        if (cached) cached.inFlightPromise = null;
+        throw err;
+      });
+
+    if (cached) {
+      cached.inFlightPromise = inFlightPromise;
+    } else {
+      clientApiCache.set(cacheKey, {
+        data: null,
+        timestamp: 0,
+        inFlightPromise,
+      });
+    }
+
+    return inFlightPromise;
+  };
+
+  // 1. Force refresh requested (e.g. user manually refreshed, or right after mutation)
+  if (force) {
+    return await fetchFreshData();
+  }
+
+  // 2. Cache Hit: Return cached data instantly (0 ms)
+  if (cached && cached.data) {
+    const isStale = now - cached.timestamp > ttl;
+    if (isStale) {
+      // Trigger background revalidation quietly without blocking the caller
+      fetchFreshData().catch((err) =>
+        console.warn(`Background revalidation failed for ${action}:`, err)
+      );
+    }
+    return cached.data;
+  }
+
+  // 3. Cache Miss or In-Flight: Await fresh data
+  if (cached?.inFlightPromise) {
+    return await cached.inFlightPromise;
+  }
+
+  return await fetchFreshData();
 }
 
 // POST API call to NodeJs API
@@ -356,20 +559,33 @@ export function resolveMediaUrl(urlOrKey) {
   let raw = decodeURIComponent(urlOrKey).trim();
   if (raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
 
+  const customDomain =
+    process.env.NEXT_PUBLIC_S3_CUSTOM_DOMAIN ||
+    publicRuntimeConfig?.NEXT_PUBLIC_S3_CUSTOM_DOMAIN;
+  const cdnBase = customDomain ? customDomain.trim().replace(/\/+$/, "") : "";
+
   // 1. If it's already a proxy view URL: e.g. /api/media/view?key=drivers/...
   if (raw.includes("/api/media/view") && raw.includes("key=")) {
     try {
       const parsed = new URL(raw, "http://localhost");
       const k = parsed.searchParams.get("key");
-      if (k) return `/api/media/view?key=${encodeURIComponent(decodeURIComponent(k).trim())}`;
+      if (k) {
+        const cleanK = decodeURIComponent(k).trim().replace(/^\/+/, "");
+        if (cdnBase) return `${cdnBase}/${cleanK}`;
+        return `/api/media/view?key=${encodeURIComponent(cleanK)}`;
+      }
     } catch (_) {}
     return raw;
   }
 
   // 2. If key contains a known prefix anywhere in path, match from that prefix
-  const prefixMatch = raw.match(/(drivers\/[^\s?#]+|fleet\/[^\s?#]+|documents\/[^\s?#]+|uploads\/[^\s?#]+)/i);
+  const prefixMatch = raw.match(
+    /(drivers\/[^\s?#]+|fleet\/[^\s?#]+|documents\/[^\s?#]+|uploads\/[^\s?#]+)/i
+  );
   if (prefixMatch && prefixMatch[1]) {
-    return `/api/media/view?key=${encodeURIComponent(prefixMatch[1].replace(/^\/+/, ""))}`;
+    const cleanK = prefixMatch[1].replace(/^\/+/, "");
+    if (cdnBase) return `${cdnBase}/${cleanK}`;
+    return `/api/media/view?key=${encodeURIComponent(cleanK)}`;
   }
 
   // 3. If it's a full URL, parse path
@@ -378,6 +594,7 @@ export function resolveMediaUrl(urlOrKey) {
       const urlObj = new URL(raw);
       const cleanPath = urlObj.pathname.replace(/^\/+/, "").split("?")[0];
       if (cleanPath) {
+        if (cdnBase) return `${cdnBase}/${cleanPath}`;
         return `/api/media/view?key=${encodeURIComponent(cleanPath)}`;
       }
     } catch (_) {}
