@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import moment from "moment";
+import { formatIndiaDateTime } from "@/utilities/timeUtils";
 import {
   FiClock,
   FiUser,
@@ -43,9 +44,7 @@ export default function ActivityDetailModal({ activity, isOpen, onClose }) {
   } = activity || {};
 
   const rawTimestamp = performedAt || activity?.createdAt;
-  const formattedDate = rawTimestamp
-    ? moment.utc(rawTimestamp).local().format("DD MMM YYYY, hh:mm A")
-    : "N/A";
+  const formattedDate = formatIndiaDateTime(rawTimestamp, "N/A");
 
   // Determine if this activity is related to fleet maintenance
   const isMaintenanceActivity =

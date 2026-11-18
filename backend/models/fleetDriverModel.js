@@ -2,6 +2,7 @@ import executeQuery, { executeTransaction } from "@/helpers/dbConnection";
 import { ensureDriverTable } from "./driverModel";
 import { ensureFleetTable } from "./fleetModel";
 import { logFleetActivity } from "./fleetActivityModel";
+import { invalidateCachePattern } from "@/helpers/cacheService";
 
 /**
  * Assign a driver to a fleet vehicle.
@@ -69,6 +70,10 @@ export function assignDriverToFleetModel(fleetId, driverId) {
         source: "driver",
         metadata: { driver_name: driver.driver_name, vehicle_number: fleet.vehicle_number },
       });
+
+      // Invalidate driver and fleet caches across all tenants
+      await invalidateCachePattern("cargodesk:org:*:drivers:*");
+      await invalidateCachePattern("cargodesk:org:*:fleets:*");
 
       resolve({
         status: true,
@@ -155,6 +160,10 @@ export function removeDriverFromFleetModel({ driverId, fleetId }) {
           metadata: { driver_name: driverName, vehicle_number: vehicleNo },
         });
       }
+
+      // Invalidate driver and fleet caches across all tenants
+      await invalidateCachePattern("cargodesk:org:*:drivers:*");
+      await invalidateCachePattern("cargodesk:org:*:fleets:*");
 
       resolve({
         status: true,

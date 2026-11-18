@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Head from "next/head";
 import moment from "moment";
+import { formatIndiaDateTime, getIndiaISOString } from "@/utilities/timeUtils";
 import MaintenanceFormV2 from "@/components/fleetMaintenance/maintenanceFormV2";
 import { withUserSsr } from "@/utilities/withUserSsr";
 import { postApiData } from "@/utilities/services/apiService";
@@ -33,7 +34,6 @@ export default function MaintenanceSupervisorPage({ pageData }) {
   const [showRecent, setShowRecent] = useState(false);
   const [lastSubmittedRecord, setLastSubmittedRecord] = useState(null);
 
-
   const { toggleLogoutModal } = useFleetDriver() || {};
 
   // Fetch latest 5 maintenance records
@@ -56,9 +56,31 @@ export default function MaintenanceSupervisorPage({ pageData }) {
   }, [fetchRecentRecords]);
 
   // Handle successful maintenance record submission
-  const handleRecordSuccess = (record) => {
+  const handleRecordSuccess = (record, ctx = {}) => {
     setLastSubmittedRecord(record);
-    fetchRecentRecords();
+
+    // Fallback: if the API didn't return an id, we can't build a reliable row
+    // if (!record?.id) {
+    //   fetchRecentRecords();
+    //   return;
+    // }
+
+    const newItem = {
+      ...record,
+      vehicle_number: record.vehicle_number ?? ctx.vehicle?.vehicle_number,
+      vehicle_model:
+        record.vehicle_model ??
+        ctx.vehicle?.vehicle_model ??
+        ctx.vehicle?.vehicle_type,
+      description: record.description ?? ctx.description,
+      media_count: record.media_count ?? ctx.mediaCount ?? 0,
+      status: record.status ?? "Reported",
+      created_at: record.created_at ?? getIndiaISOString(),
+    };
+
+    setRecentRecords((prev) =>
+      [newItem, ...prev.filter((r) => r.id !== newItem.id)].slice(0, 5),
+    );
   };
 
   const getStatusBadge = (status) => {
@@ -288,9 +310,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                         <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/50">
                           <span className="flex items-center gap-1">
                             <FiClock className="w-3 h-3 text-slate-400" />
-                            {moment(
-                              item.created_at || item.maintenance_date,
-                            ).format("DD MMM YYYY, hh:mm A")}
+                            {formatIndiaDateTime(item.created_at || item.maintenance_date)}
                           </span>
 
                           <div className="flex items-center gap-2">

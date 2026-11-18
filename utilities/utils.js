@@ -1,6 +1,7 @@
 import { constantsList } from "@/constants";
 import moment from "moment";
 import { DOCUMENTS_TYPE_LIST } from "./dummyData";
+export * from "./timeUtils";
 const crypto = require("crypto");
 import jwt from "jsonwebtoken";
 import { parseCookies } from "nookies";
