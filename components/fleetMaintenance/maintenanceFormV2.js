@@ -52,15 +52,17 @@ const SUPPORTED_LANGUAGES = [
 ];
 
 const QUICK_PROBLEM_CHIPS = [
-  { label: "🚨 Breakdown", text: "Vehicle breakdown / stopped on road" },
-  {
-    label: "🛑 Brake Issue",
-    text: "Brakes not working properly / strange noise",
-  },
-  { label: "🛞 Flat Tyre", text: "Tyre puncture / flat tyre" },
-  { label: "💧 Oil Leak", text: "Engine oil or coolant leakage" },
-  { label: "🔋 Battery Dead", text: "Battery dead / vehicle not starting" },
-  { label: "⚠️ Engine Smoke", text: "Engine overheating / smoke from hood" },
+  { label: "🚨 Breakdown",        type: "Breakdown",              text: "Vehicle breakdown / stopped on road" },
+  { label: "💥 Accident",         type: "Accident Damage",        text: "Accident / body damage to vehicle" },
+  { label: "🛑 Brake Issue",      type: "Brake Repair",           text: "Brakes not working properly / strange noise" },
+  { label: "🛞 Flat Tyre",        type: "Tyre Replacement",       text: "Tyre puncture / flat tyre" },
+  { label: "💧 Oil Leak",         type: "Oil & Filter Change",    text: "Engine oil or coolant leakage" },
+  { label: "🔋 Battery Dead",     type: "Battery Replacement",    text: "Battery dead / vehicle not starting" },
+  { label: "⚠️ Engine Smoke",     type: "Engine Repair",          text: "Engine overheating / smoke from hood" },
+  { label: "⚡ Electrical",       type: "Electrical Issue",       text: "Lights, horn, wiring or electrical not working" },
+  { label: "🔧 Suspension",       type: "Suspension & Steering",  text: "Steering heavy / suspension noise / vehicle pulling to one side" },
+  { label: "🛠️ Regular Service",  type: "Regular Service",        text: "Routine service due" },
+  { label: "📝 Other",            type: "Other",                  text: "Other problem (details below)" },
 ];
 
 /**
@@ -1293,7 +1295,7 @@ export default function MaintenanceFormV2({
           </div>
 
         {/* Maintenance Category (Type) */}
-        <div className="w-full mt-5">
+        {/* <div className="w-full mt-5">
           <FloatingSelect
             id="maintenance_type"
             label="Maintenance Category"
@@ -1313,7 +1315,7 @@ export default function MaintenanceFormV2({
               if (formError) setFormError(null);
             }}
           />
-        </div>
+        </div> */}
 
         {/* Selected vehicle preview pill or guidance text */}
           {/* {selectedVehicle && (
@@ -1374,10 +1376,7 @@ export default function MaintenanceFormV2({
             }}
           />
 
-          {/* Location Status & Enable Bar */}
-          {locationStatus.resolved ? (
-            <div className="flex items-center justify-between gap-3 px-3.5 py-3 bg-emerald-50/55 border border-emerald-200 rounded-xl shadow-sm">
-              {/* GPS Status & Address */}
+          {/* Location Status & Enable Bar <div className="flex items-center justify-between gap-3 px-3.5 py-3 bg-emerald-50/55 border border-emerald-200 rounded-xl shadow-sm">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="relative flex h-2.5 w-2.5 shrink-0">
                   <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-100 opacity-75 animate-ping" />
@@ -1397,7 +1396,6 @@ export default function MaintenanceFormV2({
                 </div>
               </div>
 
-              {/* Refresh Location */}
               <button
                 type="button"
                 onClick={handleRequestLocation}
@@ -1407,7 +1405,9 @@ export default function MaintenanceFormV2({
               >
                 <FiRefreshCcw className="w-4 h-4" />
               </button>
-            </div>
+            </div> */}
+          {locationStatus.resolved ? (
+            null
           ) : locationStatus.loading ? (
             <div className="flex items-center justify-between px-3.5 py-2.5 bg-blue-50/90 border border-blue-200 rounded-2xl text-xs text-blue-900 shadow-2xs">
               <div className="flex items-center gap-2">
@@ -1666,7 +1666,7 @@ export default function MaintenanceFormV2({
           </div>
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none my-3">
+          <div className="flex items-center gap-2 overflow-x-auto pt-2 pb-3 scrollbar-none my-3">
             {QUICK_PROBLEM_CHIPS.map((chip, idx) => (
               <button
                 key={idx}
