@@ -13,9 +13,6 @@ import {
   uploadMediaFile,
   compressImageFile,
 } from "@/utilities/services/apiService";
-import moment from "moment";
-import { getIndiaDateString, getIndiaISOString } from "@/utilities/timeUtils";
-import { FLEET_MAINTENANCE_TYPES } from "@/utilities/masterData";
 import {
   watermarkCapturedPhoto,
   preloadLocation,
@@ -140,18 +137,6 @@ export default function MaintenanceFormV2({
   const [highlightedVehicleIndex, setHighlightedVehicleIndex] = useState(0);
   const vehicleDropdownRef = useRef(null);
   const vehicleInputRef = useRef(null);
-
-  // 1b. Maintenance Category (Type) State
-  const [maintenanceType, setMaintenanceType] = useState(
-    initialData?.maintenance_type || FLEET_MAINTENANCE_TYPES[0],
-  );
-
-  // Sync maintenanceType when initialData changes
-  useEffect(() => {
-    if (initialData?.maintenance_type) {
-      setMaintenanceType(initialData.maintenance_type);
-    }
-  }, [initialData?.maintenance_type]);
 
   // 2. Problem Description & Voice State
   const [problemDescription, setProblemDescription] = useState(
@@ -895,22 +880,15 @@ export default function MaintenanceFormV2({
   };
 
   // Quick problem chip click handler
-  const handleChipClick = (chip) => {
-    const text = typeof chip === "object" ? chip.text : chip;
+  const handleChipClick = (chipText) => {
     setProblemDescription((prev) => {
       let next;
-      if (!prev || prev.trim() === "") next = text;
-      else if (prev.includes(text)) next = prev;
-      else next = `${prev.trim()}, ${text}`;
+      if (!prev || prev.trim() === "") next = chipText;
+      else if (prev.includes(chipText)) next = prev;
+      else next = `${prev.trim()}, ${chipText}`;
       speechBaseTextRef.current = next;
       return next;
     });
-
-    // Auto-select corresponding maintenance category directly from chip.type
-    if (typeof chip === "object" && chip.type) {
-      setMaintenanceType(chip.type);
-    }
-
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
@@ -1067,9 +1045,6 @@ export default function MaintenanceFormV2({
           setVehicleSearchQuery("");
         }
         setProblemDescription("");
-        setMaintenanceType(
-          initialData?.maintenance_type || FLEET_MAINTENANCE_TYPES[0],
-        );
         attachedFiles.forEach((item) => {
           if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
             try {
@@ -1341,8 +1316,7 @@ export default function MaintenanceFormV2({
             )}
           </div>
 
-
-          {/* Selected vehicle preview pill or guidance text */}
+        {/* Selected vehicle preview pill or guidance text */}
           {/* {selectedVehicle && (
             <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-xl px-3 py-2 text-xs animate-fadeIn">
               <div className="flex items-center gap-2 min-w-0">
@@ -1687,25 +1661,18 @@ export default function MaintenanceFormV2({
           </div>
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
-          <div className="flex items-center gap-2 overflow-x-auto pt-2 pb-3 scrollbar-none my-3">
-            {QUICK_PROBLEM_CHIPS.map((chip, idx) => {
-              const isSelected = maintenanceType === chip.type;
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleChipClick(chip)}
-                  disabled={isSubmitting}
-                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border ${
-                    isSelected
-                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                      : "bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              );
-            })}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none my-3">
+            {QUICK_PROBLEM_CHIPS.map((chip, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleChipClick(chip.text)}
+                disabled={isSubmitting}
+                className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-200 transition-colors cursor-pointer"
+              >
+                {chip.label}
+              </button>
+            ))}
           </div>
 
           {/* Textarea + Large Microphone Button */}
