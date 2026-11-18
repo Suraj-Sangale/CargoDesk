@@ -8,11 +8,9 @@ import React, {
   useCallback,
 } from "react";
 import { showToast } from "@/utilities/toastService";
-import {
-  postApiData,
-  uploadMediaFile,
-  compressImageFile,
-} from "@/utilities/services/apiService";
+import { postApiData, uploadMediaFile, compressImageFile } from "@/utilities/services/apiService";
+import { FloatingSelect } from "../common/floatingInput";
+import { FLEET_MAINTENANCE_TYPES } from "@/utilities/masterData";
 import {
   watermarkCapturedPhoto,
   preloadLocation,
@@ -95,6 +93,18 @@ export default function MaintenanceFormV2({
   const [highlightedVehicleIndex, setHighlightedVehicleIndex] = useState(0);
   const vehicleDropdownRef = useRef(null);
   const vehicleInputRef = useRef(null);
+
+  // 1b. Maintenance Category (Type) State
+  const [maintenanceType, setMaintenanceType] = useState(
+    initialData?.maintenance_type || FLEET_MAINTENANCE_TYPES[0]
+  );
+
+  // Sync maintenanceType when initialData changes
+  useEffect(() => {
+    if (initialData?.maintenance_type) {
+      setMaintenanceType(initialData.maintenance_type);
+    }
+  }, [initialData?.maintenance_type]);
 
   // 2. Problem Description & Voice State
   const [problemDescription, setProblemDescription] = useState(
@@ -838,15 +848,27 @@ export default function MaintenanceFormV2({
   };
 
   // Quick problem chip click handler
-  const handleChipClick = (chipText) => {
+  const handleChipClick = (chip) => {
+    const text = typeof chip === 'object' ? chip.text : chip;
     setProblemDescription((prev) => {
       let next;
-      if (!prev || prev.trim() === "") next = chipText;
-      else if (prev.includes(chipText)) next = prev;
-      else next = `${prev.trim()}, ${chipText}`;
+      if (!prev || prev.trim() === '') next = text;
+      else if (prev.includes(text)) next = prev;
+      else next = `${prev.trim()}, ${text}`;
       speechBaseTextRef.current = next;
       return next;
     });
+
+    // Auto-select corresponding maintenance category if available
+    if (typeof chip === 'object' && chip.label) {
+      if (chip.label.includes('Breakdown')) setMaintenanceType('Breakdown');
+      else if (chip.label.includes('Tyre')) setMaintenanceType('Tyre Replacement');
+      else if (chip.label.includes('Brake')) setMaintenanceType('Brake Repair');
+      else if (chip.label.includes('Battery')) setMaintenanceType('Battery Replacement');
+      else if (chip.label.includes('Oil')) setMaintenanceType('Oil & Filter Change');
+      else if (chip.label.includes('Engine')) setMaintenanceType('Engine Repair');
+    }
+
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
@@ -963,7 +985,7 @@ export default function MaintenanceFormV2({
 
       const payload = {
         vehicle_id: vid,
-        maintenance_type: "Breakdown", // Default simple classification for quick issue reporting
+        maintenance_type: maintenanceType || FLEET_MAINTENANCE_TYPES[0],
         description: problemDescription.trim(),
         maintenance_date: new Date().toISOString().slice(0, 10),
         status: "Reported",
@@ -1002,6 +1024,7 @@ export default function MaintenanceFormV2({
           setVehicleSearchQuery("");
         }
         setProblemDescription("");
+        setMaintenanceType(initialData?.maintenance_type || FLEET_MAINTENANCE_TYPES[0]);
         attachedFiles.forEach((item) => {
           if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
             try {
@@ -1269,7 +1292,30 @@ export default function MaintenanceFormV2({
             )}
           </div>
 
-          {/* Selected vehicle preview pill or guidance text */}
+        {/* Maintenance Category (Type) */}
+        <div className="w-full mt-5">
+          <FloatingSelect
+            id="maintenance_type"
+            label="Maintenance Category"
+            required
+            options={FLEET_MAINTENANCE_TYPES}
+            value={maintenanceType || ""}
+            selectedValue={maintenanceType || ""}
+            disabled={isSubmitting}
+            onChange={(val) => {
+              const actualVal =
+                val && typeof val === "object"
+                  ? val.value !== undefined
+                    ? val.value
+                    : val.target?.value
+                  : val;
+              setMaintenanceType(actualVal || "");
+              if (formError) setFormError(null);
+            }}
+          />
+        </div>
+
+        {/* Selected vehicle preview pill or guidance text */}
           {/* {selectedVehicle && (
             <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-xl px-3 py-2 text-xs animate-fadeIn">
               <div className="flex items-center gap-2 min-w-0">
@@ -1531,13 +1577,11 @@ export default function MaintenanceFormV2({
           {/* 4. Selected Photo/Video Previews */}
           {attachedFiles.length > 0 && (
             <div className="mt-3">
-              <div className="flex items-center justify-between text-xs text-slate-600 font-semibold mb-2">
-                <span>
+              <div className="flex items-center justify-end text-xs text-slate-600 font-semibold mb-2">
                   Attached Files ({attachedFiles.length}/{MAX_ATTACHMENTS})
-                </span>
-                <span className="text-[11px] text-slate-400">
+                {/* <span className="text-[11px] text-slate-400">
                   Tap × to remove
-                </span>
+                </span> */}
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
@@ -1627,7 +1671,7 @@ export default function MaintenanceFormV2({
               <button
                 key={idx}
                 type="button"
-                onClick={() => handleChipClick(chip.text)}
+                onClick={() => handleChipClick(chip)}
                 disabled={isSubmitting}
                 className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-200 transition-colors cursor-pointer"
               >
