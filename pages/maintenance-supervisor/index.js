@@ -104,9 +104,9 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                 <h1 className="text-base sm:text-lg font-black text-slate-900 leading-tight tracking-tight truncate">
                   Vehicle Maintenance
                 </h1>
-                <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wide truncate">
+                {/* <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wide truncate">
                   CargoDesk Workshop
-                </p>
+                </p> */}
               </div>
             </div>
 

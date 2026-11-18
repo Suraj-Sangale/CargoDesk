@@ -197,7 +197,8 @@ export default function FleetForm({
 
     if (response && response.status) {
       // Refresh synchronized context datasets
-      // if (refreshAll) await refreshAll();
+      // if (refreshAll) await refreshAll(true);
+      if (refreshAll) await refreshAll(true);
 
       if (setFleetList) {
         if (isEdit) {
