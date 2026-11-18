@@ -1,5 +1,6 @@
 import executeQuery, { executeTransaction } from "@/helpers/dbConnection";
 import { logFleetActivity } from "./fleetActivityModel";
+import { getIndiaDateString } from "@/utilities/timeUtils";
 
 /**
  * Creates a maintenance entry and its media attachments in a MySQL transaction.
@@ -41,7 +42,12 @@ export async function createMaintenanceRecordModel(data, authUser = null) {
       : null;
   const cleanMaintType = (maintenance_type || "Regular Service").trim();
   const cleanDesc = (description || "").trim();
-  const cleanDate = maintenance_date ? new Date(maintenance_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const indiaDateStr = getIndiaDateString();
+  const cleanDate = maintenance_date
+    ? (typeof maintenance_date === "string" && maintenance_date.length >= 10
+        ? maintenance_date.slice(0, 10)
+        : indiaDateStr)
+    : indiaDateStr;
   const cleanStatus = ["Reported", "In Progress", "Completed", "Cancelled"].includes(status) ? status : "Reported";
   const userId = authUser?.userId ? Number(authUser.userId) : null;
   const userName = authUser ? `${authUser.firstName || ""} ${authUser.lastName || ""}`.trim() || authUser.email || "Admin User" : "Admin User";
@@ -136,6 +142,7 @@ export async function createMaintenanceRecordModel(data, authUser = null) {
       maintenance_type: cleanMaintType,
       description: cleanDesc,
       maintenance_date: cleanDate,
+      created_at: new Date().toISOString(),
       odometer_reading: parsedOdometer,
       cost: parsedCost,
       garage_name: garage_name || null,

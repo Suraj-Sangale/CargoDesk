@@ -1,5 +1,6 @@
 import executeQuery, { executeTransaction } from "@/helpers/dbConnection";
 import { logFleetActivity, syncFleetMaintenanceActivities } from "./fleetActivityModel";
+import { getOrSetCache, invalidateCachePattern } from "@/helpers/cacheService";
 
 export function getAllFleetsModel(requestOrUser = {}, authUser = null) {
   return new Promise(async (resolve, reject) => {
@@ -77,16 +78,25 @@ export function getAllFleetsModel(requestOrUser = {}, authUser = null) {
         ${whereSQL}
         ORDER BY f.id DESC
       `;
-      const rows = await executeQuery(selectQuery, params);
-      const processedRows = (Array.isArray(rows) ? rows : []).map((row, idx) => ({
-        ...row,
-        sr_no: idx + 1,
-      }));
-      resolve({
-        status: true,
-        data: processedRows,
-        message: "Fleets fetched successfully",
+
+      const effectiveOrgId =
+        isSuperAdmin && !request?.orgId ? "all" : (orgId ? String(orgId) : "none");
+      const cacheKey = `cargodesk:org:${effectiveOrgId}:fleets:list`;
+
+      const cachedResult = await getOrSetCache(cacheKey, 300, async () => {
+        const rows = await executeQuery(selectQuery, params);
+        const processedRows = (Array.isArray(rows) ? rows : []).map((row, idx) => ({
+          ...row,
+          sr_no: idx + 1,
+        }));
+        return {
+          status: true,
+          data: processedRows,
+          message: "Fleets fetched successfully",
+        };
       });
+
+      resolve(cachedResult);
     } catch (error) {
       console.error("Error fetching fleets:", error);
       // Fallback to empty array if db fails
@@ -483,6 +493,12 @@ export function addNewFleetModel(data, authUser = null) {
             performedByName: data.performedByName || "Admin User",
             source: "fleet-driver",
           });
+        }
+
+        // Invalidate fleet and driver cache across tenants
+        await invalidateCachePattern("cargodesk:org:*:fleets:*");
+        if (parsedDriverId) {
+          await invalidateCachePattern("cargodesk:org:*:drivers:*");
         }
 
         resolve({
@@ -887,6 +903,12 @@ export function updateFleetModel(id, data, authUser = null) {
         });
       }
 
+      // Invalidate fleet and driver cache across tenants
+      await invalidateCachePattern("cargodesk:org:*:fleets:*");
+      if (parsedDriverId || oldDriverId) {
+        await invalidateCachePattern("cargodesk:org:*:drivers:*");
+      }
+
       return resolve({
         status: true,
         message: "Fleet vehicle updated successfully.",
@@ -987,6 +1009,10 @@ export function deleteFleetModel(ids, authUser = null) {
             });
           }
         }
+
+        // Invalidate fleet and driver cache across tenants
+        await invalidateCachePattern("cargodesk:org:*:fleets:*");
+        await invalidateCachePattern("cargodesk:org:*:drivers:*");
 
         resolve({
           status: true,

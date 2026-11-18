@@ -1,16 +1,19 @@
 import { requireValidUser } from "@/utilities/authServer";
 import executeQuery from "@/helpers/dbConnection";
 import { getModuleIdFromPath, ALL_MODULE_IDS } from "@/utilities/organizationModules";
+import { getOrSetCache, deleteCache, invalidateCachePattern } from "@/helpers/cacheService";
 
-// Fast in-memory cache to prevent redundant remote DB round-trips on every page navigation
+// Fast L1 in-memory cache to prevent redundant remote DB round-trips on every page navigation
 const orgCache = new Map();
-const ORG_CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+const ORG_CACHE_TTL_MS = 60 * 1000; // 60 seconds L1 TTL
 
 export function invalidateOrgSsrCache(orgId) {
   if (orgId) {
     orgCache.delete(Number(orgId));
+    deleteCache(`cargodesk:org:${Number(orgId)}:ssr_details`);
   } else {
     orgCache.clear();
+    invalidateCachePattern("cargodesk:org:*:ssr_details");
   }
 }
 
@@ -46,12 +49,19 @@ export function withUserSsr(handler, options = {}) {
     const isSuperAdmin =
       user?.role === "super_admin" || user?.email === "suraj@agnibyte.com";
 
-    // Legacy session cookie fallback: If orgId is missing from token, fetch it from database
+    // Legacy session cookie fallback: If orgId is missing from token, fetch it with Redis cache
     if (!user?.orgId && user?.userId) {
       try {
-        const uRows = await executeQuery("SELECT orgId FROM users WHERE userId = ?", [user.userId]);
-        if (uRows && uRows.length > 0 && uRows[0].orgId) {
-          user.orgId = Number(uRows[0].orgId);
+        const cachedOrgId = await getOrSetCache(
+          `cargodesk:user:${user.userId}:orgId`,
+          3600,
+          async () => {
+            const uRows = await executeQuery("SELECT orgId FROM users WHERE userId = ? LIMIT 1", [user.userId]);
+            return uRows && uRows.length > 0 && uRows[0].orgId ? Number(uRows[0].orgId) : null;
+          }
+        );
+        if (cachedOrgId) {
+          user.orgId = cachedOrgId;
         }
       } catch (e) {
         console.error("Failed to fallback query orgId in withUserSsr:", e);
@@ -68,12 +78,20 @@ export function withUserSsr(handler, options = {}) {
         if (cached && cached.expiresAt > Date.now()) {
           org = cached.data;
         } else {
-          const orgRows = await executeQuery(
-            "SELECT orgId, orgName, allowedModules, status FROM organizations WHERE orgId = ?",
-            [numericOrgId]
+          // L2 Redis cache (10 min TTL) with L3 MySQL fallback
+          org = await getOrSetCache(
+            `cargodesk:org:${numericOrgId}:ssr_details`,
+            600,
+            async () => {
+              const orgRows = await executeQuery(
+                "SELECT orgId, orgName, allowedModules, status FROM organizations WHERE orgId = ?",
+                [numericOrgId]
+              );
+              return orgRows && orgRows.length > 0 ? orgRows[0] : null;
+            }
           );
-          if (orgRows && orgRows.length > 0) {
-            org = orgRows[0];
+
+          if (org) {
             orgCache.set(numericOrgId, {
               data: org,
               expiresAt: Date.now() + ORG_CACHE_TTL_MS,

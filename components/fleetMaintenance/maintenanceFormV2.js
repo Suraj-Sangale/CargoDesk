@@ -13,7 +13,8 @@ import {
   uploadMediaFile,
   compressImageFile,
 } from "@/utilities/services/apiService";
-import { FloatingSelect } from "../common/floatingInput";
+import moment from "moment";
+import { getIndiaDateString, getIndiaISOString } from "@/utilities/timeUtils";
 import { FLEET_MAINTENANCE_TYPES } from "@/utilities/masterData";
 import {
   watermarkCapturedPhoto,
@@ -905,18 +906,9 @@ export default function MaintenanceFormV2({
       return next;
     });
 
-    // Auto-select corresponding maintenance category if available
-    if (typeof chip === "object" && chip.label) {
-      if (chip.label.includes("Breakdown")) setMaintenanceType("Breakdown");
-      else if (chip.label.includes("Tyre"))
-        setMaintenanceType("Tyre Replacement");
-      else if (chip.label.includes("Brake")) setMaintenanceType("Brake Repair");
-      else if (chip.label.includes("Battery"))
-        setMaintenanceType("Battery Replacement");
-      else if (chip.label.includes("Oil"))
-        setMaintenanceType("Oil & Filter Change");
-      else if (chip.label.includes("Engine"))
-        setMaintenanceType("Engine Repair");
+    // Auto-select corresponding maintenance category directly from chip.type
+    if (typeof chip === "object" && chip.type) {
+      setMaintenanceType(chip.type);
     }
 
     if (textareaRef.current) {
@@ -1030,14 +1022,15 @@ export default function MaintenanceFormV2({
         }
       }
 
-      // Step 2: Save maintenance record in database
+      // Step 2: Save maintenance record in database with India local date and time
       setSubmissionProgress("Submitting problem report...");
 
       const payload = {
         vehicle_id: vid,
         maintenance_type: maintenanceType || FLEET_MAINTENANCE_TYPES[0],
         description: problemDescription.trim(),
-        maintenance_date: new Date().toISOString().slice(0, 10),
+        maintenance_date: getIndiaDateString(),
+        created_at: getIndiaISOString(),
         status: "Reported",
         cost: "0.00",
         odometer_reading: null,
@@ -1348,28 +1341,6 @@ export default function MaintenanceFormV2({
             )}
           </div>
 
-          {/* Maintenance Category (Type) */}
-          {/* <div className="w-full mt-5">
-          <FloatingSelect
-            id="maintenance_type"
-            label="Maintenance Category"
-            required
-            options={FLEET_MAINTENANCE_TYPES}
-            value={maintenanceType || ""}
-            selectedValue={maintenanceType || ""}
-            disabled={isSubmitting}
-            onChange={(val) => {
-              const actualVal =
-                val && typeof val === "object"
-                  ? val.value !== undefined
-                    ? val.value
-                    : val.target?.value
-                  : val;
-              setMaintenanceType(actualVal || "");
-              if (formError) setFormError(null);
-            }}
-          />
-        </div> */}
 
           {/* Selected vehicle preview pill or guidance text */}
           {/* {selectedVehicle && (
@@ -1717,17 +1688,24 @@ export default function MaintenanceFormV2({
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
           <div className="flex items-center gap-2 overflow-x-auto pt-2 pb-3 scrollbar-none my-3">
-            {QUICK_PROBLEM_CHIPS.map((chip, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleChipClick(chip)}
-                disabled={isSubmitting}
-                className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-200 transition-colors cursor-pointer"
-              >
-                {chip.label}
-              </button>
-            ))}
+            {QUICK_PROBLEM_CHIPS.map((chip, idx) => {
+              const isSelected = maintenanceType === chip.type;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleChipClick(chip)}
+                  disabled={isSubmitting}
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border ${
+                    isSelected
+                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                      : "bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Textarea + Large Microphone Button */}

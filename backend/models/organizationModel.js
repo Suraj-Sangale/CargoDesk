@@ -1,6 +1,7 @@
 import executeQuery from "@/helpers/dbConnection";
 import { hashWithSHA256 } from "@/utilities/utils";
 import { ALL_MODULE_IDS } from "@/utilities/organizationModules";
+import { invalidateCachePattern } from "@/helpers/cacheService";
 
 let isOrgTableInitialized = false;
 
@@ -273,6 +274,8 @@ export function updateOrganizationModel(data) {
       const result = await executeQuery(`UPDATE organizations SET ? WHERE orgId = ?`, [updateFields, orgId]);
 
       if (result && result.affectedRows >= 0) {
+        // Purge Redis cache for this organization
+        await invalidateCachePattern(`cargodesk:org:${orgId}:*`);
         resolve({ status: true, message: "Organization updated successfully" });
       } else {
         resolve({ status: false, message: "Failed to update organization" });
@@ -298,6 +301,9 @@ export function deleteOrganizationModel(orgId) {
         try {
           await executeQuery(`UPDATE users SET orgId = NULL WHERE orgId = ?`, [id]);
         } catch (_) {}
+
+        // Purge Redis cache for deleted organization
+        await invalidateCachePattern(`cargodesk:org:${id}:*`);
 
         resolve({ status: true, message: "Organization deleted successfully" });
       } else {

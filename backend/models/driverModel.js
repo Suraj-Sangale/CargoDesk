@@ -1,6 +1,7 @@
 import executeQuery, { executeTransaction } from "@/helpers/dbConnection";
 import { logFleetActivity } from "./fleetActivityModel";
 import { getMediaProxyUrl, extractS3Key } from "../services/s3Service";
+import { getOrSetCache, invalidateCachePattern } from "@/helpers/cacheService";
 
 let isTableInitialized = false;
 
@@ -289,56 +290,65 @@ export function getAllDriversModel(requestOrUser = {}, authUser = null) {
         ${whereSQL}
         ORDER BY d.id DESC
       `;
-      const rows = await executeQuery(selectQuery, params);
 
-      const processedRows = (Array.isArray(rows) ? rows : []).map((row, idx) => {
-        let photo = row.profile_photo;
-        if (photo && typeof photo === "string") {
-          const s3Key = extractS3Key(photo);
-          if (s3Key) {
-            photo = getMediaProxyUrl(s3Key);
+      const effectiveOrgId =
+        isSuperAdmin && !request?.orgId ? "all" : (orgId ? String(orgId) : "none");
+      const cacheKey = `cargodesk:org:${effectiveOrgId}:drivers:list`;
+
+      const cachedResult = await getOrSetCache(cacheKey, 300, async () => {
+        const rows = await executeQuery(selectQuery, params);
+
+        const processedRows = (Array.isArray(rows) ? rows : []).map((row, idx) => {
+          let photo = row.profile_photo;
+          if (photo && typeof photo === "string") {
+            const s3Key = extractS3Key(photo);
+            if (s3Key) {
+              photo = getMediaProxyUrl(s3Key);
+            }
           }
-        }
 
-        let docs = row.supporting_documents;
-        if (docs && typeof docs === "string") {
-          try {
-            let parsedDocs = JSON.parse(docs);
-            if (typeof parsedDocs === "string") {
-              parsedDocs = JSON.parse(parsedDocs);
-            }
-            if (Array.isArray(parsedDocs)) {
-              docs = parsedDocs.map((d) => {
-                if (!d || typeof d !== "object") return d;
-                const s3Key = d.s3Key || extractS3Key(d.dataUrl || d.url);
-                if (s3Key) {
-                  const mediaUrl = getMediaProxyUrl(s3Key);
-                  return {
-                    ...d,
-                    s3Key,
-                    dataUrl: mediaUrl,
-                    url: mediaUrl,
-                  };
-                }
-                return d;
-              });
-            }
-          } catch (_) {}
-        }
+          let docs = row.supporting_documents;
+          if (docs && typeof docs === "string") {
+            try {
+              let parsedDocs = JSON.parse(docs);
+              if (typeof parsedDocs === "string") {
+                parsedDocs = JSON.parse(parsedDocs);
+              }
+              if (Array.isArray(parsedDocs)) {
+                docs = parsedDocs.map((d) => {
+                  if (!d || typeof d !== "object") return d;
+                  const s3Key = d.s3Key || extractS3Key(d.dataUrl || d.url);
+                  if (s3Key) {
+                    const mediaUrl = getMediaProxyUrl(s3Key);
+                    return {
+                      ...d,
+                      s3Key,
+                      dataUrl: mediaUrl,
+                      url: mediaUrl,
+                    };
+                  }
+                  return d;
+                });
+              }
+            } catch (_) {}
+          }
+
+          return {
+            ...row,
+            sr_no: idx + 1,
+            profile_photo: photo,
+            supporting_documents: docs,
+          };
+        });
 
         return {
-          ...row,
-          sr_no: idx + 1,
-          profile_photo: photo,
-          supporting_documents: docs,
+          status: true,
+          data: processedRows,
+          message: "Drivers fetched successfully",
         };
       });
 
-      resolve({
-        status: true,
-        data: processedRows,
-        message: "Drivers fetched successfully",
-      });
+      resolve(cachedResult);
     } catch (error) {
       console.error("Error fetching drivers:", error);
       resolve({
@@ -531,6 +541,12 @@ export function addNewDriverModel(data, authUser = null) {
             source: "driver",
             metadata: { driver_name, contact_number },
           });
+        }
+
+        // Invalidate driver cache across tenants
+        await invalidateCachePattern("cargodesk:org:*:drivers:*");
+        if (parsedFleetId) {
+          await invalidateCachePattern("cargodesk:org:*:fleets:*");
         }
 
         resolve({
@@ -772,6 +788,12 @@ export const updateDriverModel = (id, data, authUser = null) => {
         });
       }
 
+      // Invalidate driver cache across tenants
+      await invalidateCachePattern("cargodesk:org:*:drivers:*");
+      if (parsedFleetId || oldDriver?.fleet_id) {
+        await invalidateCachePattern("cargodesk:org:*:fleets:*");
+      }
+
       resolve({
         success: true,
         message: "Driver updated successfully",
@@ -829,6 +851,10 @@ export function deleteDriverModel(ids, authUser = null) {
       const result = await executeQuery(deleteQuery, [ids]);
 
       if (result.affectedRows > 0) {
+        // Invalidate driver and fleet caches
+        await invalidateCachePattern("cargodesk:org:*:drivers:*");
+        await invalidateCachePattern("cargodesk:org:*:fleets:*");
+
         resolve({
           status: true,
           message: `${result.affectedRows} driver${result.affectedRows > 1 ? "s" : ""} deleted successfully`,

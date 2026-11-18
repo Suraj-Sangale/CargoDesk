@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import moment from "moment";
 import {
+  getIndiaMoment,
+  formatIndiaTime,
+  isTodayIndia,
+  formatIndiaDate,
+} from "@/utilities/timeUtils";
+import {
   FiClock,
   FiCalendar,
   FiChevronDown,
@@ -145,12 +151,12 @@ export default function ActivityHistory({
     setPage(1);
   };
 
-  // Group activities chronologically by date using UTC->local conversion
+  // Group activities chronologically by date using India timezone
   const groupedActivities = useMemo(() => {
     const groups = {};
     (activities || []).forEach((act) => {
       const rawDate = act.performedAt || act.createdAt;
-      const m = rawDate ? moment.utc(rawDate).local() : moment();
+      const m = getIndiaMoment(rawDate);
       const dateKey = m.format("YYYY-MM-DD");
       if (!groups[dateKey]) {
         groups[dateKey] = [];
@@ -163,8 +169,8 @@ export default function ActivityHistory({
       .sort((a, b) => new Date(b) - new Date(a))
       .map((dateKey) => ({
         dateKey,
-        formattedDate: moment(dateKey).format("DD MMM YYYY"),
-        isToday: moment(dateKey).isSame(moment(), "day"),
+        formattedDate: formatIndiaDate(dateKey),
+        isToday: isTodayIndia(dateKey),
         items: groups[dateKey],
       }));
   }, [activities]);
@@ -557,9 +563,7 @@ export default function ActivityHistory({
                     const CategoryIcon = style.icon;
                     const rawTimestamp =
                       activity.performedAt || activity.createdAt;
-                    const formattedTime = rawTimestamp
-                      ? moment(rawTimestamp).format("hh:mm A")
-                      : "";
+                    const formattedTime = formatIndiaTime(rawTimestamp);
 
                     return (
                       <div

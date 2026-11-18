@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Head from "next/head";
 import moment from "moment";
+import { formatIndiaDateTime, getIndiaISOString } from "@/utilities/timeUtils";
 import MaintenanceFormV2 from "@/components/fleetMaintenance/maintenanceFormV2";
 import { withUserSsr } from "@/utilities/withUserSsr";
 import { postApiData } from "@/utilities/services/apiService";
@@ -74,7 +75,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
       description: record.description ?? ctx.description,
       media_count: record.media_count ?? ctx.mediaCount ?? 0,
       status: record.status ?? "Reported",
-      created_at: record.created_at ?? new Date().toISOString(),
+      created_at: record.created_at ?? getIndiaISOString(),
     };
 
     setRecentRecords((prev) =>
@@ -309,9 +310,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                         <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/50">
                           <span className="flex items-center gap-1">
                             <FiClock className="w-3 h-3 text-slate-400" />
-                            {moment(
-                              item.created_at || item.maintenance_date,
-                            ).format("DD MMM YYYY, hh:mm A")}
+                            {formatIndiaDateTime(item.created_at || item.maintenance_date)}
                           </span>
 
                           <div className="flex items-center gap-2">
