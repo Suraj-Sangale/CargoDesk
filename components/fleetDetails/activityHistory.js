@@ -558,7 +558,7 @@ export default function ActivityHistory({
                     const rawTimestamp =
                       activity.performedAt || activity.createdAt;
                     const formattedTime = rawTimestamp
-                      ? moment.utc(rawTimestamp).local().format("hh:mm A")
+                      ? moment(rawTimestamp).format("hh:mm A")
                       : "";
 
                     return (

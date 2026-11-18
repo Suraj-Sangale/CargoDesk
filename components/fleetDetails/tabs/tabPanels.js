@@ -639,7 +639,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
       </div>
 
       {/* 2. Controls & Actions Row */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 sm:p-5 flex flex-col md:items-startd justify-between gap-3">
         {/* Search & Filters */}
         <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
           <form onSubmit={handleSearchSubmit} className="relative w-full sm:w-64">
@@ -688,7 +688,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         </div>
 
         {/* Action Buttons: Quick Report V2 & Full Log Form */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-end gap-2">
           <button
             type="button"
             onClick={() => setIsQuickReportOpen(true)}

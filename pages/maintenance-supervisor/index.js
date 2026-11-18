@@ -33,7 +33,6 @@ export default function MaintenanceSupervisorPage({ pageData }) {
   const [showRecent, setShowRecent] = useState(false);
   const [lastSubmittedRecord, setLastSubmittedRecord] = useState(null);
 
-
   const { toggleLogoutModal } = useFleetDriver() || {};
 
   // Fetch latest 5 maintenance records
@@ -56,9 +55,31 @@ export default function MaintenanceSupervisorPage({ pageData }) {
   }, [fetchRecentRecords]);
 
   // Handle successful maintenance record submission
-  const handleRecordSuccess = (record) => {
+  const handleRecordSuccess = (record, ctx = {}) => {
     setLastSubmittedRecord(record);
-    fetchRecentRecords();
+
+    // Fallback: if the API didn't return an id, we can't build a reliable row
+    // if (!record?.id) {
+    //   fetchRecentRecords();
+    //   return;
+    // }
+
+    const newItem = {
+      ...record,
+      vehicle_number: record.vehicle_number ?? ctx.vehicle?.vehicle_number,
+      vehicle_model:
+        record.vehicle_model ??
+        ctx.vehicle?.vehicle_model ??
+        ctx.vehicle?.vehicle_type,
+      description: record.description ?? ctx.description,
+      media_count: record.media_count ?? ctx.mediaCount ?? 0,
+      status: record.status ?? "Reported",
+      created_at: record.created_at ?? new Date().toISOString(),
+    };
+
+    setRecentRecords((prev) =>
+      [newItem, ...prev.filter((r) => r.id !== newItem.id)].slice(0, 5),
+    );
   };
 
   const getStatusBadge = (status) => {

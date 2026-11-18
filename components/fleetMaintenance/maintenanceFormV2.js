@@ -8,7 +8,11 @@ import React, {
   useCallback,
 } from "react";
 import { showToast } from "@/utilities/toastService";
-import { postApiData, uploadMediaFile, compressImageFile } from "@/utilities/services/apiService";
+import {
+  postApiData,
+  uploadMediaFile,
+  compressImageFile,
+} from "@/utilities/services/apiService";
 import { FloatingSelect } from "../common/floatingInput";
 import { FLEET_MAINTENANCE_TYPES } from "@/utilities/masterData";
 import {
@@ -52,17 +56,57 @@ const SUPPORTED_LANGUAGES = [
 ];
 
 const QUICK_PROBLEM_CHIPS = [
-  { label: "🚨 Breakdown",        type: "Breakdown",              text: "Vehicle breakdown / stopped on road" },
-  { label: "💥 Accident",         type: "Accident Damage",        text: "Accident / body damage to vehicle" },
-  { label: "🛑 Brake Issue",      type: "Brake Repair",           text: "Brakes not working properly / strange noise" },
-  { label: "🛞 Flat Tyre",        type: "Tyre Replacement",       text: "Tyre puncture / flat tyre" },
-  { label: "💧 Oil Leak",         type: "Oil & Filter Change",    text: "Engine oil or coolant leakage" },
-  { label: "🔋 Battery Dead",     type: "Battery Replacement",    text: "Battery dead / vehicle not starting" },
-  { label: "⚠️ Engine Smoke",     type: "Engine Repair",          text: "Engine overheating / smoke from hood" },
-  { label: "⚡ Electrical",       type: "Electrical Issue",       text: "Lights, horn, wiring or electrical not working" },
-  { label: "🔧 Suspension",       type: "Suspension & Steering",  text: "Steering heavy / suspension noise / vehicle pulling to one side" },
-  { label: "🛠️ Regular Service",  type: "Regular Service",        text: "Routine service due" },
-  { label: "📝 Other",            type: "Other",                  text: "Other problem (details below)" },
+  {
+    label: "🚨 Breakdown",
+    type: "Breakdown",
+    text: "Vehicle breakdown / stopped on road",
+  },
+  {
+    label: "💥 Accident",
+    type: "Accident Damage",
+    text: "Accident / body damage to vehicle",
+  },
+  {
+    label: "🛑 Brake Issue",
+    type: "Brake Repair",
+    text: "Brakes not working properly / strange noise",
+  },
+  {
+    label: "🛞 Flat Tyre",
+    type: "Tyre Replacement",
+    text: "Tyre puncture / flat tyre",
+  },
+  {
+    label: "💧 Oil Leak",
+    type: "Oil & Filter Change",
+    text: "Engine oil or coolant leakage",
+  },
+  {
+    label: "🔋 Battery Dead",
+    type: "Battery Replacement",
+    text: "Battery dead / vehicle not starting",
+  },
+  {
+    label: "⚠️ Engine Smoke",
+    type: "Engine Repair",
+    text: "Engine overheating / smoke from hood",
+  },
+  {
+    label: "⚡ Electrical",
+    type: "Electrical Issue",
+    text: "Lights, horn, wiring or electrical not working",
+  },
+  {
+    label: "🔧 Suspension",
+    type: "Suspension & Steering",
+    text: "Steering heavy / suspension noise / vehicle pulling to one side",
+  },
+  {
+    label: "🛠️ Regular Service",
+    type: "Regular Service",
+    text: "Routine service due",
+  },
+  { label: "📝 Other", type: "Other", text: "Other problem (details below)" },
 ];
 
 /**
@@ -98,7 +142,7 @@ export default function MaintenanceFormV2({
 
   // 1b. Maintenance Category (Type) State
   const [maintenanceType, setMaintenanceType] = useState(
-    initialData?.maintenance_type || FLEET_MAINTENANCE_TYPES[0]
+    initialData?.maintenance_type || FLEET_MAINTENANCE_TYPES[0],
   );
 
   // Sync maintenanceType when initialData changes
@@ -851,10 +895,10 @@ export default function MaintenanceFormV2({
 
   // Quick problem chip click handler
   const handleChipClick = (chip) => {
-    const text = typeof chip === 'object' ? chip.text : chip;
+    const text = typeof chip === "object" ? chip.text : chip;
     setProblemDescription((prev) => {
       let next;
-      if (!prev || prev.trim() === '') next = text;
+      if (!prev || prev.trim() === "") next = text;
       else if (prev.includes(text)) next = prev;
       else next = `${prev.trim()}, ${text}`;
       speechBaseTextRef.current = next;
@@ -862,13 +906,17 @@ export default function MaintenanceFormV2({
     });
 
     // Auto-select corresponding maintenance category if available
-    if (typeof chip === 'object' && chip.label) {
-      if (chip.label.includes('Breakdown')) setMaintenanceType('Breakdown');
-      else if (chip.label.includes('Tyre')) setMaintenanceType('Tyre Replacement');
-      else if (chip.label.includes('Brake')) setMaintenanceType('Brake Repair');
-      else if (chip.label.includes('Battery')) setMaintenanceType('Battery Replacement');
-      else if (chip.label.includes('Oil')) setMaintenanceType('Oil & Filter Change');
-      else if (chip.label.includes('Engine')) setMaintenanceType('Engine Repair');
+    if (typeof chip === "object" && chip.label) {
+      if (chip.label.includes("Breakdown")) setMaintenanceType("Breakdown");
+      else if (chip.label.includes("Tyre"))
+        setMaintenanceType("Tyre Replacement");
+      else if (chip.label.includes("Brake")) setMaintenanceType("Brake Repair");
+      else if (chip.label.includes("Battery"))
+        setMaintenanceType("Battery Replacement");
+      else if (chip.label.includes("Oil"))
+        setMaintenanceType("Oil & Filter Change");
+      else if (chip.label.includes("Engine"))
+        setMaintenanceType("Engine Repair");
     }
 
     if (textareaRef.current) {
@@ -1026,7 +1074,9 @@ export default function MaintenanceFormV2({
           setVehicleSearchQuery("");
         }
         setProblemDescription("");
-        setMaintenanceType(initialData?.maintenance_type || FLEET_MAINTENANCE_TYPES[0]);
+        setMaintenanceType(
+          initialData?.maintenance_type || FLEET_MAINTENANCE_TYPES[0],
+        );
         attachedFiles.forEach((item) => {
           if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
             try {
@@ -1040,7 +1090,11 @@ export default function MaintenanceFormV2({
       }
 
       if (onSuccess) {
-        onSuccess(saveJson.data);
+        onSuccess(saveJson.data, {
+          vehicle: selectedVehicle,
+          mediaCount: uploadedMediaItems.length,
+          description: payload.description,
+        });
       }
       if (onClose) {
         onClose();
@@ -1294,8 +1348,8 @@ export default function MaintenanceFormV2({
             )}
           </div>
 
-        {/* Maintenance Category (Type) */}
-        {/* <div className="w-full mt-5">
+          {/* Maintenance Category (Type) */}
+          {/* <div className="w-full mt-5">
           <FloatingSelect
             id="maintenance_type"
             label="Maintenance Category"
@@ -1317,7 +1371,7 @@ export default function MaintenanceFormV2({
           />
         </div> */}
 
-        {/* Selected vehicle preview pill or guidance text */}
+          {/* Selected vehicle preview pill or guidance text */}
           {/* {selectedVehicle && (
             <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-xl px-3 py-2 text-xs animate-fadeIn">
               <div className="flex items-center gap-2 min-w-0">
@@ -1406,15 +1460,11 @@ export default function MaintenanceFormV2({
                 <FiRefreshCcw className="w-4 h-4" />
               </button>
             </div> */}
-          {locationStatus.resolved ? (
-            null
-          ) : locationStatus.loading ? (
+          {locationStatus.resolved ? null : locationStatus.loading ? (
             <div className="flex items-center justify-between px-3.5 py-2.5 bg-blue-50/90 border border-blue-200 rounded-2xl text-xs text-blue-900 shadow-2xs">
               <div className="flex items-center gap-2">
                 <ImSpinner9 className="w-3.5 h-3.5 animate-spin text-blue-600 shrink-0" />
-                <span className="font-medium">
-                  Loading...
-                </span>
+                <span className="font-medium">Loading...</span>
               </div>
               {/* <button
                 type="button"
@@ -1578,7 +1628,7 @@ export default function MaintenanceFormV2({
           {attachedFiles.length > 0 && (
             <div className="mt-3">
               <div className="flex items-center justify-end text-xs text-slate-600 font-semibold mb-2">
-                  Attached Files ({attachedFiles.length}/{MAX_ATTACHMENTS})
+                Attached Files ({attachedFiles.length}/{MAX_ATTACHMENTS})
                 {/* <span className="text-[11px] text-slate-400">
                   Tap × to remove
                 </span> */}
