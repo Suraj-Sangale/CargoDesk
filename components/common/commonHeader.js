@@ -16,7 +16,7 @@ export default function CommonHeader({
 
   return (
     <div
-      className={`relative flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 ${className}`}
+      className={`relative flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2 md:mb-4 ${className}`}
     >
       {/* Title & Description */}
       <div className={`z-10 max-w-xl ${contentClassName}`}>

@@ -154,6 +154,20 @@ export async function ensureDriverTable() {
       await executeQuery(`ALTER TABLE drivers ADD COLUMN orgId INT NULL AFTER id`);
     }
 
+    // Ensure indexes on orgId and fleet_id for fast lookups, scoping, and JOINs
+    try {
+      const idxRows = await executeQuery(`SHOW INDEX FROM drivers`);
+      const existingIndexes = new Set((idxRows || []).map((i) => i.Key_name));
+      if (!existingIndexes.has("idx_drivers_orgId")) {
+        await executeQuery(`CREATE INDEX idx_drivers_orgId ON drivers(orgId)`);
+      }
+      if (!existingIndexes.has("idx_drivers_fleet_id")) {
+        await executeQuery(`CREATE INDEX idx_drivers_fleet_id ON drivers(fleet_id)`);
+      }
+    } catch (idxErr) {
+      console.warn("Notice checking driver indexes:", idxErr?.message);
+    }
+
     // Backfill any existing legacy drivers without an orgId to their assigned fleet's orgId or default org 1
     await executeQuery(`
       UPDATE drivers d 
@@ -240,11 +254,29 @@ export function getAllDriversModel(requestOrUser = {}, authUser = null) {
 
       const selectQuery = `
         SELECT 
-          d.*,
+          d.id,
+          d.orgId,
+          d.driver_name,
+          d.contact_number,
+          d.alt_contact_number,
+          d.license_number,
+          d.license_type,
+          d.license_expiry,
+          d.assigned_vehicle,
+          d.experience_years,
+          d.blood_group,
+          d.emergency_contact,
+          d.status,
+          d.address,
+          d.notes,
+          d.created_at,
+          d.updated_at,
+          d.profile_photo,
+          d.supporting_documents,
+          d.fleet_id,
           o.orgName AS organization_name,
           o.orgName AS orgName,
           o.orgCode AS orgCode,
-          d.fleet_id AS fleet_id,
           f.id AS assigned_fleet_id,
           f.vehicle_number AS assigned_vehicle,
           f.vehicle_model AS assigned_vehicle_model,
@@ -269,11 +301,15 @@ export function getAllDriversModel(requestOrUser = {}, authUser = null) {
         }
 
         let docs = row.supporting_documents;
-        if (docs && typeof docs === "string" && docs.trim().startsWith("[")) {
+        if (docs && typeof docs === "string") {
           try {
-            const parsedDocs = JSON.parse(docs);
+            let parsedDocs = JSON.parse(docs);
+            if (typeof parsedDocs === "string") {
+              parsedDocs = JSON.parse(parsedDocs);
+            }
             if (Array.isArray(parsedDocs)) {
               docs = parsedDocs.map((d) => {
+                if (!d || typeof d !== "object") return d;
                 const s3Key = d.s3Key || extractS3Key(d.dataUrl || d.url);
                 if (s3Key) {
                   const mediaUrl = getMediaProxyUrl(s3Key);
@@ -312,6 +348,41 @@ export function getAllDriversModel(requestOrUser = {}, authUser = null) {
       });
     }
   });
+}
+
+export function sanitizeSupportingDocs(docs) {
+  if (!docs) return null;
+  let parsed = docs;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+      if (typeof parsed === "string") {
+        parsed = JSON.parse(parsed);
+      }
+    } catch (_) {
+      return docs;
+    }
+  }
+  if (!Array.isArray(parsed)) {
+    return typeof docs === "string" ? docs : JSON.stringify(docs);
+  }
+  const cleaned = parsed.map((d, idx) => {
+    if (!d || typeof d !== "object") return d;
+    const s3Key = d.s3Key || extractS3Key(d.url || d.dataUrl);
+    const mediaUrl = s3Key ? getMediaProxyUrl(s3Key) : d.url || null;
+    return {
+      id: d.id || `doc_${Date.now()}_${idx}`,
+      name: d.name || `Document ${idx + 1}`,
+      size: d.size || null,
+      type: d.type || "application/octet-stream",
+      s3Key: s3Key || undefined,
+      url: mediaUrl || d.url,
+      // Never store raw multi-megabyte base64 in the database when an S3 key or URL is available
+      dataUrl: mediaUrl || (d.dataUrl && !d.dataUrl.startsWith("data:") ? d.dataUrl : undefined),
+      uploadedAt: d.uploadedAt || new Date().toISOString(),
+    };
+  });
+  return JSON.stringify(cleaned);
 }
 
 export function addNewDriverModel(data, authUser = null) {
@@ -424,11 +495,7 @@ export function addNewDriverModel(data, authUser = null) {
         emergency_contact: emergency_contact ? emergency_contact.trim() : null,
         status: status || "Active",
         profile_photo: profile_photo || null,
-        supporting_documents: supporting_documents
-          ? typeof supporting_documents === "string"
-            ? supporting_documents
-            : JSON.stringify(supporting_documents)
-          : null,
+        supporting_documents: sanitizeSupportingDocs(supporting_documents),
         fleet_id: parsedFleetId,
         address: address ? address.trim() : null,
         notes: notes ? notes.trim() : null,
@@ -639,7 +706,7 @@ export const updateDriverModel = (id, data, authUser = null) => {
         profile_photo: data.profile_photo,
         supporting_documents:
           data.supporting_documents !== undefined
-            ? JSON.stringify(data.supporting_documents)
+            ? sanitizeSupportingDocs(data.supporting_documents)
             : undefined,
         fleet_id: parsedFleetId,
         orgId: orgField ? newOrgId : undefined,

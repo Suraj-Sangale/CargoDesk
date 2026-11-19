@@ -112,7 +112,7 @@ export default function Sidebar({
     },
     {
       id: "users",
-      name: "Sub Users",
+      name: "Users",
       icon: FiUsers,
       path: "/users",
       adminOnly: true,
