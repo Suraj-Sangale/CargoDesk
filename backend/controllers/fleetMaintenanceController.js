@@ -158,6 +158,7 @@ export async function getMaintenanceListByVehicleController(vehicleId, query = {
       status: query.status,
       maintenanceType: query.maintenance_type,
       search: query.search,
+      exportAll: query.exportAll || query.isExport,
     });
 
     return {

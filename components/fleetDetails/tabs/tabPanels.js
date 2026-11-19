@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import moment from "moment";
 import {
   FiFileText,
@@ -23,7 +23,15 @@ import {
   FiFilter,
   FiClock,
   FiCamera,
+  FiDownload,
+  FiPrinter,
 } from "react-icons/fi";
+import {
+  exportVehicleOverviewCsv,
+  exportVehicleOverviewPdf,
+  exportMaintenanceHistoryCsv,
+  exportMaintenanceHistoryPdf,
+} from "@/utilities/exportUtils";
 import { HiOutlineTruck, HiOutlineDocumentText } from "react-icons/hi";
 import { ImSpinner9 } from "react-icons/im";
 import CommonModal from "../../common/commonModal";
@@ -44,6 +52,39 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
 
   return (
     <div className="space-y-6">
+      {/* Top Overview Bar with Export Options */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">Vehicle Overview & Health</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Operational profile and technical specifications for {fleet?.vehicle_number || "this vehicle"}.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              exportVehicleOverviewCsv(fleet);
+              showToast({ message: "Vehicle overview CSV downloaded", type: "success" });
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+            title="Download CSV / Excel report"
+          >
+            <FiDownload className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Export CSV</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => exportVehicleOverviewPdf(fleet)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-xl border border-blue-200 transition-colors cursor-pointer"
+            title="Print or Save as PDF"
+          >
+            <FiPrinter className="w-3.5 h-3.5 text-blue-600" />
+            <span>Export PDF</span>
+          </button>
+        </div>
+      </div>
+
       {/* Metric Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
@@ -479,6 +520,57 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
   const [isQuickReportOpen, setIsQuickReportOpen] = useState(false);
   const [selectedRecordForDetails, setSelectedRecordForDetails] = useState(null);
   const [selectedRecordForEdit, setSelectedRecordForEdit] = useState(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const exportMenuRef = useRef(null);
+
+  // Close export menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+        setExportMenuOpen(false);
+      }
+    };
+    if (exportMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [exportMenuOpen]);
+
+  // Handle Maintenance History Export
+  const handleExportMaintenance = async (exportFormat = "csv") => {
+    if (!fleet?.id) return;
+    setIsExporting(true);
+    try {
+      showToast({ message: `Preparing maintenance ${exportFormat.toUpperCase()} report...`, type: "info" });
+      const payload = {
+        vehicleId: fleet.id,
+        exportAll: true,
+        limit: 2000,
+      };
+      if (statusFilter && statusFilter !== "all") payload.status = statusFilter;
+      if (typeFilter && typeFilter !== "all") payload.maintenance_type = typeFilter;
+      if (searchQuery && searchQuery.trim() !== "") payload.search = searchQuery.trim();
+
+      const json = await postApiData("GET_VEHICLE_MAINTENANCE", payload);
+      const exportList = json?.status && Array.isArray(json.data) ? json.data : records;
+
+      if (exportFormat === "csv") {
+        exportMaintenanceHistoryCsv(exportList, fleet, summary);
+        showToast({ message: "Maintenance history CSV downloaded successfully", type: "success" });
+      } else {
+        exportMaintenanceHistoryPdf(exportList, fleet, summary);
+      }
+    } catch (err) {
+      console.error("Export error:", err);
+      showToast({ message: "Failed to export maintenance records", type: "error" });
+    } finally {
+      setIsExporting(false);
+      setExportMenuOpen(false);
+    }
+  };
 
   // Fetch maintenance records and vehicle summary
   const fetchMaintenance = useCallback(
@@ -687,8 +779,50 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
           </div>
         </div>
 
-        {/* Action Buttons: Quick Report V2 & Full Log Form */}
+        {/* Action Buttons: Export, Quick Report V2 & Full Log Form */}
         <div className="flex items-center gap-2">
+          {/* Export Maintenance History Dropdown */}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setExportMenuOpen((prev) => !prev)}
+              disabled={isExporting}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-all cursor-pointer shrink-0 disabled:opacity-50"
+              title="Export maintenance history report"
+            >
+              {isExporting ? (
+                <ImSpinner9 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+              ) : (
+                <FiDownload className="w-3.5 h-3.5 text-slate-600" />
+              )}
+              <span>Export</span>
+            </button>
+
+            {exportMenuOpen && (
+              <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-slate-200/90 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100">
+                <div className="text-[10px] font-bold text-slate-400 px-3.5 py-1 uppercase tracking-wider">
+                  Maintenance Export
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleExportMaintenance("csv")}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <FiFileText className="w-4 h-4 text-emerald-600" />
+                  <span>Export as CSV / Excel</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportMaintenance("pdf")}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <FiPrinter className="w-4 h-4 text-blue-600" />
+                  <span>Export as PDF (Print)</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={() => setIsQuickReportOpen(true)}

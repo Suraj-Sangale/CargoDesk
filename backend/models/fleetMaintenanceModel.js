@@ -196,14 +196,18 @@ export async function getMaintenanceListByVehicleModel({
   status = null,
   maintenanceType = null,
   search = null,
+  exportAll = false,
 }) {
   const vid = Number(vehicleId);
   if (!vid || isNaN(vid)) {
     throw new Error("Valid vehicle ID is required");
   }
 
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
+  const isExport = Boolean(exportAll || limit === "all" || Number(limit) > 50);
+  const pageNum = isExport ? 1 : Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = isExport
+    ? Math.min(5000, Math.max(1, parseInt(limit, 10) || 1000))
+    : Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
   const offset = (pageNum - 1) * limitNum;
 
   // Build WHERE conditions
