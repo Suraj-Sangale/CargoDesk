@@ -1761,7 +1761,7 @@ export default function MaintenanceFormV2({
         </div>
 
         {/* 5. Expense / Cost Field (Single Simple Input) */}
-        <div className=" space-y-1.5">
+        <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
             <FiDollarSign className="w-3.5 h-3.5 text-emerald-600" />
             <span>Maintenance Expense / Cost (₹)</span>
