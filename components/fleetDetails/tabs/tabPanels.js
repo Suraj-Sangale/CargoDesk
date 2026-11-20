@@ -47,8 +47,33 @@ import { postApiData } from "@/utilities/services/apiService";
 /**
  * Overview Tab Panel
  */
-export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
+export function OverviewPanel({ fleet, summary = {}, onNavigateTab, onAddDocument }) {
   const status = (fleet?.status || "Active").toLowerCase();
+
+  const loggedInUser =
+    typeof window !== "undefined"
+      ? window.__NEXT_DATA__?.props?.pageData?.user
+      : null;
+
+  const exportSummary = {
+    ...summary,
+    orgName:
+      loggedInUser?.orgName ||
+      loggedInUser?.organization_name ||
+      fleet?.organization_name ||
+      fleet?.orgName ||
+      fleet?.orgCode ||
+      summary?.orgName ||
+      "",
+    organization_name:
+      loggedInUser?.orgName ||
+      loggedInUser?.organization_name ||
+      fleet?.organization_name ||
+      fleet?.orgName ||
+      fleet?.orgCode ||
+      summary?.organization_name ||
+      "",
+  };
 
   return (
     <div className="space-y-6">
@@ -64,7 +89,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           <button
             type="button"
             onClick={() => {
-              exportVehicleOverviewCsv(fleet);
+              exportVehicleOverviewCsv(fleet, exportSummary);
               showToast({ message: "Vehicle overview CSV downloaded", type: "success" });
             }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
@@ -75,7 +100,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           </button>
           <button
             type="button"
-            onClick={() => exportVehicleOverviewPdf(fleet)}
+            onClick={() => exportVehicleOverviewPdf(fleet, exportSummary)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-xl border border-blue-200 transition-colors cursor-pointer"
             title="Print or Save as PDF"
           >
@@ -87,7 +112,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
 
       {/* Metric Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Vehicle Status
@@ -104,7 +129,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           <p className="text-xs text-slate-400 mt-1">Operational state</p>
         </div>
 
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Documents
@@ -123,7 +148,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           </button>
         </div>
 
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Assigned Driver
@@ -142,7 +167,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           </button>
         </div>
 
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Financing & EMI
@@ -160,7 +185,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
             View EMI schedule <FiArrowRight className="w-3 h-3" />
           </button>
         </div>
-        {fleet?.gps_tracking_id && <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        {fleet?.gps_tracking_id && <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               GPS Tracking ID
@@ -557,11 +582,28 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
       const json = await postApiData("GET_VEHICLE_MAINTENANCE", payload);
       const exportList = json?.status && Array.isArray(json.data) ? json.data : records;
 
+      const loggedInUser =
+        typeof window !== "undefined"
+          ? window.__NEXT_DATA__?.props?.pageData?.user
+          : null;
+
+      const exportSummary = {
+        ...summary,
+        orgName:
+          loggedInUser?.orgName ||
+          loggedInUser?.organization_name ||
+          fleet?.organization_name ||
+          fleet?.orgName ||
+          fleet?.orgCode ||
+          summary?.orgName ||
+          "",
+      };
+
       if (exportFormat === "csv") {
-        exportMaintenanceHistoryCsv(exportList, fleet, summary);
+        exportMaintenanceHistoryCsv(exportList, fleet, exportSummary);
         showToast({ message: "Maintenance history CSV downloaded successfully", type: "success" });
       } else {
-        exportMaintenanceHistoryPdf(exportList, fleet, summary);
+        exportMaintenanceHistoryPdf(exportList, fleet, exportSummary);
       }
     } catch (err) {
       console.error("Export error:", err);
@@ -660,7 +702,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
       {/* 1. Summary Cards Section */}
       <div className="grid grid-cols-4 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Records */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
               Total Services
@@ -676,7 +718,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         </div>
 
         {/* Total Expenditure */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Total Expense
@@ -694,7 +736,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         </div>
 
         {/* Last Maintenance Date */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Last Service
@@ -713,7 +755,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         </div>
 
         {/* Current / Latest Status */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Latest Status

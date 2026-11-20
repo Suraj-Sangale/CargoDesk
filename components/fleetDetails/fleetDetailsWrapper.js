@@ -339,6 +339,7 @@ export default function FleetDetailsWrapper({
           {activeTab === "overview" && (
             <OverviewPanel
               fleet={fleet}
+              summary={initialSummary}
               onNavigateTab={(t) => setActiveTab(t)}
               onAddDocument={() => setDocModalOpen(true)}
             />

@@ -398,11 +398,33 @@ export function exportVehicleOverviewCsv(fleet, summary = {}) {
   return exportToCsv(filename, rows);
 }
 
+/**
+ * Helper to determine logged-in user or fleet's organization title for report branding
+ */
+export function getOrganizationTitle(fleet = null, summary = {}) {
+  if (summary?.orgName) return String(summary.orgName).toUpperCase();
+  if (summary?.organization_name) return String(summary.organization_name).toUpperCase();
+
+  if (typeof window !== "undefined") {
+    const pageUser = window.__NEXT_DATA__?.props?.pageData?.user;
+    console.log("🚀 ~ pageUser:", pageUser)
+    if (pageUser?.orgName) return String(pageUser.orgName).toUpperCase();
+    if (pageUser?.organization_name) return String(pageUser.organization_name).toUpperCase();
+  }
+
+  if (fleet?.organization_name) return String(fleet.organization_name).toUpperCase();
+  if (fleet?.orgName) return String(fleet.orgName).toUpperCase();
+  if (fleet?.orgCode) return String(fleet.orgCode).toUpperCase();
+
+  return "CARGODESK FLEET MANAGEMENT";
+}
+
 export function exportVehicleOverviewPdf(fleet, summary = {}) {
   const vNo = fleet?.vehicle_number || "MH 03 CD 5678";
   const fleetId = fleet?.id ? `FL-${String(fleet.id).padStart(6, "0")}` : "N/A";
   const status = (fleet?.status || "Active").trim();
   const dateStr = moment().format("DD MMM YYYY, hh:mm A");
+  const orgTitle = getOrganizationTitle(fleet, summary);
 
   const totalExpense = summary.total_expenditure !== undefined
     ? Number(summary.total_expenditure || 0).toLocaleString("en-IN")
@@ -424,8 +446,8 @@ export function exportVehicleOverviewPdf(fleet, summary = {}) {
   const bodyHtml = `
     <div class="header-banner">
       <div>
-        <h1 class="brand-title">CARGODESK FLEET MANAGEMENT</h1>
-        <p class="brand-subtitle">Vehicle Master Profile & Executive Compliance Overview</p>
+        <h1 class="brand-title">${orgTitle}</h1>
+        <p class="brand-subtitle">Vehicle Master Profile & Executive Compliance Overview &bull; By CargoDesk</p>
       </div>
       <div class="meta-box">
         <div><strong>Vehicle:</strong> ${vNo}</div>
@@ -614,6 +636,7 @@ export function exportMaintenanceHistoryPdf(records, fleet, summary = {}) {
   const vNo = fleet?.vehicle_number || "MH 03 CD 5678";
   const vModel = fleet?.vehicle_model || "Commercial Vehicle";
   const dateStr = moment().format("DD MMM YYYY, hh:mm A");
+  const orgTitle = getOrganizationTitle(fleet, summary);
 
   const totalExpense = summary.total_expenditure !== undefined
     ? Number(summary.total_expenditure || 0).toLocaleString("en-IN")
@@ -664,8 +687,8 @@ export function exportMaintenanceHistoryPdf(records, fleet, summary = {}) {
   const bodyHtml = `
     <div class="header-banner">
       <div>
-        <h1 class="brand-title">CARGODESK FLEET MANAGEMENT</h1>
-        <p class="brand-subtitle">Vehicle Maintenance Ledger & Service History Report</p>
+        <h1 class="brand-title">${orgTitle}</h1>
+        <p class="brand-subtitle">Vehicle Maintenance Ledger & Service History Report &bull; By CargoDesk</p>
       </div>
       <div class="meta-box">
         <div><strong>Vehicle:</strong> ${vNo} (${vModel})</div>
