@@ -207,17 +207,61 @@ export const FLEET_STATUS_OPTIONS = [
 ];
 
 export const FLEET_MAINTENANCE_TYPES = [
-  "Regular Service",
-  "Engine Repair",
-  "Tyre Replacement",
-  "Brake Repair",
-  "Electrical Issue",
-  "Battery Replacement",
-  "Oil & Filter Change",
-  "Suspension & Steering",
-  "Accident Damage",
-  "Breakdown",
-  "Other",
+  {
+    label: "🛠️ Regular Service",
+    type: "Regular Service",
+    text: "Routine service due",
+  },
+  {
+    label: "⚠️ Engine Smoke",
+    type: "Engine Repair",
+    text: "Engine overheating / smoke from hood",
+  },
+  {
+    label: "🛞 Flat Tyre",
+    type: "Tyre Replacement",
+    text: "Tyre puncture / flat tyre",
+  },
+  {
+    label: "🛑 Brake Issue",
+    type: "Brake Repair",
+    text: "Brakes not working properly / strange noise",
+  },
+  {
+    label: "⚡ Electrical",
+    type: "Electrical Issue",
+    text: "Lights, horn, wiring or electrical not working",
+  },
+  {
+    label: "🔋 Battery Dead",
+    type: "Battery Replacement",
+    text: "Battery dead / vehicle not starting",
+  },
+  {
+    label: "💧 Oil Leak",
+    type: "Oil & Filter Change",
+    text: "Engine oil or coolant leakage",
+  },
+  {
+    label: "🔧 Suspension",
+    type: "Suspension & Steering",
+    text: "Steering heavy / suspension noise / vehicle pulling to one side",
+  },
+  {
+    label: "💥 Accident",
+    type: "Accident Damage",
+    text: "Accident / body damage to vehicle",
+  },
+  {
+    label: "🚨 Breakdown",
+    type: "Breakdown",
+    text: "Vehicle breakdown / stopped on road",
+  },
+  {
+    label: "📝 Other",
+    type: "Other",
+    text: "Other problem (details below)",
+  },
 ];
 
 export const FLEET_MAINTENANCE_STATUSES = [

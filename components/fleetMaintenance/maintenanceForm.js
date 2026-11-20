@@ -315,7 +315,7 @@ export default function MaintenanceForm({
                   id="maintenance_type"
                   label="Maintenance Category"
                   required
-                  options={FLEET_MAINTENANCE_TYPES}
+                  options={FLEET_MAINTENANCE_TYPES.map(m=>m.type)}
                   value={field.value || ""}
                   selectedValue={field.value || ""}
                   onChange={(val) => {

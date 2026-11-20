@@ -42,6 +42,7 @@ import {
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 import EnableLocationPopup from "./enableLocationPopup";
+import { FLEET_MAINTENANCE_TYPES } from "@/utilities/masterData";
 
 const MAX_ATTACHMENTS = 10;
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -1005,7 +1006,7 @@ export default function MaintenanceFormV2({
 
       const payload = {
         vehicle_id: vid,
-        maintenance_type: maintenanceType || FLEET_MAINTENANCE_TYPES[0],
+        maintenance_type: ,
         description: problemDescription.trim(),
         maintenance_date: getIndiaDateString(),
         created_at: getIndiaISOString(),
@@ -1662,7 +1663,7 @@ export default function MaintenanceFormV2({
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none my-3">
-            {QUICK_PROBLEM_CHIPS.map((chip, idx) => (
+            {FLEET_MAINTENANCE_TYPES.map((chip, idx) => (
               <button
                 key={idx}
                 type="button"

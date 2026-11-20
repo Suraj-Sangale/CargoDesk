@@ -18,6 +18,7 @@ export const database = mysql({
 
 export default function executeQuery(query, values = []) {
   return new Promise((resolve, reject) => {
+    console.log("🚀 ~ query:", query)
     database
       .query(query, values)
       .then((results) => {
@@ -36,6 +37,7 @@ export async function executeTransaction(callback) {
   try {
     await database.query("START TRANSACTION");
     const result = await callback(async (query, values = []) => {
+      console.log("🚀 ~ query:", query)
       const res = await database.query(query, values);
       return JSON.parse(JSON.stringify(res));
     });

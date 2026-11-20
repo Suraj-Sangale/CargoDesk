@@ -679,8 +679,8 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
             >
               <option value="all">All Categories</option>
               {FLEET_MAINTENANCE_TYPES.map((tp) => (
-                <option key={tp} value={tp}>
-                  {tp}
+                <option key={tp.type} value={tp.type}>
+                  {tp.type}
                 </option>
               ))}
             </select>
