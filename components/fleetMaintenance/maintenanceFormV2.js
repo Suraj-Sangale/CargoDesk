@@ -39,6 +39,7 @@ import {
   FiChevronDown,
   FiRefreshCcw,
   FiSlash,
+  FiDollarSign,
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 import EnableLocationPopup from "./enableLocationPopup";
@@ -137,6 +138,13 @@ export default function MaintenanceFormV2({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionProgress, setSubmissionProgress] = useState("");
   const [formError, setFormError] = useState(null);
+
+  // 5. Expense / Cost Field State
+  const [expenseCost, setExpenseCost] = useState(
+    initialData?.cost !== undefined && initialData?.cost !== null
+      ? String(initialData.cost)
+      : "",
+  );
 
   // References
   const cameraInputRef = useRef(null);
@@ -995,11 +1003,11 @@ export default function MaintenanceFormV2({
         maintenance_date: getIndiaDateString(),
         created_at: getIndiaISOString(),
         status: "Reported",
-        cost: "0.00",
-        odometer_reading: null,
-        garage_name: null,
-        invoice_number: null,
-        additional_notes: null,
+        cost: expenseCost ? parseFloat(expenseCost) || "0.00" : "0.00",
+        odometer_reading: initialData?.odometer_reading ?? null,
+        garage_name: initialData?.garage_name ?? null,
+        invoice_number: initialData?.invoice_number ?? null,
+        additional_notes: initialData?.additional_notes ?? null,
       };
 
       let saveJson;
@@ -1031,6 +1039,7 @@ export default function MaintenanceFormV2({
         }
         setProblemDescription("");
         setMaintenanceType(initialData?.maintenance_type || "");
+        setExpenseCost("");
         attachedFiles.forEach((item) => {
           if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
             try {
@@ -1749,6 +1758,30 @@ export default function MaintenanceFormV2({
               <span>{speechError}</span>
             </p>
           )}
+        </div>
+
+        {/* 5. Expense / Cost Field (Single Simple Input) */}
+        <div className=" space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+            <FiDollarSign className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Maintenance Expense / Cost (₹)</span>
+            <span className="text-slate-400 font-normal text-[11px]">(Optional)</span>
+          </div>
+          <div className="relative">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">
+              ₹
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={expenseCost}
+              onChange={(e) => setExpenseCost(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="e.g. 1500 (Optional, leave blank if not known yet)"
+              className="w-full pl-8 pr-3.5 py-2.5 text-sm font-medium text-slate-900 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-400 disabled:opacity-60"
+            />
+          </div>
         </div>
 
         {/* 6. Prominent Full-Width Submit Button */}
