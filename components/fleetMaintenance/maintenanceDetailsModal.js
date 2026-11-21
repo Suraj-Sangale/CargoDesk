@@ -144,7 +144,7 @@ export default function MaintenanceDetailsModal({
     <div className="p-5 sm:p-6 space-y-5">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-        <div className="flex items-center gap-3">
+        {/* <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center font-bold text-xl shadow-2xs">
             <FiTool className="w-6 h-6" />
           </div>
@@ -156,11 +156,10 @@ export default function MaintenanceDetailsModal({
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Vehicle {record.vehicle_number} {record.vehicle_model ? `(${record.vehicle_model})` : ""} •{" "}
               {moment(record.maintenance_date).format("DD MMM YYYY")}
             </p>
           </div>
-        </div>
+        </div> */}
 
         {/* Status Changer Buttons */}
         <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">

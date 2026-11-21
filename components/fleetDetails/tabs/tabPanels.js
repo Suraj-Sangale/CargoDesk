@@ -35,6 +35,7 @@ import {
 import { HiOutlineTruck, HiOutlineDocumentText } from "react-icons/hi";
 import { ImSpinner9 } from "react-icons/im";
 import CommonModal from "../../common/commonModal";
+import CommonConfirmation from "../../common/items/commonConfirmation";
 import MaintenanceForm, { MaintenanceFormV2 } from "../../fleetMaintenance/maintenanceForm";
 import MaintenanceDetailsModal from "../../fleetMaintenance/maintenanceDetailsModal";
 import {
@@ -545,6 +546,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
   const [isQuickReportOpen, setIsQuickReportOpen] = useState(false);
   const [selectedRecordForDetails, setSelectedRecordForDetails] = useState(null);
   const [selectedRecordForEdit, setSelectedRecordForEdit] = useState(null);
+  const [recordToDelete, setRecordToDelete] = useState(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const exportMenuRef = useRef(null);
@@ -660,11 +662,13 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
     fetchMaintenance(1, statusFilter, typeFilter, searchQuery);
   };
 
-  // Handle Record Delete
-  const handleDeleteRecord = async (recordToDelete) => {
-    if (!window.confirm(`Are you sure you want to permanently delete this ${recordToDelete.maintenance_type} record and its attachments?`)) {
-      return;
-    }
+  // Handle Record Delete (Opens confirmation modal)
+  const handleDeleteRecord = (record) => {
+    setRecordToDelete(record);
+  };
+
+  const handleConfirmDeleteRecord = async () => {
+    if (!recordToDelete?.id) return;
 
     try {
       const json = await postApiData("DELETE_MAINTENANCE_RECORD", { id: recordToDelete.id });
@@ -673,8 +677,10 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         if (selectedRecordForDetails?.id === recordToDelete.id) {
           setSelectedRecordForDetails(null);
         }
-        fetchMaintenance();
-        if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id);
+    setRecords((prev)=>prev.filter((record)=>record.id!==recordToDelete.id))
+        setRecordToDelete(null);
+        // fetchMaintenance();
+        // if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id); // ne need to refresh
       } else {
         showToast({ message: json?.message || "Failed to delete record", type: "error" });
       }
@@ -896,9 +902,10 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         <div className="space-y-3">
           {records.map((item) => (
             <div
-              key={item.id}
-              className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs transition-all space-y-3.5"
-            >
+  key={item.id}
+  onClick={() => setSelectedRecordForDetails(item)}
+  className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs transition-all space-y-3.5 cursor-pointer"
+>
               {/* Card Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="flex items-center gap-3">
@@ -930,9 +937,9 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
                 </div>
 
                 {/* Cost & Odometer */}
-                <div className="flex items-center sm:text-right gap-3 sm:gap-4 self-start sm:self-center">
+                <div className="flex items-start sm:text-right gap-3 sm:gap-4 self-start sm:self-center">
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 block">Expense</span>
+                    {/* <span className="text-[11px] font-semibold text-slate-400 block">Expense</span> */}
                     <span className="text-sm font-bold text-slate-900">
                       ₹{Number(item.cost || 0).toLocaleString("en-IN")}
                     </span>
@@ -991,18 +998,21 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                  <button
+                  {/* <button
                     type="button"
                     onClick={() => setSelectedRecordForDetails(item)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
                   >
                     <FiEye className="w-3.5 h-3.5 text-blue-600" />
                     <span>View</span>
-                  </button>
+                  </button> */}
 
                   <button
                     type="button"
-                    onClick={() => setSelectedRecordForEdit(item)}
+                   onClick={(e) => {
+  e.stopPropagation();
+  setSelectedRecordForEdit(item);
+}}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
                   >
                     <FiEdit className="w-3.5 h-3.5 text-slate-600" />
@@ -1011,7 +1021,10 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
 
                   <button
                     type="button"
-                    onClick={() => handleDeleteRecord(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteRecord(item);
+                    }}
                     className="p-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
                     title="Delete record"
                   >
@@ -1173,6 +1186,26 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
               } catch (_) {}
               fetchMaintenance();
             }}
+          />
+        </CommonModal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {recordToDelete && (
+        <CommonModal
+          modalOpen={Boolean(recordToDelete)}
+          setModalOpen={(open) => {
+            if (!open) setRecordToDelete(null);
+          }}
+          modalTitle="Delete Confirmation"
+          modalSize="w-11/12 md:w-[480px]"
+        >
+          <CommonConfirmation
+            title={`Are you sure you want to permanently delete this ${recordToDelete.maintenance_type || "maintenance"} record and its attachments?`}
+            confirmText="Yes"
+            cancelText="No"
+            onConfirm={handleConfirmDeleteRecord}
+            onCancel={() => setRecordToDelete(null)}
           />
         </CommonModal>
       )}
