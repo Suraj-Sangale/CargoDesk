@@ -50,7 +50,7 @@ export default function CommonLayout({ children, pageProps = {} }) {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#F4F7FC] overflow-x-hidden">
+    <div className="min-h-screen flex bg-[#F4F7FC] overflow-x-clip">
       {/* Sidebar Navigation */}
       <Sidebar
         isMobileOpen={isMobileOpen}

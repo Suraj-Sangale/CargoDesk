@@ -18,7 +18,7 @@ export const database = mysql({
 
 export default function executeQuery(query, values = []) {
   return new Promise((resolve, reject) => {
-    console.log("🚀 ~ query:", query)
+    // console.log("🚀 ~ query:", query)
     database
       .query(query, values)
       .then((results) => {

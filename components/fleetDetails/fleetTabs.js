@@ -70,7 +70,7 @@ export default function FleetTabs({
     },
     {
       id: "history",
-      name: "Activity History",
+      name: "All Activity History",
       icon: FiClock,
       isPrimary: true,
     },
