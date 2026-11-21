@@ -109,6 +109,7 @@ export default function FleetSummaryCard({ fleet, onEditPhoto }) {
         >
           <FiCamera className="w-3.5 h-3.5" />
           <span>Change Photo</span>
+          
         </button>
       </div>
 

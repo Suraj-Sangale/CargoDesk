@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import moment from "moment";
 import {
   FiFileText,
@@ -43,12 +43,12 @@ import {
   FLEET_MAINTENANCE_STATUSES,
 } from "@/utilities/masterData";
 import { showToast } from "@/utilities/toastService";
-import { postApiData } from "@/utilities/services/apiService";
+import { postApiData, swrPostApiData, invalidateApiCache } from "@/utilities/services/apiService";
 
 /**
  * Overview Tab Panel
  */
-export function OverviewPanel({ fleet, summary = {}, onNavigateTab, onAddDocument }) {
+export const OverviewPanel = React.memo(function OverviewPanel({ fleet, summary = {}, onNavigateTab, onAddDocument }) {
   const status = (fleet?.status || "Active").toLowerCase();
 
   const loggedInUser =
@@ -56,7 +56,7 @@ export function OverviewPanel({ fleet, summary = {}, onNavigateTab, onAddDocumen
       ? window.__NEXT_DATA__?.props?.pageData?.user
       : null;
 
-  const exportSummary = {
+  const exportSummary = useMemo(() => ({
     ...summary,
     orgName:
       loggedInUser?.orgName ||
@@ -74,7 +74,7 @@ export function OverviewPanel({ fleet, summary = {}, onNavigateTab, onAddDocumen
       fleet?.orgCode ||
       summary?.organization_name ||
       "",
-  };
+  }), [summary, fleet?.organization_name, fleet?.orgName, fleet?.orgCode, loggedInUser?.orgName, loggedInUser?.organization_name]);
 
   return (
     <div className="space-y-6">
@@ -209,12 +209,12 @@ export function OverviewPanel({ fleet, summary = {}, onNavigateTab, onAddDocumen
       </div>
     </div>
   );
-}
+});
 
 /**
  * Documents Tab Panel
  */
-export function DocumentsPanel({ fleet, onAddDocument, onEditDocument }) {
+export const DocumentsPanel = React.memo(function DocumentsPanel({ fleet, onAddDocument, onEditDocument }) {
   const documents = Array.isArray(fleet?.documents) ? fleet.documents : [];
 
   return (
@@ -332,12 +332,12 @@ export function DocumentsPanel({ fleet, onAddDocument, onEditDocument }) {
       )}
     </div>
   );
-}
+});
 
 /**
  * EMI Tab Panel
  */
-export function EmiPanel({ fleet }) {
+export const EmiPanel = React.memo(function EmiPanel({ fleet }) {
   const emis = Array.isArray(fleet?.emis) ? fleet.emis : [];
 
   return (
@@ -433,12 +433,12 @@ export function EmiPanel({ fleet }) {
       )}
     </div>
   );
-}
+});
 
 /**
  * Driver Tab Panel
  */
-export function DriverPanel({ fleet, onAssignDriver, onUnassignDriver }) {
+export const DriverPanel = React.memo(function DriverPanel({ fleet, onAssignDriver, onUnassignDriver }) {
   const hasDriver = Boolean(fleet?.driver_name);
 
   return (
@@ -520,13 +520,13 @@ export function DriverPanel({ fleet, onAssignDriver, onUnassignDriver }) {
       )}
     </div>
   );
-}
+});
 
 /**
  * Maintenance Tab Panel
  * Complete maintenance history, summary metrics, filtering, and media management for the vehicle.
  */
-export function MaintenancePanel({ fleet, onRefreshFleet }) {
+export const MaintenancePanel = React.memo(function MaintenancePanel({ fleet, onRefreshFleet }) {
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState({
     total_records: 0,
@@ -540,6 +540,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -549,7 +550,9 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
   const [recordToDelete, setRecordToDelete] = useState(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
   const exportMenuRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   // Close export menu on outside click
   useEffect(() => {
@@ -566,23 +569,219 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
     };
   }, [exportMenuOpen]);
 
-  // Handle Maintenance History Export
+  // Debounce search query input (350ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // Fetch maintenance records and vehicle summary with SWR cache and race-condition guard
+  const fetchMaintenance = useCallback(
+    async (targetPage = 1, forceRefresh = false) => {
+      if (!fleet?.id) return;
+      const currentRequestId = ++requestIdRef.current;
+      setLoading(true);
+
+      try {
+        const payload = {
+          vehicleId: fleet.id,
+          page: targetPage,
+          limit: 10,
+        };
+        if (statusFilter !== "all") payload.status = statusFilter;
+        if (typeFilter !== "all") payload.maintenance_type = typeFilter;
+        if (debouncedSearch !== "") payload.search = debouncedSearch;
+
+        // Use swrPostApiData for instant tab switching (0 ms cache hit)
+        const json = await swrPostApiData("GET_VEHICLE_MAINTENANCE", payload, {
+          ttl: 60000,
+          force: forceRefresh,
+          onRevalidate: (freshRes) => {
+            if (currentRequestId === requestIdRef.current && freshRes?.status) {
+              setRecords(Array.isArray(freshRes.data) ? freshRes.data : []);
+              if (freshRes.summary) {
+                setSummary(freshRes.summary);
+              }
+              if (freshRes.pagination) {
+                setPage(freshRes.pagination.page);
+                setTotalPages(freshRes.pagination.totalPages || 1);
+              }
+            }
+          },
+        });
+
+        // Only commit if this is still the active request
+        if (currentRequestId === requestIdRef.current && json?.status) {
+          setRecords(Array.isArray(json.data) ? json.data : []);
+          if (json.summary) {
+            setSummary(json.summary);
+          }
+          if (json.pagination) {
+            setPage(json.pagination.page);
+            setTotalPages(json.pagination.totalPages || 1);
+          }
+        }
+      } catch (err) {
+        if (currentRequestId === requestIdRef.current) {
+          console.error("Error loading maintenance records:", err);
+        }
+      } finally {
+        if (currentRequestId === requestIdRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [fleet?.id, statusFilter, typeFilter, debouncedSearch]
+  );
+
+  // Trigger fetch when vehicle, filters, or debounced search change (resets to page 1)
+  useEffect(() => {
+    fetchMaintenance(1);
+  }, [fetchMaintenance]);
+
+  // Handle Search on Enter (immediate execution)
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    setDebouncedSearch(searchQuery.trim());
+  };
+
+  // 1. OPTIMISTIC DELETE (0 API calls on success)
+  const handleDeleteRecord = (record) => {
+    setRecordToDelete(record);
+  };
+
+  const handleConfirmDeleteRecord = async () => {
+    if (!recordToDelete?.id) return;
+    const deletedId = recordToDelete.id;
+    const deletedCost = Number(recordToDelete.cost || 0);
+
+    try {
+      const json = await postApiData("DELETE_MAINTENANCE_RECORD", { id: deletedId });
+      if (json?.status) {
+        showToast({ message: "Maintenance record deleted successfully", type: "success" });
+
+        // Optimistically remove from state
+        setRecords((prev) => prev.filter((r) => r.id !== deletedId));
+
+        // Optimistically update summary metrics
+        setSummary((prev) => ({
+          ...prev,
+          total_records: Math.max(0, (Number(prev.total_records) || 0) - 1),
+          total_expenditure: Math.max(0, (Number(prev.total_expenditure) || 0) - deletedCost),
+        }));
+
+        if (selectedRecordForDetails?.id === deletedId) {
+          setSelectedRecordForDetails(null);
+        }
+        setRecordToDelete(null);
+        invalidateApiCache("GET_VEHICLE_MAINTENANCE");
+      } else {
+        showToast({ message: json?.message || "Failed to delete record", type: "error" });
+      }
+    } catch (err) {
+      console.error("Error deleting record:", err);
+      showToast({ message: "Network error while deleting record", type: "error" });
+    }
+  };
+
+  // 2. OPTIMISTIC EDIT (0 API calls on success)
+  const handleEditSuccess = (updatedRecord) => {
+    setSelectedRecordForEdit(null);
+    if (!updatedRecord?.id) {
+      fetchMaintenance(page, true);
+      return;
+    }
+
+    setRecords((prev) =>
+      prev.map((r) => (r.id === updatedRecord.id ? { ...r, ...updatedRecord } : r))
+    );
+
+    if (selectedRecordForDetails?.id === updatedRecord.id) {
+      setSelectedRecordForDetails((prev) => (prev ? { ...prev, ...updatedRecord } : null));
+    }
+
+    invalidateApiCache("GET_VEHICLE_MAINTENANCE");
+  };
+
+  // 3. OPTIMISTIC ADD / QUICK REPORT (0 API calls on success)
+  const handleAddSuccess = (newRecord) => {
+    setIsAddModalOpen(false);
+    setIsQuickReportOpen(false);
+
+    if (!newRecord?.id) {
+      fetchMaintenance(1, true);
+      return;
+    }
+
+    // Prepend new record to top of list
+    setRecords((prev) => [newRecord, ...prev]);
+
+    // Optimistically update summary metrics
+    setSummary((prev) => ({
+      ...prev,
+      total_records: (Number(prev.total_records) || 0) + 1,
+      total_expenditure: (Number(prev.total_expenditure) || 0) + Number(newRecord.cost || 0),
+      last_maintenance_date: newRecord.maintenance_date || prev.last_maintenance_date,
+      latest_status: newRecord.status || prev.latest_status,
+    }));
+
+    invalidateApiCache("GET_VEHICLE_MAINTENANCE");
+  };
+
+  // 4. OPTIMISTIC STATUS CHANGE (0 extra API calls)
+  const handleDetailsStatusChange = (newStatus) => {
+    if (!selectedRecordForDetails?.id) return;
+    const recId = selectedRecordForDetails.id;
+
+    setSelectedRecordForDetails((prev) => (prev ? { ...prev, status: newStatus } : null));
+    setRecords((prev) =>
+      prev.map((r) => (r.id === recId ? { ...r, status: newStatus } : r))
+    );
+
+    invalidateApiCache("GET_VEHICLE_MAINTENANCE");
+  };
+
+  // 5. SINGLE-RECORD REFRESH (Only when attachments change in details modal)
+  const handleDetailsRefresh = async () => {
+    if (!selectedRecordForDetails?.id) return;
+    try {
+      const json = await postApiData("GET_MAINTENANCE_RECORD", { id: selectedRecordForDetails.id });
+      if (json?.status && json?.data) {
+        setSelectedRecordForDetails(json.data);
+        setRecords((prev) =>
+          prev.map((r) => (r.id === json.data.id ? json.data : r))
+        );
+      }
+    } catch (_) {}
+    invalidateApiCache("GET_VEHICLE_MAINTENANCE");
+  };
+
+  // 6. OPTIMIZED EXPORT (Reuses in-memory records when possible)
   const handleExportMaintenance = async (exportFormat = "csv") => {
     if (!fleet?.id) return;
     setIsExporting(true);
     try {
       showToast({ message: `Preparing maintenance ${exportFormat.toUpperCase()} report...`, type: "info" });
-      const payload = {
-        vehicleId: fleet.id,
-        exportAll: true,
-        limit: 2000,
-      };
-      if (statusFilter && statusFilter !== "all") payload.status = statusFilter;
-      if (typeFilter && typeFilter !== "all") payload.maintenance_type = typeFilter;
-      if (searchQuery && searchQuery.trim() !== "") payload.search = searchQuery.trim();
 
-      const json = await postApiData("GET_VEHICLE_MAINTENANCE", payload);
-      const exportList = json?.status && Array.isArray(json.data) ? json.data : records;
+      let exportList = records;
+      // Only hit the API if total records exceed the currently loaded page
+      if (Number(summary.total_records || 0) > records.length) {
+        const payload = {
+          vehicleId: fleet.id,
+          exportAll: true,
+          limit: 2000,
+        };
+        if (statusFilter !== "all") payload.status = statusFilter;
+        if (typeFilter !== "all") payload.maintenance_type = typeFilter;
+        if (debouncedSearch !== "") payload.search = debouncedSearch;
+
+        const json = await postApiData("GET_VEHICLE_MAINTENANCE", payload);
+        if (json?.status && Array.isArray(json.data)) {
+          exportList = json.data;
+        }
+      }
 
       const loggedInUser =
         typeof window !== "undefined"
@@ -613,80 +812,6 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
     } finally {
       setIsExporting(false);
       setExportMenuOpen(false);
-    }
-  };
-
-  // Fetch maintenance records and vehicle summary
-  const fetchMaintenance = useCallback(
-    async (currentPage = page, status = statusFilter, type = typeFilter, search = searchQuery) => {
-      if (!fleet?.id) return;
-      setLoading(true);
-
-      try {
-        const payload = {
-          vehicleId: fleet.id,
-          page: currentPage,
-          limit: 10,
-        };
-        if (status && status !== "all") payload.status = status;
-        if (type && type !== "all") payload.maintenance_type = type;
-        if (search && search.trim() !== "") payload.search = search.trim();
-
-        const json = await postApiData("GET_VEHICLE_MAINTENANCE", payload);
-        if (json?.status) {
-          setRecords(Array.isArray(json.data) ? json.data : []);
-          if (json.summary) {
-            setSummary(json.summary);
-          }
-          if (json.pagination) {
-            setPage(json.pagination.page);
-            setTotalPages(json.pagination.totalPages || 1);
-          }
-        }
-      } catch (err) {
-        console.error("Error loading maintenance records:", err);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [fleet?.id, page, statusFilter, typeFilter, searchQuery]
-  );
-
-  useEffect(() => {
-    fetchMaintenance(1, statusFilter, typeFilter, searchQuery);
-  }, [fleet?.id, statusFilter, typeFilter]);
-
-  // Handle Search on Enter or debounce
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    fetchMaintenance(1, statusFilter, typeFilter, searchQuery);
-  };
-
-  // Handle Record Delete (Opens confirmation modal)
-  const handleDeleteRecord = (record) => {
-    setRecordToDelete(record);
-  };
-
-  const handleConfirmDeleteRecord = async () => {
-    if (!recordToDelete?.id) return;
-
-    try {
-      const json = await postApiData("DELETE_MAINTENANCE_RECORD", { id: recordToDelete.id });
-      if (json?.status) {
-        showToast({ message: "Maintenance record deleted successfully", type: "success" });
-        if (selectedRecordForDetails?.id === recordToDelete.id) {
-          setSelectedRecordForDetails(null);
-        }
-    setRecords((prev)=>prev.filter((record)=>record.id!==recordToDelete.id))
-        setRecordToDelete(null);
-        // fetchMaintenance();
-        // if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id); // ne need to refresh
-      } else {
-        showToast({ message: json?.message || "Failed to delete record", type: "error" });
-      }
-    } catch (err) {
-      console.error("Error deleting record:", err);
-      showToast({ message: "Network error while deleting record", type: "error" });
     }
   };
 
@@ -1106,11 +1231,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
           <MaintenanceFormV2
             preselectedVehicle={fleet}
             onClose={() => setIsQuickReportOpen(false)}
-            onSuccess={() => {
-              setIsQuickReportOpen(false);
-              fetchMaintenance(1);
-              if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id);
-            }}
+            onSuccess={handleAddSuccess}
           />
         </CommonModal>
       )}
@@ -1127,10 +1248,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
             preselectedVehicle={fleet}
             isEdit={false}
             onClose={() => setIsAddModalOpen(false)}
-            onSuccess={() => {
-              fetchMaintenance(1);
-              if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id);
-            }}
+            onSuccess={handleAddSuccess}
           />
         </CommonModal>
       )}
@@ -1148,11 +1266,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
             initialData={selectedRecordForEdit}
             isEdit={true}
             onClose={() => setSelectedRecordForEdit(null)}
-            onSuccess={() => {
-              setSelectedRecordForEdit(null);
-              fetchMaintenance();
-              if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id);
-            }}
+            onSuccess={handleEditSuccess}
           />
         </CommonModal>
       )}
@@ -1173,19 +1287,8 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
               setSelectedRecordForEdit(rec);
             }}
             onDelete={handleDeleteRecord}
-            onStatusChange={() => {
-              fetchMaintenance();
-              if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id);
-            }}
-            onRefresh={async () => {
-              try {
-                const json = await postApiData("GET_MAINTENANCE_RECORD", { id: selectedRecordForDetails.id });
-                if (json?.status && json?.data) {
-                  setSelectedRecordForDetails(json.data);
-                }
-              } catch (_) {}
-              fetchMaintenance();
-            }}
+            onStatusChange={handleDetailsStatusChange}
+            onRefresh={handleDetailsRefresh}
           />
         </CommonModal>
       )}
@@ -1211,5 +1314,5 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
       )}
     </div>
   );
-}
+});
 
