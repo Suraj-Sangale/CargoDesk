@@ -45,9 +45,15 @@ export function exportToCsv(filename, data) {
 export function openPrintPdfWindow(title, bodyHtml) {
   if (typeof window === "undefined") return;
 
-  const printWindow = window.open("", "_blank", "width=960,height=800,menubar=no,toolbar=no");
+  const printWindow = window.open(
+    "",
+    "_blank",
+    "width=960,height=800,menubar=no,toolbar=no",
+  );
   if (!printWindow) {
-    alert("Popup was blocked by your browser. Please allow popups for CargoDesk to export PDF.");
+    alert(
+      "Popup was blocked by your browser. Please allow popups for CargoDesk to export PDF.",
+    );
     return;
   }
 
@@ -349,19 +355,21 @@ export function buildVehicleOverviewRows(fleet, summary = {}) {
   const status = (fleet?.status || "Active").trim();
   const fleetId = fleet?.id ? `FL-${String(fleet.id).padStart(6, "0")}` : "N/A";
 
-  const totalExpense = summary.total_expenditure !== undefined
-    ? Number(summary.total_expenditure || 0).toFixed(2)
-    : "0.00";
-  const totalServices = summary.total_records !== undefined
-    ? summary.total_records
-    : (fleet?.counts?.maintenance || 0);
+  const totalExpense =
+    summary.total_expenditure !== undefined
+      ? Number(summary.total_expenditure || 0).toFixed(2)
+      : "0.00";
+  const totalServices =
+    summary.total_records !== undefined
+      ? summary.total_records
+      : fleet?.counts?.maintenance || 0;
   const lastService = summary.last_maintenance_date
     ? moment(summary.last_maintenance_date).format("YYYY-MM-DD")
     : "None Recorded";
 
   return [
     {
-      "Fleet ID": fleetId,
+      "Vehicle ID": fleetId,
       "Vehicle Number": vNo,
       "Model & Make": fleet?.vehicle_model || "",
       "Vehicle Type": fleet?.vehicle_type || "",
@@ -374,18 +382,28 @@ export function buildVehicleOverviewRows(fleet, summary = {}) {
       "Payload Capacity": fleet?.capacity || "",
       "GPS Tracking ID": fleet?.gps_tracking_id || "",
       "Assigned Driver Name": fleet?.driver_name || "Unassigned",
-      "Driver Contact Number": fleet?.driver_contact || fleet?.contact_number || "",
+      "Driver Contact Number":
+        fleet?.driver_contact || fleet?.contact_number || "",
       "Driver License Number": fleet?.driver_license_number || "",
       "Driver Status": fleet?.driver_status || "",
-      "RC Expiry Date": fleet?.rc_expiry ? moment(fleet.rc_expiry).format("YYYY-MM-DD") : "",
-      "Total Registered Documents": fleet?.counts?.documents || (Array.isArray(fleet?.documents) ? fleet.documents.length : 0),
-      "Active EMI Loans": fleet?.counts?.emi || (Array.isArray(fleet?.emi) ? fleet.emi.length : 0),
+      "RC Expiry Date": fleet?.rc_expiry
+        ? moment(fleet.rc_expiry).format("YYYY-MM-DD")
+        : "",
+      "Total Registered Documents":
+        fleet?.counts?.documents ||
+        (Array.isArray(fleet?.documents) ? fleet.documents.length : 0),
+      "Active EMI Loans":
+        fleet?.counts?.emi ||
+        (Array.isArray(fleet?.emi) ? fleet.emi.length : 0),
       "Total Maintenance Logged": totalServices,
       "Total Maintenance Cost (INR)": totalExpense,
       "Last Service Date": lastService,
-      "Organization Name": fleet?.organization_name || fleet?.orgName || fleet?.orgCode || "",
+      "Organization Name":
+        fleet?.organization_name || fleet?.orgName || fleet?.orgCode || "",
       "Operational Notes": (fleet?.notes || "").replace(/\r?\n/g, " "),
-      "Created On": fleet?.created_at ? moment(fleet.created_at).format("YYYY-MM-DD HH:mm") : "",
+      "Created On": fleet?.created_at
+        ? moment(fleet.created_at).format("YYYY-MM-DD HH:mm")
+        : "",
     },
   ];
 }
@@ -403,16 +421,18 @@ export function exportVehicleOverviewCsv(fleet, summary = {}) {
  */
 export function getOrganizationTitle(fleet = null, summary = {}) {
   if (summary?.orgName) return String(summary.orgName).toUpperCase();
-  if (summary?.organization_name) return String(summary.organization_name).toUpperCase();
+  if (summary?.organization_name)
+    return String(summary.organization_name).toUpperCase();
 
   if (typeof window !== "undefined") {
     const pageUser = window.__NEXT_DATA__?.props?.pageData?.user;
-    console.log("🚀 ~ pageUser:", pageUser)
     if (pageUser?.orgName) return String(pageUser.orgName).toUpperCase();
-    if (pageUser?.organization_name) return String(pageUser.organization_name).toUpperCase();
+    if (pageUser?.organization_name)
+      return String(pageUser.organization_name).toUpperCase();
   }
 
-  if (fleet?.organization_name) return String(fleet.organization_name).toUpperCase();
+  if (fleet?.organization_name)
+    return String(fleet.organization_name).toUpperCase();
   if (fleet?.orgName) return String(fleet.orgName).toUpperCase();
   if (fleet?.orgCode) return String(fleet.orgCode).toUpperCase();
 
@@ -426,12 +446,14 @@ export function exportVehicleOverviewPdf(fleet, summary = {}) {
   const dateStr = moment().format("DD MMM YYYY, hh:mm A");
   const orgTitle = getOrganizationTitle(fleet, summary);
 
-  const totalExpense = summary.total_expenditure !== undefined
-    ? Number(summary.total_expenditure || 0).toLocaleString("en-IN")
-    : "0";
-  const totalServices = summary.total_records !== undefined
-    ? summary.total_records
-    : (fleet?.counts?.maintenance || 0);
+  const totalExpense =
+    summary.total_expenditure !== undefined
+      ? Number(summary.total_expenditure || 0).toLocaleString("en-IN")
+      : "0";
+  const totalServices =
+    summary.total_records !== undefined
+      ? summary.total_records
+      : fleet?.counts?.maintenance || 0;
   const lastService = summary.last_maintenance_date
     ? moment(summary.last_maintenance_date).format("DD MMM YYYY")
     : "None Recorded";
@@ -440,8 +462,8 @@ export function exportVehicleOverviewPdf(fleet, summary = {}) {
     status.toLowerCase() === "active"
       ? "badge-active"
       : status.toLowerCase() === "maintenance"
-      ? "badge-maintenance"
-      : "badge-transit";
+        ? "badge-maintenance"
+        : "badge-transit";
 
   const bodyHtml = `
     <div class="header-banner">
@@ -451,7 +473,7 @@ export function exportVehicleOverviewPdf(fleet, summary = {}) {
       </div>
       <div class="meta-box">
         <div><strong>Vehicle:</strong> ${vNo}</div>
-        <div><strong>Fleet ID:</strong> ${fleetId}</div>
+        <div><strong>Vehicle ID:</strong> ${fleetId}</div>
         <div><strong>Generated:</strong> ${dateStr}</div>
       </div>
     </div>
@@ -474,7 +496,7 @@ export function exportVehicleOverviewPdf(fleet, summary = {}) {
       <div class="summary-card">
         <div class="summary-card-title">Operational State</div>
         <div class="summary-card-val">${status}</div>
-        <div class="summary-card-sub">Fleet status</div>
+        <div class="summary-card-sub">Vehicle status</div>
       </div>
       <div class="summary-card">
         <div class="summary-card-title">Assigned Driver</div>
@@ -499,7 +521,7 @@ export function exportVehicleOverviewPdf(fleet, summary = {}) {
     <div class="section-title">1. Technical & Registration Specifications</div>
     <table class="kv-table">
       <tr>
-        <td class="kv-key">Fleet Identifier</td>
+        <td class="kv-key">Vehicle Identifier</td>
         <td class="kv-val"><strong>${fleetId}</strong></td>
         <td class="kv-key">Registration Number</td>
         <td class="kv-val"><strong>${vNo}</strong></td>
@@ -569,18 +591,24 @@ export function exportVehicleOverviewPdf(fleet, summary = {}) {
     </table>
 
     <!-- 4. Notes & Operational Remarks -->
-    <div class="section-title">4. Operational Notes & Remarks</div>
-    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 11px; color: #334155; line-height: 1.6;">
-      ${fleet?.notes || "Assigned for commercial fleet logistics operations. Managed under CargoDesk Logistics System."}
-    </div>
+    ${
+  fleet?.notes?.trim()
+    ? `
+      <div class="section-title">4. Operational Notes & Remarks</div>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 11px; color: #334155; line-height: 1.6;">
+        ${fleet.notes}
+      </div>
+    `
+    : ""
+}
 
     <div class="footer-note">
-      <span>CargoDesk Logistics Management &bull; Fleet Overview Report</span>
+      <span>CargoDesk Logistics Management &bull; Vehicle Master Profile Report</span>
       <span>Confidential &bull; Generated on ${dateStr}</span>
     </div>
   `;
 
-  openPrintPdfWindow(`CargoDesk_Vehicle_Overview_${vNo}`, bodyHtml);
+  openPrintPdfWindow(`Vehicle_Overview_${vNo}`, bodyHtml);
 }
 
 /**
@@ -602,7 +630,8 @@ export function buildMaintenanceHistoryRows(records = [], fleet = {}) {
       ? moment(r.created_at).format("YYYY-MM-DD HH:mm")
       : "";
     const costFormatted = Number(r.cost || 0).toFixed(2);
-    const mediaCount = r.media_count || (Array.isArray(r.media) ? r.media.length : 0);
+    const mediaCount =
+      r.media_count || (Array.isArray(r.media) ? r.media.length : 0);
 
     return {
       "Record ID": recId,
@@ -610,12 +639,17 @@ export function buildMaintenanceHistoryRows(records = [], fleet = {}) {
       "Vehicle Model": r.vehicle_model || vModel,
       "Service Date": serviceDate,
       "Maintenance Category": r.maintenance_type || "Regular Service",
-      "Status": r.status || "Reported",
+      Status: r.status || "Reported",
       "Total Cost (INR)": costFormatted,
-      "Odometer Reading (KM)": r.odometer_reading ? Number(r.odometer_reading) : "",
+      "Odometer Reading (KM)": r.odometer_reading
+        ? Number(r.odometer_reading)
+        : "",
       "Garage / Workshop": r.garage_name || "Self / Workshop",
       "Invoice Number": r.invoice_number || "",
-      "Problem & Work Description": (r.description || "").replace(/\r?\n/g, " "),
+      "Problem & Work Description": (r.description || "").replace(
+        /\r?\n/g,
+        " ",
+      ),
       "Mechanic Remarks": (r.additional_notes || "").replace(/\r?\n/g, " "),
       "Evidence Attachments Count": mediaCount,
       "Logged By": r.created_by_name || "System",
@@ -638,9 +672,10 @@ export function exportMaintenanceHistoryPdf(records, fleet, summary = {}) {
   const dateStr = moment().format("DD MMM YYYY, hh:mm A");
   const orgTitle = getOrganizationTitle(fleet, summary);
 
-  const totalExpense = summary.total_expenditure !== undefined
-    ? Number(summary.total_expenditure || 0).toLocaleString("en-IN")
-    : "0";
+  const totalExpense =
+    summary.total_expenditure !== undefined
+      ? Number(summary.total_expenditure || 0).toLocaleString("en-IN")
+      : "0";
   const totalServices = records?.length || summary.total_records || 0;
   const lastService = summary.last_maintenance_date
     ? moment(summary.last_maintenance_date).format("DD MMM YYYY")
@@ -648,25 +683,40 @@ export function exportMaintenanceHistoryPdf(records, fleet, summary = {}) {
 
   const getBadgeClass = (st) => {
     switch (st) {
-      case "Completed": return "badge-completed";
-      case "In Progress": return "badge-inprogress";
-      case "Cancelled": return "badge-cancelled";
-      default: return "badge-reported";
+      case "Completed":
+        return "badge-completed";
+      case "In Progress":
+        return "badge-inprogress";
+      case "Cancelled":
+        return "badge-cancelled";
+      default:
+        return "badge-reported";
     }
   };
 
-  const rowsHtml = (records || []).map((r, idx) => {
-    const recId = r.id ? `MNT-${String(r.id).padStart(6, "0")}` : `#${idx + 1}`;
-    const sDate = r.maintenance_date ? moment(r.maintenance_date).format("DD MMM YYYY") : "N/A";
-    const cost = Number(r.cost || 0).toLocaleString("en-IN");
-    const odo = r.odometer_reading ? `${Number(r.odometer_reading).toLocaleString("en-IN")} KM` : "-";
-    const garage = r.garage_name || "Self / Workshop";
-    const inv = r.invoice_number ? `<span style="font-family: monospace;">${r.invoice_number}</span>` : "-";
-    const desc = r.description || "No description provided";
-    const notes = r.additional_notes ? `<div style="font-size: 10px; color: #b45309; margin-top: 3px;"><em>Note: ${r.additional_notes}</em></div>` : "";
-    const badgeCls = getBadgeClass(r.status);
+  const rowsHtml = (records || [])
+    .map((r, idx) => {
+      const recId = r.id
+        ? `MNT-${String(r.id).padStart(6, "0")}`
+        : `#${idx + 1}`;
+      const sDate = r.maintenance_date
+        ? moment(r.maintenance_date).format("DD MMM YYYY")
+        : "N/A";
+      const cost = Number(r.cost || 0).toLocaleString("en-IN");
+      const odo = r.odometer_reading
+        ? `${Number(r.odometer_reading).toLocaleString("en-IN")} KM`
+        : "-";
+      const garage = r.garage_name || "Self / Workshop";
+      const inv = r.invoice_number
+        ? `<span style="font-family: monospace;">${r.invoice_number}</span>`
+        : "-";
+      const desc = r.description || "No description provided";
+      const notes = r.additional_notes
+        ? `<div style="font-size: 10px; color: #b45309; margin-top: 3px;"><em>Note: ${r.additional_notes}</em></div>`
+        : "";
+      const badgeCls = getBadgeClass(r.status);
 
-    return `
+      return `
       <tr>
         <td style="font-weight: 600; white-space: nowrap;">${sDate}</td>
         <td style="font-family: monospace; font-size: 10px; font-weight: 600;">${recId}</td>
@@ -682,7 +732,8 @@ export function exportMaintenanceHistoryPdf(records, fleet, summary = {}) {
         </td>
       </tr>
     `;
-  }).join("");
+    })
+    .join("");
 
   const bodyHtml = `
     <div class="header-banner">
@@ -738,15 +789,21 @@ export function exportMaintenanceHistoryPdf(records, fleet, summary = {}) {
         </tr>
       </thead>
       <tbody>
-        ${rowsHtml.length > 0 ? rowsHtml : `
+        ${
+          rowsHtml.length > 0
+            ? rowsHtml
+            : `
           <tr>
             <td colspan="9" style="text-align: center; padding: 24px; color: #94a3b8;">
               No maintenance records found for this vehicle.
             </td>
           </tr>
-        `}
+        `
+        }
       </tbody>
-      ${records && records.length > 0 ? `
+      ${
+        records && records.length > 0
+          ? `
         <tfoot>
           <tr style="background: #f1f5f9; font-weight: 800;">
             <td colspan="4" style="text-align: right; padding: 10px; font-size: 11px;">
@@ -758,11 +815,13 @@ export function exportMaintenanceHistoryPdf(records, fleet, summary = {}) {
             <td colspan="4"></td>
           </tr>
         </tfoot>
-      ` : ""}
+      `
+          : ""
+      }
     </table>
 
     <div class="footer-note">
-      <span>CargoDesk Logistics Management &bull; Fleet Maintenance Service Ledger</span>
+      <span>CargoDesk Logistics Management &bull; Vehicle Maintenance Ledger</span>
       <span>Confidential &bull; Generated on ${dateStr}</span>
     </div>
   `;
