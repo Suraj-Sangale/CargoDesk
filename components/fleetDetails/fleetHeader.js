@@ -11,9 +11,16 @@ import {
   FiCheck,
   FiShield,
   FiTool,
+  FiDownload,
+  FiFileText,
+  FiPrinter,
 } from "react-icons/fi";
 import { HiOutlineTruck } from "react-icons/hi";
 import { showToast } from "@/utilities/toastService";
+import {
+  exportVehicleOverviewCsv,
+  exportVehicleOverviewPdf,
+} from "@/utilities/exportUtils";
 
 export default function FleetHeader({
   fleet,
@@ -22,8 +29,10 @@ export default function FleetHeader({
   onStatusChange,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef(null);
+  const exportMenuRef = useRef(null);
 
   // Close dropdown menu on outside click
   useEffect(() => {
@@ -31,14 +40,17 @@ export default function FleetHeader({
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setMenuOpen(false);
       }
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+        setExportMenuOpen(false);
+      }
     };
-    if (menuOpen) {
+    if (menuOpen || exportMenuOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [menuOpen]);
+  }, [menuOpen, exportMenuOpen]);
 
   const vehicleNo = fleet?.vehicle_number || "MH 03 CD 5678";
   const vehicleModel = fleet?.vehicle_model || "Tata 407";
@@ -148,6 +160,50 @@ export default function FleetHeader({
 
         {/* Right Side: Action Buttons */}
         <div className="flex items-center justify-around md:gap-2.5">
+          {/* Export Overview Dropdown */}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setExportMenuOpen((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl shadow-xs transition-all cursor-pointer"
+              title="Export vehicle overview report"
+            >
+              <FiDownload className="w-4 h-4 text-slate-500" />
+              <span>Export</span>
+            </button>
+
+            {exportMenuOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200/90 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100">
+                <div className="text-[10px] font-bold text-slate-400 px-3.5 py-1 uppercase tracking-wider">
+                  Vehicle Overview Export
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    exportVehicleOverviewCsv(fleet);
+                    setExportMenuOpen(false);
+                    showToast({ message: "Vehicle overview CSV downloaded", type: "success" });
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <FiFileText className="w-4 h-4 text-emerald-600" />
+                  <span>Export as CSV / Excel</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    exportVehicleOverviewPdf(fleet);
+                    setExportMenuOpen(false);
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <FiPrinter className="w-4 h-4 text-blue-600" />
+                  <span>Export as PDF (Print)</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={onEditFleet}
@@ -189,6 +245,31 @@ export default function FleetHeader({
                 >
                   {copied ? <FiCheck className="w-4 h-4 text-emerald-600" /> : <FiCopy className="w-4 h-4 text-slate-400" />}
                   <span>{copied ? "Copied!" : "Copy Vehicle No"}</span>
+                </button>
+
+                <div className="h-px bg-slate-100 my-1" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    exportVehicleOverviewCsv(fleet);
+                    setMenuOpen(false);
+                    showToast({ message: "Vehicle overview CSV downloaded", type: "success" });
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5"
+                >
+                  <FiFileText className="w-4 h-4 text-emerald-600" />
+                  <span>Export Overview (CSV)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    exportVehicleOverviewPdf(fleet);
+                    setMenuOpen(false);
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5"
+                >
+                  <FiPrinter className="w-4 h-4 text-blue-600" />
+                  <span>Export Overview (PDF)</span>
                 </button>
 
                 {onStatusChange && (

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import moment from "moment";
 import {
@@ -15,6 +15,7 @@ import {
 } from "react-icons/fi";
 import { HiOutlineTruck } from "react-icons/hi";
 import { showToast } from "@/utilities/toastService";
+import { resolveMediaUrl } from "@/utilities/services/apiService";
 
 export default function FleetSummaryCard({ fleet, onEditPhoto }) {
   const [copied, setCopied] = useState(false);
@@ -39,6 +40,41 @@ export default function FleetSummaryCard({ fleet, onEditPhoto }) {
     ? moment(fleet.created_at).format("DD MMM YYYY")
     : "12 Jan 2024";
 
+  const defaultHero = "/imges/png/fleet_truck_hero.jpg";
+
+  const docPhoto = Array.isArray(fleet?.documents)
+    ? fleet.documents.find(
+        (d) =>
+          d.documentType?.toLowerCase() === "vehicle photo" ||
+          d.documentType?.toLowerCase() === "photo" ||
+          d.documentType?.toLowerCase() === "vehicle image",
+      )
+    : null;
+
+  const rawPhoto =
+    fleet?.vehicle_photo ||
+    fleet?.photo ||
+    fleet?.image ||
+    fleet?.vehicle_image ||
+    fleet?.profile_photo ||
+    fleet?.s3_key ||
+    fleet?.hero_image ||
+    docPhoto?.dataUrl ||
+    docPhoto?.url ||
+    docPhoto?.s3Key;
+
+  const [imgSrc, setImgSrc] = useState(() =>
+    rawPhoto ? resolveMediaUrl(rawPhoto) : defaultHero,
+  );
+
+  useEffect(() => {
+    if (rawPhoto) {
+      setImgSrc(resolveMediaUrl(rawPhoto));
+    } else {
+      setImgSrc(defaultHero);
+    }
+  }, [rawPhoto]);
+
   const handleCopy = () => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(vehicleNo);
@@ -53,12 +89,16 @@ export default function FleetSummaryCard({ fleet, onEditPhoto }) {
       {/* Vehicle Hero Photo Container */}
       <div className="relative w-full h-52 sm:h-56 bg-slate-100 overflow-hidden group">
         <Image
-          src="/imges/png/fleet_truck_hero.jpg"
+          src={imgSrc || defaultHero}
           alt={vehicleNo}
           fill
+          unoptimized
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 400px"
           className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
           priority
+          onError={() => {
+            setImgSrc(defaultHero);
+          }}
         />
 
         {/* Change Photo Overlay Pill */}
@@ -69,6 +109,7 @@ export default function FleetSummaryCard({ fleet, onEditPhoto }) {
         >
           <FiCamera className="w-3.5 h-3.5" />
           <span>Change Photo</span>
+          
         </button>
       </div>
 

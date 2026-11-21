@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import moment from "moment";
 import {
   FiFileText,
@@ -23,10 +23,19 @@ import {
   FiFilter,
   FiClock,
   FiCamera,
+  FiDownload,
+  FiPrinter,
 } from "react-icons/fi";
+import {
+  exportVehicleOverviewCsv,
+  exportVehicleOverviewPdf,
+  exportMaintenanceHistoryCsv,
+  exportMaintenanceHistoryPdf,
+} from "@/utilities/exportUtils";
 import { HiOutlineTruck, HiOutlineDocumentText } from "react-icons/hi";
 import { ImSpinner9 } from "react-icons/im";
 import CommonModal from "../../common/commonModal";
+import CommonConfirmation from "../../common/items/commonConfirmation";
 import MaintenanceForm, { MaintenanceFormV2 } from "../../fleetMaintenance/maintenanceForm";
 import MaintenanceDetailsModal from "../../fleetMaintenance/maintenanceDetailsModal";
 import {
@@ -34,19 +43,77 @@ import {
   FLEET_MAINTENANCE_STATUSES,
 } from "@/utilities/masterData";
 import { showToast } from "@/utilities/toastService";
-import { postApiData } from "@/utilities/services/apiService";
+import { postApiData, swrPostApiData, invalidateApiCache } from "@/utilities/services/apiService";
 
 /**
  * Overview Tab Panel
  */
-export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
+export const OverviewPanel = React.memo(function OverviewPanel({ fleet, summary = {}, onNavigateTab, onAddDocument }) {
   const status = (fleet?.status || "Active").toLowerCase();
+
+  const loggedInUser =
+    typeof window !== "undefined"
+      ? window.__NEXT_DATA__?.props?.pageData?.user
+      : null;
+
+  const exportSummary = useMemo(() => ({
+    ...summary,
+    orgName:
+      loggedInUser?.orgName ||
+      loggedInUser?.organization_name ||
+      fleet?.organization_name ||
+      fleet?.orgName ||
+      fleet?.orgCode ||
+      summary?.orgName ||
+      "",
+    organization_name:
+      loggedInUser?.orgName ||
+      loggedInUser?.organization_name ||
+      fleet?.organization_name ||
+      fleet?.orgName ||
+      fleet?.orgCode ||
+      summary?.organization_name ||
+      "",
+  }), [summary, fleet?.organization_name, fleet?.orgName, fleet?.orgCode, loggedInUser?.orgName, loggedInUser?.organization_name]);
 
   return (
     <div className="space-y-6">
+      {/* Top Overview Bar with Export Options */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">Vehicle Overview & Health</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Operational profile and technical specifications for {fleet?.vehicle_number || "this vehicle"}.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              exportVehicleOverviewCsv(fleet, exportSummary);
+              showToast({ message: "Vehicle overview CSV downloaded", type: "success" });
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+            title="Download CSV / Excel report"
+          >
+            <FiDownload className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Export CSV</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => exportVehicleOverviewPdf(fleet, exportSummary)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-xl border border-blue-200 transition-colors cursor-pointer"
+            title="Print or Save as PDF"
+          >
+            <FiPrinter className="w-3.5 h-3.5 text-blue-600" />
+            <span>Export PDF</span>
+          </button>
+        </div>
+      </div>
+
       {/* Metric Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Vehicle Status
@@ -63,7 +130,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           <p className="text-xs text-slate-400 mt-1">Operational state</p>
         </div>
 
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Documents
@@ -82,7 +149,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           </button>
         </div>
 
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Assigned Driver
@@ -101,7 +168,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
           </button>
         </div>
 
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Financing & EMI
@@ -119,7 +186,7 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
             View EMI schedule <FiArrowRight className="w-3 h-3" />
           </button>
         </div>
-        {fleet?.gps_tracking_id && <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        {fleet?.gps_tracking_id && <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               GPS Tracking ID
@@ -142,12 +209,12 @@ export function OverviewPanel({ fleet, onNavigateTab, onAddDocument }) {
       </div>
     </div>
   );
-}
+});
 
 /**
  * Documents Tab Panel
  */
-export function DocumentsPanel({ fleet, onAddDocument, onEditDocument }) {
+export const DocumentsPanel = React.memo(function DocumentsPanel({ fleet, onAddDocument, onEditDocument }) {
   const documents = Array.isArray(fleet?.documents) ? fleet.documents : [];
 
   return (
@@ -265,12 +332,12 @@ export function DocumentsPanel({ fleet, onAddDocument, onEditDocument }) {
       )}
     </div>
   );
-}
+});
 
 /**
  * EMI Tab Panel
  */
-export function EmiPanel({ fleet }) {
+export const EmiPanel = React.memo(function EmiPanel({ fleet }) {
   const emis = Array.isArray(fleet?.emis) ? fleet.emis : [];
 
   return (
@@ -366,12 +433,12 @@ export function EmiPanel({ fleet }) {
       )}
     </div>
   );
-}
+});
 
 /**
  * Driver Tab Panel
  */
-export function DriverPanel({ fleet, onAssignDriver, onUnassignDriver }) {
+export const DriverPanel = React.memo(function DriverPanel({ fleet, onAssignDriver, onUnassignDriver }) {
   const hasDriver = Boolean(fleet?.driver_name);
 
   return (
@@ -453,13 +520,13 @@ export function DriverPanel({ fleet, onAssignDriver, onUnassignDriver }) {
       )}
     </div>
   );
-}
+});
 
 /**
  * Maintenance Tab Panel
  * Complete maintenance history, summary metrics, filtering, and media management for the vehicle.
  */
-export function MaintenancePanel({ fleet, onRefreshFleet }) {
+export const MaintenancePanel = React.memo(function MaintenancePanel({ fleet, onRefreshFleet }) {
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState({
     total_records: 0,
@@ -473,31 +540,80 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isQuickReportOpen, setIsQuickReportOpen] = useState(false);
   const [selectedRecordForDetails, setSelectedRecordForDetails] = useState(null);
   const [selectedRecordForEdit, setSelectedRecordForEdit] = useState(null);
+  const [recordToDelete, setRecordToDelete] = useState(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
-  // Fetch maintenance records and vehicle summary
+  const exportMenuRef = useRef(null);
+  const requestIdRef = useRef(0);
+
+  // Close export menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+        setExportMenuOpen(false);
+      }
+    };
+    if (exportMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [exportMenuOpen]);
+
+  // Debounce search query input (350ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // Fetch maintenance records and vehicle summary with SWR cache and race-condition guard
   const fetchMaintenance = useCallback(
-    async (currentPage = page, status = statusFilter, type = typeFilter, search = searchQuery) => {
+    async (targetPage = 1, forceRefresh = false) => {
       if (!fleet?.id) return;
+      const currentRequestId = ++requestIdRef.current;
       setLoading(true);
 
       try {
         const payload = {
           vehicleId: fleet.id,
-          page: currentPage,
+          page: targetPage,
           limit: 10,
         };
-        if (status && status !== "all") payload.status = status;
-        if (type && type !== "all") payload.maintenance_type = type;
-        if (search && search.trim() !== "") payload.search = search.trim();
+        if (statusFilter !== "all") payload.status = statusFilter;
+        if (typeFilter !== "all") payload.maintenance_type = typeFilter;
+        if (debouncedSearch !== "") payload.search = debouncedSearch;
 
-        const json = await postApiData("GET_VEHICLE_MAINTENANCE", payload);
-        if (json?.status) {
+        // Use swrPostApiData for instant tab switching (0 ms cache hit)
+        const json = await swrPostApiData("GET_VEHICLE_MAINTENANCE", payload, {
+          ttl: 60000,
+          force: forceRefresh,
+          onRevalidate: (freshRes) => {
+            if (currentRequestId === requestIdRef.current && freshRes?.status) {
+              setRecords(Array.isArray(freshRes.data) ? freshRes.data : []);
+              if (freshRes.summary) {
+                setSummary(freshRes.summary);
+              }
+              if (freshRes.pagination) {
+                setPage(freshRes.pagination.page);
+                setTotalPages(freshRes.pagination.totalPages || 1);
+              }
+            }
+          },
+        });
+
+        // Only commit if this is still the active request
+        if (currentRequestId === requestIdRef.current && json?.status) {
           setRecords(Array.isArray(json.data) ? json.data : []);
           if (json.summary) {
             setSummary(json.summary);
@@ -508,45 +624,194 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
           }
         }
       } catch (err) {
-        console.error("Error loading maintenance records:", err);
+        if (currentRequestId === requestIdRef.current) {
+          console.error("Error loading maintenance records:", err);
+        }
       } finally {
-        setLoading(false);
+        if (currentRequestId === requestIdRef.current) {
+          setLoading(false);
+        }
       }
     },
-    [fleet?.id, page, statusFilter, typeFilter, searchQuery]
+    [fleet?.id, statusFilter, typeFilter, debouncedSearch]
   );
 
+  // Trigger fetch when vehicle, filters, or debounced search change (resets to page 1)
   useEffect(() => {
-    fetchMaintenance(1, statusFilter, typeFilter, searchQuery);
-  }, [fleet?.id, statusFilter, typeFilter]);
+    fetchMaintenance(1);
+  }, [fetchMaintenance]);
 
-  // Handle Search on Enter or debounce
+  // Handle Search on Enter (immediate execution)
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchMaintenance(1, statusFilter, typeFilter, searchQuery);
+    setDebouncedSearch(searchQuery.trim());
   };
 
-  // Handle Record Delete
-  const handleDeleteRecord = async (recordToDelete) => {
-    if (!window.confirm(`Are you sure you want to permanently delete this ${recordToDelete.maintenance_type} record and its attachments?`)) {
-      return;
-    }
+  // 1. OPTIMISTIC DELETE (0 API calls on success)
+  const handleDeleteRecord = (record) => {
+    setRecordToDelete(record);
+  };
+
+  const handleConfirmDeleteRecord = async () => {
+    if (!recordToDelete?.id) return;
+    const deletedId = recordToDelete.id;
+    const deletedCost = Number(recordToDelete.cost || 0);
 
     try {
-      const json = await postApiData("DELETE_MAINTENANCE_RECORD", { id: recordToDelete.id });
+      const json = await postApiData("DELETE_MAINTENANCE_RECORD", { id: deletedId });
       if (json?.status) {
         showToast({ message: "Maintenance record deleted successfully", type: "success" });
-        if (selectedRecordForDetails?.id === recordToDelete.id) {
+
+        // Optimistically remove from state
+        setRecords((prev) => prev.filter((r) => r.id !== deletedId));
+
+        // Optimistically update summary metrics
+        setSummary((prev) => ({
+          ...prev,
+          total_records: Math.max(0, (Number(prev.total_records) || 0) - 1),
+          total_expenditure: Math.max(0, (Number(prev.total_expenditure) || 0) - deletedCost),
+        }));
+
+        if (selectedRecordForDetails?.id === deletedId) {
           setSelectedRecordForDetails(null);
         }
-        fetchMaintenance();
-        if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id);
+        setRecordToDelete(null);
+        invalidateApiCache("GET_VEHICLE_MAINTENANCE");
       } else {
         showToast({ message: json?.message || "Failed to delete record", type: "error" });
       }
     } catch (err) {
       console.error("Error deleting record:", err);
       showToast({ message: "Network error while deleting record", type: "error" });
+    }
+  };
+
+  // 2. OPTIMISTIC EDIT (0 API calls on success)
+  const handleEditSuccess = (updatedRecord) => {
+    setSelectedRecordForEdit(null);
+    if (!updatedRecord?.id) {
+      fetchMaintenance(page, true);
+      return;
+    }
+
+    setRecords((prev) =>
+      prev.map((r) => (r.id === updatedRecord.id ? { ...r, ...updatedRecord } : r))
+    );
+
+    if (selectedRecordForDetails?.id === updatedRecord.id) {
+      setSelectedRecordForDetails((prev) => (prev ? { ...prev, ...updatedRecord } : null));
+    }
+
+    invalidateApiCache("GET_VEHICLE_MAINTENANCE");
+  };
+
+  // 3. OPTIMISTIC ADD / QUICK REPORT (0 API calls on success)
+  const handleAddSuccess = (newRecord) => {
+    setIsAddModalOpen(false);
+    setIsQuickReportOpen(false);
+
+    if (!newRecord?.id) {
+      fetchMaintenance(1, true);
+      return;
+    }
+
+    // Prepend new record to top of list
+    setRecords((prev) => [newRecord, ...prev]);
+
+    // Optimistically update summary metrics
+    setSummary((prev) => ({
+      ...prev,
+      total_records: (Number(prev.total_records) || 0) + 1,
+      total_expenditure: (Number(prev.total_expenditure) || 0) + Number(newRecord.cost || 0),
+      last_maintenance_date: newRecord.maintenance_date || prev.last_maintenance_date,
+      latest_status: newRecord.status || prev.latest_status,
+    }));
+
+    invalidateApiCache("GET_VEHICLE_MAINTENANCE");
+  };
+
+  // 4. OPTIMISTIC STATUS CHANGE (0 extra API calls)
+  const handleDetailsStatusChange = (newStatus) => {
+    if (!selectedRecordForDetails?.id) return;
+    const recId = selectedRecordForDetails.id;
+
+    setSelectedRecordForDetails((prev) => (prev ? { ...prev, status: newStatus } : null));
+    setRecords((prev) =>
+      prev.map((r) => (r.id === recId ? { ...r, status: newStatus } : r))
+    );
+
+    invalidateApiCache("GET_VEHICLE_MAINTENANCE");
+  };
+
+  // 5. SINGLE-RECORD REFRESH (Only when attachments change in details modal)
+  const handleDetailsRefresh = async () => {
+    if (!selectedRecordForDetails?.id) return;
+    try {
+      const json = await postApiData("GET_MAINTENANCE_RECORD", { id: selectedRecordForDetails.id });
+      if (json?.status && json?.data) {
+        setSelectedRecordForDetails(json.data);
+        setRecords((prev) =>
+          prev.map((r) => (r.id === json.data.id ? json.data : r))
+        );
+      }
+    } catch (_) {}
+    invalidateApiCache("GET_VEHICLE_MAINTENANCE");
+  };
+
+  // 6. OPTIMIZED EXPORT (Reuses in-memory records when possible)
+  const handleExportMaintenance = async (exportFormat = "csv") => {
+    if (!fleet?.id) return;
+    setIsExporting(true);
+    try {
+      showToast({ message: `Preparing maintenance ${exportFormat.toUpperCase()} report...`, type: "info" });
+
+      let exportList = records;
+      // Only hit the API if total records exceed the currently loaded page
+      if (Number(summary.total_records || 0) > records.length) {
+        const payload = {
+          vehicleId: fleet.id,
+          exportAll: true,
+          limit: 2000,
+        };
+        if (statusFilter !== "all") payload.status = statusFilter;
+        if (typeFilter !== "all") payload.maintenance_type = typeFilter;
+        if (debouncedSearch !== "") payload.search = debouncedSearch;
+
+        const json = await postApiData("GET_VEHICLE_MAINTENANCE", payload);
+        if (json?.status && Array.isArray(json.data)) {
+          exportList = json.data;
+        }
+      }
+
+      const loggedInUser =
+        typeof window !== "undefined"
+          ? window.__NEXT_DATA__?.props?.pageData?.user
+          : null;
+
+      const exportSummary = {
+        ...summary,
+        orgName:
+          loggedInUser?.orgName ||
+          loggedInUser?.organization_name ||
+          fleet?.organization_name ||
+          fleet?.orgName ||
+          fleet?.orgCode ||
+          summary?.orgName ||
+          "",
+      };
+
+      if (exportFormat === "csv") {
+        exportMaintenanceHistoryCsv(exportList, fleet, exportSummary);
+        showToast({ message: "Maintenance history CSV downloaded successfully", type: "success" });
+      } else {
+        exportMaintenanceHistoryPdf(exportList, fleet, exportSummary);
+      }
+    } catch (err) {
+      console.error("Export error:", err);
+      showToast({ message: "Failed to export maintenance records", type: "error" });
+    } finally {
+      setIsExporting(false);
+      setExportMenuOpen(false);
     }
   };
 
@@ -568,7 +833,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
       {/* 1. Summary Cards Section */}
       <div className="grid grid-cols-4 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Records */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
               Total Services
@@ -584,7 +849,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         </div>
 
         {/* Total Expenditure */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Total Expense
@@ -602,7 +867,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         </div>
 
         {/* Last Maintenance Date */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Last Service
@@ -621,7 +886,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         </div>
 
         {/* Current / Latest Status */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Latest Status
@@ -679,16 +944,58 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
             >
               <option value="all">All Categories</option>
               {FLEET_MAINTENANCE_TYPES.map((tp) => (
-                <option key={tp} value={tp}>
-                  {tp}
+                <option key={tp.type} value={tp.type}>
+                  {tp.type}
                 </option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Action Buttons: Quick Report V2 & Full Log Form */}
-        <div className="flex items-end gap-2">
+        {/* Action Buttons: Export, Quick Report V2 & Full Log Form */}
+        <div className="flex items-center gap-2">
+          {/* Export Maintenance History Dropdown */}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setExportMenuOpen((prev) => !prev)}
+              disabled={isExporting}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-all cursor-pointer shrink-0 disabled:opacity-50"
+              title="Export maintenance history report"
+            >
+              {isExporting ? (
+                <ImSpinner9 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+              ) : (
+                <FiDownload className="w-3.5 h-3.5 text-slate-600" />
+              )}
+              <span>Export</span>
+            </button>
+
+            {exportMenuOpen && (
+              <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-slate-200/90 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100">
+                <div className="text-[10px] font-bold text-slate-400 px-3.5 py-1 uppercase tracking-wider">
+                  Maintenance Export
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleExportMaintenance("csv")}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <FiFileText className="w-4 h-4 text-emerald-600" />
+                  <span>Export as CSV / Excel</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportMaintenance("pdf")}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <FiPrinter className="w-4 h-4 text-blue-600" />
+                  <span>Export as PDF (Print)</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={() => setIsQuickReportOpen(true)}
@@ -720,9 +1027,10 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
         <div className="space-y-3">
           {records.map((item) => (
             <div
-              key={item.id}
-              className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs transition-all space-y-3.5"
-            >
+  key={item.id}
+  onClick={() => setSelectedRecordForDetails(item)}
+  className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs transition-all space-y-3.5 cursor-pointer"
+>
               {/* Card Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="flex items-center gap-3">
@@ -754,9 +1062,9 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
                 </div>
 
                 {/* Cost & Odometer */}
-                <div className="flex items-center sm:text-right gap-3 sm:gap-4 self-start sm:self-center">
+                <div className="flex items-start sm:text-right gap-3 sm:gap-4 self-start sm:self-center">
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 block">Expense</span>
+                    {/* <span className="text-[11px] font-semibold text-slate-400 block">Expense</span> */}
                     <span className="text-sm font-bold text-slate-900">
                       ₹{Number(item.cost || 0).toLocaleString("en-IN")}
                     </span>
@@ -815,18 +1123,21 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                  <button
+                  {/* <button
                     type="button"
                     onClick={() => setSelectedRecordForDetails(item)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
                   >
                     <FiEye className="w-3.5 h-3.5 text-blue-600" />
                     <span>View</span>
-                  </button>
+                  </button> */}
 
                   <button
                     type="button"
-                    onClick={() => setSelectedRecordForEdit(item)}
+                   onClick={(e) => {
+  e.stopPropagation();
+  setSelectedRecordForEdit(item);
+}}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
                   >
                     <FiEdit className="w-3.5 h-3.5 text-slate-600" />
@@ -835,7 +1146,10 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
 
                   <button
                     type="button"
-                    onClick={() => handleDeleteRecord(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteRecord(item);
+                    }}
                     className="p-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
                     title="Delete record"
                   >
@@ -917,11 +1231,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
           <MaintenanceFormV2
             preselectedVehicle={fleet}
             onClose={() => setIsQuickReportOpen(false)}
-            onSuccess={() => {
-              setIsQuickReportOpen(false);
-              fetchMaintenance(1);
-              if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id);
-            }}
+            onSuccess={handleAddSuccess}
           />
         </CommonModal>
       )}
@@ -938,10 +1248,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
             preselectedVehicle={fleet}
             isEdit={false}
             onClose={() => setIsAddModalOpen(false)}
-            onSuccess={() => {
-              fetchMaintenance(1);
-              if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id);
-            }}
+            onSuccess={handleAddSuccess}
           />
         </CommonModal>
       )}
@@ -959,11 +1266,7 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
             initialData={selectedRecordForEdit}
             isEdit={true}
             onClose={() => setSelectedRecordForEdit(null)}
-            onSuccess={() => {
-              setSelectedRecordForEdit(null);
-              fetchMaintenance();
-              if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id);
-            }}
+            onSuccess={handleEditSuccess}
           />
         </CommonModal>
       )}
@@ -984,23 +1287,32 @@ export function MaintenancePanel({ fleet, onRefreshFleet }) {
               setSelectedRecordForEdit(rec);
             }}
             onDelete={handleDeleteRecord}
-            onStatusChange={() => {
-              fetchMaintenance();
-              if (onRefreshFleet && fleet?.id) onRefreshFleet(fleet.id);
-            }}
-            onRefresh={async () => {
-              try {
-                const json = await postApiData("GET_MAINTENANCE_RECORD", { id: selectedRecordForDetails.id });
-                if (json?.status && json?.data) {
-                  setSelectedRecordForDetails(json.data);
-                }
-              } catch (_) {}
-              fetchMaintenance();
-            }}
+            onStatusChange={handleDetailsStatusChange}
+            onRefresh={handleDetailsRefresh}
+          />
+        </CommonModal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {recordToDelete && (
+        <CommonModal
+          modalOpen={Boolean(recordToDelete)}
+          setModalOpen={(open) => {
+            if (!open) setRecordToDelete(null);
+          }}
+          modalTitle="Delete Confirmation"
+          modalSize="w-11/12 md:w-[480px]"
+        >
+          <CommonConfirmation
+            title={`Are you sure you want to permanently delete this ${recordToDelete.maintenance_type || "maintenance"} record and its attachments?`}
+            confirmText="Yes"
+            cancelText="No"
+            onConfirm={handleConfirmDeleteRecord}
+            onCancel={() => setRecordToDelete(null)}
           />
         </CommonModal>
       )}
     </div>
   );
-}
+});
 

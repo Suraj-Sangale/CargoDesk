@@ -39,9 +39,12 @@ import {
   FiChevronDown,
   FiRefreshCcw,
   FiSlash,
+  FiDollarSign,
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 import EnableLocationPopup from "./enableLocationPopup";
+import { FLEET_MAINTENANCE_TYPES } from "@/utilities/masterData";
+import { getIndiaDateString, getIndiaISOString } from "@/utilities/timeUtils";
 
 const MAX_ATTACHMENTS = 10;
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -51,60 +54,6 @@ const SUPPORTED_LANGUAGES = [
   { code: "en-IN", label: "English" },
   { code: "hi-IN", label: "हिन्दी (Hindi)" },
   { code: "mr-IN", label: "मराठी (Marathi)" },
-];
-
-const QUICK_PROBLEM_CHIPS = [
-  {
-    label: "🚨 Breakdown",
-    type: "Breakdown",
-    text: "Vehicle breakdown / stopped on road",
-  },
-  {
-    label: "💥 Accident",
-    type: "Accident Damage",
-    text: "Accident / body damage to vehicle",
-  },
-  {
-    label: "🛑 Brake Issue",
-    type: "Brake Repair",
-    text: "Brakes not working properly / strange noise",
-  },
-  {
-    label: "🛞 Flat Tyre",
-    type: "Tyre Replacement",
-    text: "Tyre puncture / flat tyre",
-  },
-  {
-    label: "💧 Oil Leak",
-    type: "Oil & Filter Change",
-    text: "Engine oil or coolant leakage",
-  },
-  {
-    label: "🔋 Battery Dead",
-    type: "Battery Replacement",
-    text: "Battery dead / vehicle not starting",
-  },
-  {
-    label: "⚠️ Engine Smoke",
-    type: "Engine Repair",
-    text: "Engine overheating / smoke from hood",
-  },
-  {
-    label: "⚡ Electrical",
-    type: "Electrical Issue",
-    text: "Lights, horn, wiring or electrical not working",
-  },
-  {
-    label: "🔧 Suspension",
-    type: "Suspension & Steering",
-    text: "Steering heavy / suspension noise / vehicle pulling to one side",
-  },
-  {
-    label: "🛠️ Regular Service",
-    type: "Regular Service",
-    text: "Routine service due",
-  },
-  { label: "📝 Other", type: "Other", text: "Other problem (details below)" },
 ];
 
 /**
@@ -137,6 +86,18 @@ export default function MaintenanceFormV2({
   const [highlightedVehicleIndex, setHighlightedVehicleIndex] = useState(0);
   const vehicleDropdownRef = useRef(null);
   const vehicleInputRef = useRef(null);
+
+  // 1b. Maintenance Category (Type) State
+  const [maintenanceType, setMaintenanceType] = useState(
+    initialData?.maintenance_type || "",
+  );
+
+  // Sync maintenanceType when initialData changes
+  useEffect(() => {
+    if (initialData?.maintenance_type) {
+      setMaintenanceType(initialData.maintenance_type);
+    }
+  }, [initialData?.maintenance_type]);
 
   // 2. Problem Description & Voice State
   const [problemDescription, setProblemDescription] = useState(
@@ -177,6 +138,13 @@ export default function MaintenanceFormV2({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionProgress, setSubmissionProgress] = useState("");
   const [formError, setFormError] = useState(null);
+
+  // 5. Expense / Cost Field State
+  const [expenseCost, setExpenseCost] = useState(
+    initialData?.cost !== undefined && initialData?.cost !== null
+      ? String(initialData.cost)
+      : "",
+  );
 
   // References
   const cameraInputRef = useRef(null);
@@ -880,15 +848,22 @@ export default function MaintenanceFormV2({
   };
 
   // Quick problem chip click handler
-  const handleChipClick = (chipText) => {
+  const handleChipClick = (chip) => {
+    const text = typeof chip === "object" ? chip.text : chip;
     setProblemDescription((prev) => {
       let next;
-      if (!prev || prev.trim() === "") next = chipText;
-      else if (prev.includes(chipText)) next = prev;
-      else next = `${prev.trim()}, ${chipText}`;
+      if (!prev || prev.trim() === "") next = text;
+      else if (prev.includes(text)) next = prev;
+      else next = `${prev.trim()}, ${text}`;
       speechBaseTextRef.current = next;
       return next;
     });
+
+    // Auto-select corresponding maintenance category directly from chip.type
+    if (typeof chip === "object" && chip.type) {
+      setMaintenanceType(chip.type);
+    }
+
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
@@ -1003,18 +978,36 @@ export default function MaintenanceFormV2({
       // Step 2: Save maintenance record in database with India local date and time
       setSubmissionProgress("Submitting problem report...");
 
+      // Determine proper maintenance category
+      const resolvedMaintenanceType =
+        maintenanceType ||
+        initialData?.maintenance_type ||
+        (problemDescription
+          ? FLEET_MAINTENANCE_TYPES.find(
+              (c) =>
+                problemDescription
+                  .toLowerCase()
+                  .includes(c.type.toLowerCase()) ||
+                problemDescription
+                  .toLowerCase()
+                  .includes(c.text.toLowerCase()),
+            )?.type
+          : null) ||
+        FLEET_MAINTENANCE_TYPES[0]?.type ||
+        "Breakdown";
+
       const payload = {
         vehicle_id: vid,
-        maintenance_type: maintenanceType || FLEET_MAINTENANCE_TYPES[0],
+        maintenance_type: resolvedMaintenanceType,
         description: problemDescription.trim(),
         maintenance_date: getIndiaDateString(),
         created_at: getIndiaISOString(),
         status: "Reported",
-        cost: "0.00",
-        odometer_reading: null,
-        garage_name: null,
-        invoice_number: null,
-        additional_notes: null,
+        cost: expenseCost ? parseFloat(expenseCost) || "0.00" : "0.00",
+        odometer_reading: initialData?.odometer_reading ?? null,
+        garage_name: initialData?.garage_name ?? null,
+        invoice_number: initialData?.invoice_number ?? null,
+        additional_notes: initialData?.additional_notes ?? null,
       };
 
       let saveJson;
@@ -1045,6 +1038,8 @@ export default function MaintenanceFormV2({
           setVehicleSearchQuery("");
         }
         setProblemDescription("");
+        setMaintenanceType(initialData?.maintenance_type || "");
+        setExpenseCost("");
         attachedFiles.forEach((item) => {
           if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
             try {
@@ -1662,17 +1657,24 @@ export default function MaintenanceFormV2({
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none my-3">
-            {QUICK_PROBLEM_CHIPS.map((chip, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleChipClick(chip.text)}
-                disabled={isSubmitting}
-                className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-200 transition-colors cursor-pointer"
-              >
-                {chip.label}
-              </button>
-            ))}
+            {FLEET_MAINTENANCE_TYPES.map((chip, idx) => {
+              const isSelected = maintenanceType === chip.type;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleChipClick(chip)}
+                  disabled={isSubmitting}
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border ${
+                    isSelected
+                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                      : "bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Textarea + Large Microphone Button */}
@@ -1756,6 +1758,30 @@ export default function MaintenanceFormV2({
               <span>{speechError}</span>
             </p>
           )}
+        </div>
+
+        {/* 5. Expense / Cost Field (Single Simple Input) */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+            <FiDollarSign className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Maintenance Expense / Cost (₹)</span>
+            <span className="text-slate-400 font-normal text-[11px]">(Optional)</span>
+          </div>
+          <div className="relative">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">
+              ₹
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={expenseCost}
+              onChange={(e) => setExpenseCost(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="e.g. 1500 (Optional, leave blank if not known yet)"
+              className="w-full pl-8 pr-3.5 py-2.5 text-sm font-medium text-slate-900 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-400 disabled:opacity-60"
+            />
+          </div>
         </div>
 
         {/* 6. Prominent Full-Width Submit Button */}

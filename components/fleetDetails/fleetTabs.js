@@ -70,7 +70,7 @@ export default function FleetTabs({
     },
     {
       id: "history",
-      name: "Activity History",
+      name: "All Activity History",
       icon: FiClock,
       isPrimary: true,
     },
@@ -84,8 +84,8 @@ export default function FleetTabs({
   const isMoreActive = moreTabs.some((t) => t.id === activeTab);
 
   return (
-    <div className="relative z-30 border-b border-slate-200/90 mb-5 flex items-center justify-between gap-1 select-none">
-      {/* Scrollable Main Tabs Container */}
+    <div className="relative border-b border-slate-200/90 mb-5 flex items-center justify-between gap-1 select-none"> 
+      {/* Scrollable Main Tabs Container  z-30 removed*/}
       <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar pb-0.5 flex-1 min-w-0">
         {tabs.map((tab) => {
           const Icon = tab.icon;

@@ -43,7 +43,9 @@ export default function FleetDetailsWrapper({
   const [fleet, setFleet] = useState(initialFleet);
   const [activeTab, setActiveTab] = useState("history"); // Defaults to Activity History as primary view
   const [loading, setLoading] = useState(!initialFleet && Boolean(fleetId));
-  const [error, setError] = useState(!initialFleet && !fleetId ? "Invalid fleet ID" : null);
+  const [error, setError] = useState(
+    !initialFleet && !fleetId ? "Invalid fleet ID" : null,
+  );
 
   // Modals state
   const [summaryCollapsedMobile, setSummaryCollapsedMobile] = useState(true);
@@ -101,14 +103,20 @@ export default function FleetDetailsWrapper({
       });
 
       if (res?.status) {
-        showToast({ message: `Fleet status updated to ${newStatus}`, type: "success" });
+        showToast({
+          message: `Fleet status updated to ${newStatus}`,
+          type: "success",
+        });
         if (refreshAll) refreshAll();
         // Refresh fleet details and activity
         fetchFleetDetails(fleet.id);
       } else {
         // Revert on failure
         setFleet((prev) => ({ ...prev, status: previousStatus }));
-        showToast({ message: res?.message || "Failed to update status", type: "error" });
+        showToast({
+          message: res?.message || "Failed to update status",
+          type: "error",
+        });
       }
     } catch (err) {
       setFleet((prev) => ({ ...prev, status: previousStatus }));
@@ -127,14 +135,20 @@ export default function FleetDetailsWrapper({
     })
       .then((res) => {
         if (res?.status || res?.success) {
-          showToast({ message: "Document added successfully", type: "success" });
+          showToast({
+            message: "Document added successfully",
+            type: "success",
+          });
           setDocModalOpen(false);
           if (refreshAll) refreshAll();
           if (fleet?.id) {
             fetchFleetDetails(fleet.id);
           }
         } else {
-          showToast({ message: res?.message || "Failed to add document", type: "error" });
+          showToast({
+            message: res?.message || "Failed to add document",
+            type: "error",
+          });
         }
       })
       .catch((err) => {
@@ -158,8 +172,8 @@ export default function FleetDetailsWrapper({
           isCurrent
             ? " [Currently Assigned]"
             : isElsewhere
-            ? ` [Assigned: ${d.assigned_vehicle || "Vehicle"}]`
-            : " [Available]"
+              ? ` [Assigned: ${d.assigned_vehicle || "Vehicle"}]`
+              : " [Available]"
         }`,
       };
     });
@@ -212,7 +226,8 @@ export default function FleetDetailsWrapper({
         </div>
         <h2 className="text-xl font-bold text-slate-900">Fleet Not Found</h2>
         <p className="text-sm text-slate-500 max-w-sm mt-1 mb-6 leading-relaxed">
-          The fleet you&apos;re looking for doesn&apos;t exist or may have been removed.
+          The fleet you&apos;re looking for doesn&apos;t exist or may have been
+          removed.
         </p>
         <Link
           href="/fleets"
@@ -257,21 +272,23 @@ export default function FleetDetailsWrapper({
       />
 
       {/* Main Two-Column Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Persistent Fleet Summary Card (Collapsible by default on mobile/responsive, sticky on desktop) */}
-        <div className="lg:col-span-4 xl:col-span-4 lg:sticky lg:top-6 z-10 space-y-2">
-          {/* Mobile Summary Accordion Trigger (Visible only on mobile/tablet < lg) */}
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start">
+        {/* LEFT: Sticky Fleet Summary (No inside scroll, pinned naturally during page scroll) */}
+        <aside className="lg:col-span-4 xl:col-span-4 min-w-0 lg:sticky lg:top-20 lg:self-start z-10">
+          {/* Mobile / Tablet Accordion Trigger (Visible only < lg) */}
           <button
             type="button"
             onClick={() => setSummaryCollapsedMobile((prev) => !prev)}
             aria-expanded={!summaryCollapsedMobile}
-            className="lg:hidden w-full bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-3 text-left transition-all active:scale-[0.99] cursor-pointer hover:border-slate-300"
+            className="lg:hidden w-full bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3 text-left transition-all active:scale-[0.99] cursor-pointer hover:border-slate-300"
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
                 <HiOutlineTruck className="w-5 h-5" />
               </div>
-              <div className="min-w-0">
+
+              <div className="min-w-0 text-left">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold text-slate-900 truncate">
                     {fleet?.vehicle_number || "Vehicle Details"}
@@ -294,24 +311,31 @@ export default function FleetDetailsWrapper({
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 shrink-0 bg-blue-50/80 px-2.5 py-1.5 rounded-xl border border-blue-100">
-              <span>{summaryCollapsedMobile ? "View Details" : "Hide Details"}</span>
-              {summaryCollapsedMobile ? (
-                <FiChevronDown className="w-4 h-4 transition-transform" />
-              ) : (
-                <FiChevronUp className="w-4 h-4 transition-transform" />
-              )}
-            </div>
+            <span className="flex items-center gap-1 text-xs font-semibold text-blue-600 shrink-0">
+              {summaryCollapsedMobile ? "Expand" : "Collapse"}
+              {summaryCollapsedMobile ? <FiChevronDown /> : <FiChevronUp />}
+            </span>
           </button>
 
-          {/* Fleet Summary Card Content (Collapsible on mobile < lg, always visible on desktop lg:) */}
-          <div className={`${summaryCollapsedMobile ? "hidden lg:block" : "block"} transition-all`}>
+          {/* Summary Content: Scrollable on left section hover on desktop, collapsible on mobile */}
+          <div
+            className={`
+              ${summaryCollapsedMobile ? "hidden" : "block"}
+              lg:!block
+              mt-3 lg:mt-0
+              lg:max-h-[calc(100vh-6rem)]
+              lg:overflow-y-auto
+              custom-scrollbar
+              overscroll-contain
+              rounded-2xl
+            `}
+          >
             <FleetSummaryCard
               fleet={fleet}
               onEditPhoto={() => setEditModalOpen(true)}
             />
 
-            {/* Quick Collapse Button at bottom when expanded on mobile */}
+            {/* Mobile Collapse Button */}
             {!summaryCollapsedMobile && (
               <button
                 type="button"
@@ -323,10 +347,11 @@ export default function FleetDetailsWrapper({
               </button>
             )}
           </div>
-        </div>
+        </aside>
 
-        {/* Right Column: Dynamic Tab Content / Activity History */}
-        <div className="lg:col-span-8 xl:col-span-8 min-w-0">
+
+        {/* RIGHT: Dynamic Tab Content */}
+        <main className="lg:col-span-8 xl:col-span-8 min-w-0">
           {activeTab === "history" && (
             <ActivityHistory
               fleetId={fleet?.id}
@@ -339,6 +364,7 @@ export default function FleetDetailsWrapper({
           {activeTab === "overview" && (
             <OverviewPanel
               fleet={fleet}
+              summary={initialSummary}
               onNavigateTab={(t) => setActiveTab(t)}
               onAddDocument={() => setDocModalOpen(true)}
             />
@@ -357,7 +383,9 @@ export default function FleetDetailsWrapper({
             <DriverPanel
               fleet={fleet}
               onAssignDriver={() => {
-                setSelectedDriverId(fleet?.driver_id ? String(fleet.driver_id) : "");
+                setSelectedDriverId(
+                  fleet?.driver_id ? String(fleet.driver_id) : "",
+                );
                 setAssignDriverModalOpen(true);
               }}
               onUnassignDriver={handleUnassignDriver}
@@ -365,7 +393,10 @@ export default function FleetDetailsWrapper({
           )}
 
           {activeTab === "maintenance" && (
-            <MaintenancePanel fleet={fleet} onRefreshFleet={fetchFleetDetails} />
+            <MaintenancePanel
+              fleet={fleet}
+              onRefreshFleet={fetchFleetDetails}
+            />
           )}
 
           {activeTab === "insurance" && (
@@ -377,11 +408,16 @@ export default function FleetDetailsWrapper({
 
           {activeTab === "gps" && (
             <div className="bg-white rounded-2xl border border-slate-200/80 p-6 text-center text-slate-500 text-sm">
-              <p>GPS Tracking ID: <strong>{fleet?.gps_tracking_id || "GPS-TRK-5678"}</strong></p>
-              <p className="text-xs text-slate-400 mt-1">Live telematics and route tracking</p>
+              <p>
+                GPS Tracking ID:{" "}
+                <strong>{fleet?.gps_tracking_id || "GPS-TRK-5678"}</strong>
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Live telematics and route tracking
+              </p>
             </div>
           )}
-        </div>
+        </main>
       </div>
 
       {/* Edit Fleet Modal */}
@@ -446,7 +482,8 @@ export default function FleetDetailsWrapper({
                   Transport Driver Allocation
                 </h4>
                 <p className="text-[11px] text-slate-500 font-medium">
-                  Select a certified driver to assign as the primary operator of {fleet?.vehicle_number}.
+                  Select a certified driver to assign as the primary operator of{" "}
+                  {fleet?.vehicle_number}.
                 </p>
               </div>
             </div>
