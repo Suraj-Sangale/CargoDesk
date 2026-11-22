@@ -63,6 +63,8 @@ export const internalList = {
   ADD_NEW_FLEET: "/api/fleet/add-new",
   UPDATE_FLEET: "/api/fleet/update",
   DELETE_FLEETS: "/api/fleet/delete",
+  PRESIGN_FLEET_UPLOADS: "/api/fleet/uploads/presign",
+  PROXY_FLEET_UPLOAD: "/api/fleet/uploads/proxy",
 
   // drivers
   GET_ALL_DRIVERS: "/api/driver/driver-get-all",

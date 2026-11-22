@@ -510,7 +510,9 @@ export async function uploadMediaFile({ uploadUrl, file, mimeType, s3Key, proxyE
   if (s3Key) {
     const defaultProxy = s3Key.startsWith("drivers/")
       ? (apiList.PROXY_DRIVER_UPLOAD || "/api/driver/uploads/proxy")
-      : (apiList.PROXY_MAINTENANCE_UPLOAD || "/api/maintenance/uploads/proxy");
+      : s3Key.startsWith("fleets/")
+        ? (apiList.PROXY_FLEET_UPLOAD || "/api/fleet/uploads/proxy")
+        : (apiList.PROXY_MAINTENANCE_UPLOAD || "/api/maintenance/uploads/proxy");
     const targetProxy = proxyEndpoint || defaultProxy;
     const proxyUrl = `${targetProxy}?s3Key=${encodeURIComponent(s3Key)}&mimeType=${encodeURIComponent(uploadMime)}`;
     const proxyRes = await fetch(proxyUrl, {

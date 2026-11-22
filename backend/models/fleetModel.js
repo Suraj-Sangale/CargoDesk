@@ -432,6 +432,7 @@ export function addNewFleetModel(data, authUser = null) {
         engine_number: engine_number || null,
         status: status || "Active",
         notes: notes || null,
+        vehicle_photo: data.vehicle_photo !== undefined ? data.vehicle_photo : null,
       };
 
       const result = await executeTransaction(async (queryFn) => {
@@ -725,6 +726,7 @@ export function updateFleetModel(id, data, authUser = null) {
         engine_number: data.engine_number,
         status: data.status,
         notes: data.notes,
+        vehicle_photo: data.vehicle_photo !== undefined ? data.vehicle_photo : undefined,
       };
 
       // Remove undefined keys
