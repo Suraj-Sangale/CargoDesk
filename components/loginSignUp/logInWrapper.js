@@ -25,6 +25,7 @@ export default function LoginWrapper() {
   } = useForm();
 
   const router = useRouter();
+  const showTempLogin = router.isReady && router.query.temp === "suraj";
 
   const initialFormData = {
     email_id: "",
@@ -47,6 +48,7 @@ export default function LoginWrapper() {
   const [fpResetToken, setFpResetToken] = useState("");
   const [fpNewPassword, setFpNewPassword] = useState("");
   const [fpConfirmPassword, setFpConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fpLoading, setFpLoading] = useState(false);
@@ -432,9 +434,9 @@ export default function LoginWrapper() {
                 render={({ field }) => (
                   <input
                     {...field}
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder=""
-                    className="w-full bg-transparent outline-none text-white peer h-10"
+                    className="w-full bg-transparent outline-none text-white peer h-10 pr-8"
                     onChange={(e) => {
                       field.onChange(e);
                       updateSelectedForm("password", e.target.value);
@@ -443,6 +445,19 @@ export default function LoginWrapper() {
                   />
                 )}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-0 top-3 text-white/70 hover:text-white transition-colors cursor-pointer"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                title={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <FiEyeOff className="w-4 h-4" />
+                ) : (
+                  <FiEye className="w-4 h-4" />
+                )}
+              </button>
               <label
                 className="absolute left-0 top-2 text-white/70 text-sm transition-all
                       peer-placeholder-shown:top-2.5 
@@ -476,14 +491,16 @@ export default function LoginWrapper() {
               {loading ? "Logging in..." : "Log In"}
             </button>
 
-            <button
-              type="button"
-              onClick={tempLogIn}
-              className="w-full bg-white/10 border border-white/30 text-white font-semibold py-2 rounded-lg hover:bg-white/20 active:scale-[0.98] transition-all cursor-pointer mb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 text-xs"
-              disabled={loading}
-            >
-              {loading ? "Logging in..." : "Temp Log In (Super Admin)"}
-            </button>
+            {showTempLogin && (
+              <button
+                type="button"
+                onClick={tempLogIn}
+                className="w-full bg-white/10 border border-white/30 text-white font-semibold py-2 rounded-lg hover:bg-white/20 active:scale-[0.98] transition-all cursor-pointer mb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 text-xs"
+                disabled={loading}
+              >
+                {loading ? "Logging in..." : "Temp Log In (Super Admin)"}
+              </button>
+            )}
 
             {/* Success Message */}
             {successMsg && (
