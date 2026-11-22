@@ -134,7 +134,7 @@ export function extractS3Key(urlOrKey) {
   }
 
   // 2. If key contains a known prefix anywhere in path, match from that prefix
-  const prefixMatch = raw.match(/(drivers\/[^\s?#]+|fleet\/[^\s?#]+|documents\/[^\s?#]+|uploads\/[^\s?#]+)/i);
+  const prefixMatch = raw.match(/(drivers\/[^\s?#]+|fleets?\/[^\s?#]+|documents\/[^\s?#]+|uploads\/[^\s?#]+)/i);
   if (prefixMatch && prefixMatch[1]) {
     return prefixMatch[1].replace(/^\/+/, "");
   }
@@ -562,6 +562,9 @@ export async function generatePresignedUploadUrl({
 export async function uploadObjectDirect({ s3Key, buffer, mimeType }) {
   if (!s3Key || typeof s3Key !== "string") {
     throw new Error("Invalid S3 object key");
+  }
+  if (!buffer || !buffer.length) {
+    throw new Error("Upload body is empty. File was not received by the server.");
   }
 
   const bucketName = getBucketName();

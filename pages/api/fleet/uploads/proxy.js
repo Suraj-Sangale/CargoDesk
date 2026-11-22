@@ -62,7 +62,7 @@ export default async function handler(req, res) {
 
     await uploadObjectDirect({
       s3Key,
-      fileBuffer,
+      buffer: fileBuffer,
       mimeType: normalizedMime,
     });
 

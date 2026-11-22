@@ -585,7 +585,7 @@ export function resolveMediaUrl(urlOrKey) {
 
   // 2. If key contains a known prefix anywhere in path, match from that prefix
   const prefixMatch = raw.match(
-    /(drivers\/[^\s?#]+|fleet\/[^\s?#]+|documents\/[^\s?#]+|uploads\/[^\s?#]+)/i
+    /(drivers\/[^\s?#]+|fleets?\/[^\s?#]+|documents\/[^\s?#]+|uploads\/[^\s?#]+)/i
   );
   if (prefixMatch && prefixMatch[1]) {
     const cleanK = prefixMatch[1].replace(/^\/+/, "");

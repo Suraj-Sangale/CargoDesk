@@ -907,7 +907,7 @@ export function updateFleetModel(id, data, authUser = null) {
 
       // Invalidate fleet and driver cache across tenants
       await invalidateCachePattern("cargodesk:org:*:fleets:*");
-      if (parsedDriverId || oldDriverId) {
+      if (parsedDriverId) {
         await invalidateCachePattern("cargodesk:org:*:drivers:*");
       }
 
