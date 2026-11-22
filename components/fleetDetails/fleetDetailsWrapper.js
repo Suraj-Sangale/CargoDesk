@@ -13,6 +13,7 @@ import {
 } from "./tabs/tabPanels";
 import CommonModal from "../common/commonModal";
 import FleetForm from "../fleets/fleetForm";
+import ChangeFleetPhotoForm from "./changeFleetPhotoForm";
 import AddDocumentForm from "../common/molecules/addDocumentForm";
 import CustomSearch from "../common/customSearch";
 import { postApiData } from "@/utilities/services/apiService";
@@ -50,6 +51,7 @@ export default function FleetDetailsWrapper({
   // Modals state
   const [summaryCollapsedMobile, setSummaryCollapsedMobile] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [docModalOpen, setDocModalOpen] = useState(false);
   const [addDocLoading, setAddDocLoading] = useState(false);
   const [assignDriverModalOpen, setAssignDriverModalOpen] = useState(false);
@@ -332,7 +334,7 @@ export default function FleetDetailsWrapper({
           >
             <FleetSummaryCard
               fleet={fleet}
-              onEditPhoto={() => setEditModalOpen(true)}
+              onEditPhoto={() => setPhotoModalOpen(true)}
             />
 
             {/* Mobile Collapse Button */}
@@ -439,6 +441,27 @@ export default function FleetDetailsWrapper({
               if (fleet?.id) fetchFleetDetails(fleet.id);
             }}
             toggleModal={() => setEditModalOpen(false)}
+          />
+        </CommonModal>
+      )}
+
+      {/* Change Vehicle Photo Modal */}
+      {photoModalOpen && (
+        <CommonModal
+          modalOpen={photoModalOpen}
+          setModalOpen={setPhotoModalOpen}
+          modalTitle={`Change Photo - ${fleet?.vehicle_number || "Vehicle"}`}
+          modalSize="w-11/12 md:w-[480px]"
+        >
+          <ChangeFleetPhotoForm
+            fleet={fleet}
+            currentPhoto={fleet?.vehicle_photo}
+            onClose={() => setPhotoModalOpen(false)}
+            onSuccess={(photoUrl) => {
+              setFleet((prev) => ({ ...prev, vehicle_photo: photoUrl }));
+              if (refreshAll) refreshAll();
+              if (fleet?.id) fetchFleetDetails(fleet.id);
+            }}
           />
         </CommonModal>
       )}

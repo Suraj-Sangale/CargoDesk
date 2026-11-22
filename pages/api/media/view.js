@@ -33,6 +33,7 @@ export default async function handler(req, res) {
   const isAllowedPrefix =
     s3Key.startsWith("drivers/") ||
     s3Key.startsWith("fleet/") ||
+    s3Key.startsWith("fleets/") ||
     s3Key.startsWith("documents/") ||
     s3Key.startsWith("uploads/");
 

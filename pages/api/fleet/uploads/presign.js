@@ -1,0 +1,19 @@
+import { presignFleetUploadsController } from "@/backend/controllers/fleetController";
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb",
+    },
+  },
+};
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", ["POST"]);
+    return res.status(405).json({ status: false, message: `Method ${req.method} Not Allowed` });
+  }
+
+  const result = await presignFleetUploadsController(req);
+  return res.status(result.code || (result.status ? 200 : 400)).json(result);
+}

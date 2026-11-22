@@ -134,7 +134,7 @@ export function extractS3Key(urlOrKey) {
   }
 
   // 2. If key contains a known prefix anywhere in path, match from that prefix
-  const prefixMatch = raw.match(/(drivers\/[^\s?#]+|fleet\/[^\s?#]+|documents\/[^\s?#]+|uploads\/[^\s?#]+)/i);
+  const prefixMatch = raw.match(/(drivers\/[^\s?#]+|fleets?\/[^\s?#]+|documents\/[^\s?#]+|uploads\/[^\s?#]+)/i);
   if (prefixMatch && prefixMatch[1]) {
     return prefixMatch[1].replace(/^\/+/, "");
   }
@@ -343,6 +343,92 @@ export async function generateDriverPresignedUploadUrl({
 }
 
 /**
+ * Generates safe random S3 key for fleet uploads:
+ * fleets/{fleetId}/{category}/{randomUuid}.{ext}
+ */
+export function generateFleetObjectKey(fleetId, fileName, category = "photo") {
+  const ext = path.extname(fileName || "").toLowerCase().replace(/[^a-z0-9.]/g, "") || ".jpg";
+  const randomId = crypto.randomUUID();
+  const cleanFleetId = fleetId && !isNaN(Number(fleetId)) && Number(fleetId) > 0 ? String(fleetId) : "uploads";
+  const cleanCategory = category === "documents" ? "documents" : "photo";
+
+  return `fleets/${cleanFleetId}/${cleanCategory}/${randomId}${ext}`;
+}
+
+/**
+ * Generates presigned PUT URL for fleet vehicle direct upload to S3/R2.
+ */
+export async function generateFleetPresignedUploadUrl({
+  fleetId,
+  fileName,
+  mimeType,
+  fileSize,
+  category = "photo",
+}) {
+  const validation = validateDriverFile({ fileName, mimeType, fileSize, category: "profile" });
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+
+  const s3Key = generateFleetObjectKey(fleetId, fileName, category);
+  const fileUrl = getMediaProxyUrl(s3Key);
+  const directS3Url = getStorageObjectUrl(s3Key);
+  const bucketName = getBucketName();
+  const currentRegion = getRegion();
+  const client = getS3Client();
+
+  const command = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: s3Key,
+    ContentType: mimeType,
+  });
+
+  try {
+    const uploadUrl = await getSignedUrl(client, command, {
+      expiresIn: URL_EXPIRATION_SECONDS,
+    });
+
+    return {
+      uploadUrl,
+      s3Key,
+      fileUrl,
+      directS3Url,
+      bucket: bucketName,
+      region: currentRegion,
+      mediaType: validation.mediaType,
+      expiresIn: URL_EXPIRATION_SECONDS,
+      requiredHeaders: {
+        "Content-Type": mimeType,
+      },
+    };
+  } catch (error) {
+    if (
+      error.name === "CredentialsProviderError" ||
+      error.message?.includes("credentials") ||
+      error.message?.includes("AccessKeyId")
+    ) {
+      console.warn("Storage credentials not configured locally. Providing safe development presigned URL.");
+      const mockUploadUrl = `https://${bucketName}.s3.${currentRegion}.amazonaws.com/${s3Key}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=mock&X-Amz-Date=20261025T000000Z&X-Amz-Expires=900&X-Amz-Signature=mock_development_signature`;
+      return {
+        uploadUrl: mockUploadUrl,
+        s3Key,
+        fileUrl,
+        directS3Url,
+        bucket: bucketName,
+        region: currentRegion,
+        mediaType: validation.mediaType,
+        expiresIn: URL_EXPIRATION_SECONDS,
+        requiredHeaders: {
+          "Content-Type": mimeType,
+        },
+      };
+    }
+    console.error("Error generating fleet presigned upload URL:", error);
+    throw new Error("Failed to initialize secure upload. Please check storage credentials.");
+  }
+}
+
+/**
  * Validates file metadata before generating presigned URL.
  */
 export function validateMediaFile({ fileName, mimeType, fileSize }) {
@@ -476,6 +562,9 @@ export async function generatePresignedUploadUrl({
 export async function uploadObjectDirect({ s3Key, buffer, mimeType }) {
   if (!s3Key || typeof s3Key !== "string") {
     throw new Error("Invalid S3 object key");
+  }
+  if (!buffer || !buffer.length) {
+    throw new Error("Upload body is empty. File was not received by the server.");
   }
 
   const bucketName = getBucketName();
