@@ -33,6 +33,7 @@ export const internalList = {
 
   // organizations
   GET_ALL_ORGANIZATIONS: "/api/organization/organization-get-all",
+  GET_ORGANIZATION_BY_ID: "/api/organization/get-by-id",
   CREATE_ORGANIZATION: "/api/organization/create",
   UPDATE_ORGANIZATION: "/api/organization/update",
   DELETE_ORGANIZATION: "/api/organization/delete",

@@ -3,6 +3,7 @@ import {
   createOrganizationModel,
   updateOrganizationModel,
   deleteOrganizationModel,
+  getOrganizationDetailsModel,
 } from "../models/organizationModel";
 
 export function getAllOrganizationsController() {
@@ -32,6 +33,14 @@ export function updateOrganizationController(request) {
 export function deleteOrganizationController(request) {
   return new Promise((resolve) => {
     deleteOrganizationModel(request?.orgId || request?.id)
+      .then((res) => resolve(res))
+      .catch((err) => resolve({ status: false, message: err?.message }));
+  });
+}
+
+export function getOrganizationDetailsController(orgId, authUser = null) {
+  return new Promise((resolve) => {
+    getOrganizationDetailsModel(orgId, authUser)
       .then((res) => resolve(res))
       .catch((err) => resolve({ status: false, message: err?.message }));
   });

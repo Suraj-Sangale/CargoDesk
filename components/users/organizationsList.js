@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import {
   FiBriefcase,
   FiPlus,
@@ -11,6 +12,7 @@ import {
   FiMapPin,
   FiUserPlus,
   FiLayers,
+  FiArrowRight,
 } from "react-icons/fi";
 
 export default function OrganizationsList({
@@ -93,9 +95,13 @@ export default function OrganizationsList({
                   </div>
 
                   {/* Title & Address */}
-                  <h4 className="text-base font-bold text-slate-800 tracking-tight">
-                    {org.orgName}
-                  </h4>
+                  <Link
+                    href={`/organizations/${org.orgId}`}
+                    className="group flex items-center justify-between text-base font-bold text-slate-800 hover:text-purple-700 tracking-tight transition-colors"
+                  >
+                    <span>{org.orgName}</span>
+                    <FiArrowRight className="w-4 h-4 text-purple-600 opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all" />
+                  </Link>
                   {org.address && (
                     <p className="text-xs text-slate-500 mt-1 flex items-start gap-1.5 leading-relaxed">
                       <FiMapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
@@ -157,13 +163,20 @@ export default function OrganizationsList({
 
                 {/* Footer Actions */}
                 <div className="mt-5 pt-3 border-t border-slate-100 flex items-center gap-2">
+                  <Link
+                    href={`/organizations/${org.orgId}`}
+                    className="flex-1 py-1.5 px-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                    title="View organization details, fleets, staff and drivers"
+                  >
+                    <span>View Details</span>
+                    <FiArrowRight className="w-3.5 h-3.5" />
+                  </Link>
                   <button
                     onClick={() => onAddAdminToOrg && onAddAdminToOrg(org.orgId)}
-                    className="flex-1 py-1.5 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1"
-                    title="Add an administrator for this organization"
+                    className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Assign an Administrator"
                   >
-                    <FiUserPlus className="w-3.5 h-3.5" />
-                    <span>Assign Admin</span>
+                    <FiUserPlus className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => onOpenEdit && onOpenEdit(org)}

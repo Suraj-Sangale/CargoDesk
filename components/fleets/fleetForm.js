@@ -26,6 +26,7 @@ import {
   FiCheck,
   FiShield,
   FiAlertCircle,
+  FiBriefcase,
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 
@@ -51,10 +52,18 @@ export default function FleetForm({
   focusField,
   onClose,
   toggleModal,
+  preselectedOrgId = null,
+  organizations: initialOrgs = [],
+  currentUser = null,
+  onSuccess = null,
 }) {
   const { drivers, refreshAll } = useFleetDriver();
 
   const [selectedDriverId, setSelectedDriverId] = useState("");
+  const [selectedOrgId, setSelectedOrgId] = useState(
+    preselectedOrgId || modalData?.orgId || ""
+  );
+  const [organizationsList, setOrganizationsList] = useState(initialOrgs);
   const [apiLoading, setApiLoading] = useState(false);
 
   const {
@@ -104,6 +113,38 @@ export default function FleetForm({
       setSelectedDriverId("");
     }
   }, [isEdit, modalData, reset, drivers]);
+
+  // Synchronize preselected organization
+  useEffect(() => {
+    if (preselectedOrgId) {
+      setSelectedOrgId(String(preselectedOrgId));
+    } else if (modalData?.orgId) {
+      setSelectedOrgId(String(modalData.orgId));
+    }
+  }, [preselectedOrgId, modalData]);
+
+  // Auto-fetch organizations for Super Admin selection if not provided
+  useEffect(() => {
+    let isMounted = true;
+    async function loadOrgs() {
+      if (initialOrgs && initialOrgs.length > 0) {
+        setOrganizationsList(initialOrgs);
+        return;
+      }
+      try {
+        const res = await postApiData("GET_ALL_ORGANIZATIONS");
+        if (isMounted && res?.status && Array.isArray(res.data)) {
+          setOrganizationsList(res.data);
+        }
+      } catch (err) {
+        console.error("Error loading organizations in FleetForm:", err);
+      }
+    }
+    loadOrgs();
+    return () => {
+      isMounted = false;
+    };
+  }, [initialOrgs]);
 
   // Reusable platform-wide auto-scroll and highlight target field
   useAutoFocusField(focusField, Boolean(focusField), [modalData, isEdit]);
@@ -187,6 +228,11 @@ export default function FleetForm({
       driver_id: parsedDriverId,
     };
 
+    if (selectedOrgId && Number(selectedOrgId) > 0) {
+      payload.orgId = Number(selectedOrgId);
+      payload.organization_id = Number(selectedOrgId);
+    }
+
     let response;
     if (isEdit) {
       payload.id = modalData.id;
@@ -197,8 +243,15 @@ export default function FleetForm({
 
     if (response && response.status) {
       // Refresh synchronized context datasets
-      // if (refreshAll) await refreshAll(true);
       if (refreshAll) await refreshAll(true);
+
+      const createdOrUpdatedFleet = {
+        ...payload,
+        id: response.id || modalData?.id || Date.now(),
+        driver_id: parsedDriverId,
+        driver_name: selectedDriver?.driver_name || null,
+        driver_contact: selectedDriver?.contact_number || null,
+      };
 
       if (setFleetList) {
         if (isEdit) {
@@ -207,27 +260,18 @@ export default function FleetForm({
               item.id == modalData.id
                 ? {
                     ...item,
-                    ...payload,
-                    id: modalData.id,
-                    driver_id: parsedDriverId,
-                    driver_name: selectedDriver?.driver_name || null,
-                    driver_contact: selectedDriver?.contact_number || null,
+                    ...createdOrUpdatedFleet,
                   }
                 : item,
             ),
           );
         } else {
-          setFleetList((prev) => [
-            {
-              ...payload,
-              id: response.id || Date.now(),
-              driver_id: parsedDriverId,
-              driver_name: selectedDriver?.driver_name || null,
-              driver_contact: selectedDriver?.contact_number || null,
-            },
-            ...prev,
-          ]);
+          setFleetList((prev) => [createdOrUpdatedFleet, ...prev]);
         }
+      }
+
+      if (onSuccess) {
+        onSuccess(createdOrUpdatedFleet);
       }
 
       reset(DEFAULT_FLEET_DATA);
@@ -250,6 +294,51 @@ export default function FleetForm({
       onSubmit={handleSubmit(onSubmit)}
       className="px-4 sm:px-6 py-4 space-y-4 bg-slate-50"
     >
+      {/* Organization Assignment for Super Admin */}
+      {organizationsList.length > 0 && (
+        <div className="bg-purple-50/70 border border-purple-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-2xs">
+          <div className="flex items-center justify-between pb-2 border-b border-purple-200/60">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-2xs">
+                <FiBriefcase className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-purple-950 uppercase tracking-wider">
+                  Tenant Organization Assignment
+                </h4>
+                <p className="text-[11px] text-purple-700/80 font-medium">
+                  Assign this fleet vehicle to a specific organization
+                </p>
+              </div>
+            </div>
+            {preselectedOrgId && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-200/80 text-purple-900 border border-purple-300">
+                Pre-selected
+              </span>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              Organization <span className="text-slate-400 font-normal">(Leave unselected for Default HQ)</span>
+            </label>
+            <select
+              value={selectedOrgId}
+              onChange={(e) => setSelectedOrgId(e.target.value)}
+              disabled={Boolean(preselectedOrgId)}
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:bg-slate-100 disabled:text-slate-500 cursor-pointer"
+            >
+              <option value="">-- Unassigned / Default HQ --</option>
+              {organizationsList.map((org) => (
+                <option key={org.orgId} value={org.orgId}>
+                  {org.orgName} ({org.orgCode || `ORG-${org.orgId}`})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       {/* 1. Vehicle Identity & Model */}
       <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4 shadow-2xs">
         <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/60">
