@@ -70,6 +70,7 @@ export default function MaintenanceFormV2({
   onSuccess,
   resetOnSuccess = false,
   submitButtonText = "Save Maintenance Record",
+  userOrgId = null,
 }) {
   // 1. Vehicles Selection State
   const [vehicles, setVehicles] = useState([]);
@@ -414,7 +415,8 @@ export default function MaintenanceFormV2({
       if (preselectedVehicle) return;
       setLoadingVehicles(true);
       try {
-        const json = await postApiData("GET_VEHICLES_LIST");
+        const payload = userOrgId ? { orgId: userOrgId } : {};
+        const json = await postApiData("GET_VEHICLES_LIST", payload);
         if (isMounted && json?.status && Array.isArray(json.data)) {
           setVehicles(json.data);
         }
@@ -429,7 +431,7 @@ export default function MaintenanceFormV2({
     return () => {
       isMounted = false;
     };
-  }, [preselectedVehicle]);
+  }, [preselectedVehicle, userOrgId]);
 
   // Selected Vehicle Object
   const selectedVehicle = useMemo(() => {

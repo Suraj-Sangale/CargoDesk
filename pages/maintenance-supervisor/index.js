@@ -26,9 +26,11 @@ import {
 import { ImSpinner9 } from "react-icons/im";
 import Image from "next/image";
 import { useFleetDriver } from "@/context/fleetDriverContext";
+import executeQuery from "@/helpers/dbConnection";
 
 export default function MaintenanceSupervisorPage({ pageData }) {
   const user = pageData?.user || null;
+  const organization = pageData?.organization || null;
   const [recentRecords, setRecentRecords] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
@@ -81,6 +83,9 @@ export default function MaintenanceSupervisorPage({ pageData }) {
     setRecentRecords((prev) =>
       [newItem, ...prev.filter((r) => r.id !== newItem.id)].slice(0, 5),
     );
+
+    // Re-fetch in background to ensure database-consistent state and media counts
+    fetchRecentRecords();
   };
 
   const getStatusBadge = (status) => {
@@ -135,13 +140,13 @@ export default function MaintenanceSupervisorPage({ pageData }) {
             {/* Supervisor Info & Logout Action */}
             <div className="flex items-center gap-2 shrink-0">
               <div className="hidden sm:flex flex-col text-right">
-                <span className="text-xs font-bold text-slate-800 truncate max-w-[140px]">
+                <span className="text-xs font-bold text-slate-800 truncate max-w-[160px]">
                   {user?.firstName
                     ? `${user.firstName} ${user.lastName || ""}`.trim()
                     : user?.email || "Supervisor"}
                 </span>
-                <span className="text-[10px] font-semibold text-slate-500">
-                  Supervisor
+                <span className="text-[10px] font-semibold text-slate-500 truncate max-w-[160px]">
+                  {organization?.orgName ? `${organization.orgName} • Supervisor` : "Supervisor"}
                 </span>
               </div>
 
@@ -211,6 +216,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
               onSuccess={handleRecordSuccess}
               resetOnSuccess={true}
               submitButtonText="Save Maintenance Record"
+              userOrgId={user?.orgId}
             />
           </div>
 
@@ -233,7 +239,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                     Recent Maintenance Logs
                   </h3>
                   <p className="text-[11px] text-slate-500 font-medium">
-                    Latest {recentRecords.length} recorded vehicle entries
+                    Your last {recentRecords.length} maintenance {recentRecords.length === 1 ? "entry" : "entries"}
                   </p>
                 </div>
               </div>
@@ -361,9 +367,34 @@ MaintenanceSupervisorPage.layoutName = "none";
 
 export const getServerSideProps = withUserSsr(
   async (context, { user }) => {
+    let organization = null;
+    let userOrgId = user?.orgId ? Number(user.orgId) : null;
+    if (!userOrgId && user?.userId) {
+      try {
+        const uRows = await executeQuery(
+          "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
+          [user.userId]
+        );
+        if (uRows?.[0]?.orgId) userOrgId = Number(uRows[0].orgId);
+      } catch (_) {}
+    }
+
+    if (userOrgId) {
+      try {
+        const orgRows = await executeQuery(
+          "SELECT orgId, orgName, orgCode FROM organizations WHERE orgId = ? LIMIT 1",
+          [userOrgId]
+        );
+        if (orgRows?.[0]) organization = orgRows[0];
+      } catch (_) {}
+    }
+
     return {
       props: {
-        pageData: { user },
+        pageData: {
+          user: { ...user, orgId: userOrgId },
+          organization,
+        },
       },
     };
   },

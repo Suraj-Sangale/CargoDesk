@@ -13,7 +13,59 @@ export default async function handler(req, res) {
   }
 
   try {
-    const limit = Math.min(20, Math.max(1, parseInt(req.query?.limit || req.body?.limit, 10) || 5));
+    // Dynamically identify organization from session or profile
+    let orgId = authUser.orgId ? Number(authUser.orgId) : null;
+    if (!orgId && authUser.userId) {
+      const uRows = await executeQuery(
+        "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
+        [authUser.userId]
+      );
+      if (uRows?.[0]?.orgId) {
+        orgId = Number(uRows[0].orgId);
+      }
+    }
+
+    const isSupervisor = authUser.role === "maintenance_supervisor";
+    const isSuperAdmin =
+      authUser.role === "super_admin" || authUser.email === "suraj@agnibyte.com";
+
+    // For maintenance supervisors, strictly limit to 5 records and ensure an organization is present
+    const limit = isSupervisor
+      ? 5
+      : Math.min(20, Math.max(1, parseInt(req.query?.limit || req.body?.limit, 10) || 5));
+
+    if (isSupervisor && !orgId) {
+      return res.status(200).json({
+        status: true,
+        data: [],
+        message: "No organization associated with this supervisor account.",
+      });
+    }
+
+    const whereClauses = [];
+    const params = [];
+
+    if (isSupervisor) {
+      // 1. Must belong to the logged-in supervisor
+      whereClauses.push("m.created_by = ?");
+      params.push(authUser.userId);
+
+      // 2. Must belong to the supervisor's organization
+      whereClauses.push("f.orgId = ?");
+      params.push(orgId);
+    } else if (isSuperAdmin) {
+      const requestedOrgId = req.query?.orgId || req.body?.orgId;
+      if (requestedOrgId) {
+        whereClauses.push("f.orgId = ?");
+        params.push(Number(requestedOrgId));
+      }
+    } else if (orgId) {
+      // Regular tenant users/admins scoped to their organization
+      whereClauses.push("f.orgId = ?");
+      params.push(orgId);
+    }
+
+    const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
     const sql = `
       SELECT 
@@ -24,6 +76,7 @@ export default async function handler(req, res) {
         m.maintenance_date,
         m.status,
         m.cost,
+        m.created_by,
         m.created_at,
         f.vehicle_number,
         f.vehicle_model,
@@ -31,11 +84,14 @@ export default async function handler(req, res) {
         (SELECT COUNT(*) FROM fleet_maintenance_media WHERE maintenance_id = m.id) AS media_count
       FROM fleet_maintenance m
       LEFT JOIN fleets f ON f.id = m.vehicle_id
-      ORDER BY m.id DESC
+      ${whereSQL}
+      ORDER BY m.maintenance_date DESC, m.created_at DESC, m.id DESC
       LIMIT ?
     `;
 
-    const rows = await executeQuery(sql, [limit]);
+    params.push(limit);
+
+    const rows = await executeQuery(sql, params);
 
     return res.status(200).json({
       status: true,

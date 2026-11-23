@@ -22,7 +22,7 @@ export function getAllFleetsController(requestOrUser = {}, authUser = null) {
 
 export function getFleetByIdController(id, authUser = null) {
   return new Promise((resolve, reject) => {
-    getFleetByIdModel(id)
+    getFleetByIdModel(id, authUser)
       .then((result) => {
         resolve(result);
       })

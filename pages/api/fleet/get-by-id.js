@@ -1,4 +1,5 @@
 import { getFleetByIdController } from "@/backend/controllers/fleetController";
+import { getAuthUserFromReq } from "@/utilities/authServer";
 
 export default function handler(req, res) {
   const fleetId = req.query.id || req.query.fleetId || req.body?.id || req.body?.fleetId;
@@ -7,8 +8,10 @@ export default function handler(req, res) {
     return res.status(400).json({ status: false, message: "Missing required fleet id" });
   }
 
+  const authUser = getAuthUserFromReq(req);
+
   return new Promise((resolve) => {
-    getFleetByIdController(fleetId)
+    getFleetByIdController(fleetId, authUser)
       .then((result) => {
         if (result?.status) {
           res.status(200).json(result);
