@@ -580,94 +580,100 @@ export default function MaintenanceFormV2({
     };
   }, [attachedFiles]);
 
+  const startListening = () => {
+  if (!recognitionRef.current || isListening) return;
+  speechBaseTextRef.current = problemDescription || ""; // snapshot current text
+  try {
+    recognitionRef.current.start();
+  } catch (_) {}
+};
+
+const stopListening = () => {
+  try {
+    recognitionRef.current?.stop();
+  } catch (_) {}
+};
   // Initialize Speech Recognition
   useEffect(() => {
-    const SpeechRecognition =
-      typeof window !== "undefined"
-        ? window.SpeechRecognition || window.webkitSpeechRecognition
-        : null;
+  const SpeechRecognition =
+    typeof window !== "undefined"
+      ? window.SpeechRecognition || window.webkitSpeechRecognition
+      : null;
 
-    if (!SpeechRecognition) {
-      setSpeechSupported(false);
-      return;
-    }
+  if (!SpeechRecognition) {
+    setSpeechSupported(false);
+    return;
+  }
 
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = selectedLang;
+  const recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = selectedLang;
 
-      recognition.onstart = () => {
-        setIsListening(true);
-        setSpeechError(null);
-      };
+  recognition.onstart = () => {
+    setIsListening(true);
+    setSpeechError(null);
+  };
 
-      recognition.onresult = (event) => {
-        let finalTranscript = "";
-        let interimTranscript = "";
+  recognition.onresult = (event) => {
+    // Ignore events from a recognizer that has been replaced
+    if (recognitionRef.current !== recognition) return;
 
-        // Iterate over full session results to compute current complete transcript
-        for (let i = 0; i < event.results.length; i++) {
-          const res = event.results[i];
-          const transcript = res[0]?.transcript || "";
-          if (res.isFinal) {
-            finalTranscript += (finalTranscript ? " " : "") + transcript.trim();
-          } else {
-            interimTranscript +=
-              (interimTranscript ? " " : "") + transcript.trim();
-          }
-        }
+    let finalTranscript = "";
+    let interimTranscript = "";
 
-        const sessionSpeech = (
-          finalTranscript + (interimTranscript ? " " + interimTranscript : "")
-        ).trim();
-        if (sessionSpeech) {
-          const base = speechBaseTextRef.current
-            ? speechBaseTextRef.current.trim()
-            : "";
-          const combined = base ? `${base} ${sessionSpeech}` : sessionSpeech;
-          setProblemDescription(combined);
-          setFormError(null);
-        }
-      };
-
-      recognition.onerror = (event) => {
-        console.warn("Speech recognition error:", event.error);
-        if (event.error === "not-allowed") {
-          setSpeechError(
-            "Microphone permission denied. Please allow microphone in browser.",
-          );
-        } else if (event.error === "network") {
-          setSpeechError("Network error during speech recognition.");
-        } else if (event.error !== "no-speech") {
-          setSpeechError(`Speech error: ${event.error}`);
-        }
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        setProblemDescription((current) => {
-          speechBaseTextRef.current = (current || "").trim();
-          return current;
-        });
-      };
-
-      recognitionRef.current = recognition;
-    } catch (e) {
-      console.warn("SpeechRecognition init error:", e);
-      setSpeechSupported(false);
-    }
-
-    return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (_) {}
+    for (let i = 0; i < event.results.length; i++) {
+      const res = event.results[i];
+      const transcript = (res[0]?.transcript || "").trim();
+      if (!transcript) continue;
+      if (res.isFinal) {
+        finalTranscript += (finalTranscript ? " " : "") + transcript;
+      } else {
+        interimTranscript += (interimTranscript ? " " : "") + transcript;
       }
-    };
-  }, [selectedLang]);
+    }
+
+    const sessionSpeech = [finalTranscript, interimTranscript]
+      .filter(Boolean)
+      .join(" ");
+
+    if (sessionSpeech) {
+      const base = speechBaseTextRef.current.trim();
+      setProblemDescription(base ? `${base} ${sessionSpeech}` : sessionSpeech);
+      setFormError(null);
+    }
+  };
+
+  recognition.onerror = (event) => {
+    if (event.error === "not-allowed") {
+      setSpeechError("Microphone permission denied. Please allow microphone in browser.");
+    } else if (event.error === "network") {
+      setSpeechError("Network error during speech recognition.");
+    } else if (event.error !== "no-speech" && event.error !== "aborted") {
+      setSpeechError(`Speech error: ${event.error}`);
+    }
+    setIsListening(false);
+  };
+
+  recognition.onend = () => {
+    setIsListening(false);
+    // Do NOT touch speechBaseTextRef here
+  };
+
+  recognitionRef.current = recognition;
+
+  return () => {
+    // Detach handlers first so a dying instance can't write anything
+    recognition.onresult = null;
+    recognition.onend = null;
+    recognition.onerror = null;
+    recognition.onstart = null;
+    try {
+      recognition.abort();
+    } catch (_) {}
+    if (recognitionRef.current === recognition) recognitionRef.current = null;
+  };
+}, [selectedLang]);
 
   // Toggle voice listening
   const toggleListening = () => {
@@ -1415,9 +1421,9 @@ export default function MaintenanceFormV2({
               </button> */}
             </div>
           ) : skipWatermark ? (
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-row sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-700 shadow-2xs">
+            <div className="p-2 bg-slate-50 border border-slate-200 rounded-2xl flex flex-row sm:flex-row items-center justify-between gap-3 text-xs text-slate-700 shadow-2xs">
               <div className="flex items-start gap-2.5 min-w-0">
-                <FiSlash className="w-4 h-4 text-slate-500 shrink-0 " />
+                {/* <FiSlash className="w-4 h-4 text-slate-500 shrink-0 " /> */}
                 <div className="min-w-0">
                   <span className="font-bold block text-slate-900">
                     GPS Watermark Skipped
