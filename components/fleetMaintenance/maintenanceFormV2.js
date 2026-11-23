@@ -152,6 +152,7 @@ export default function MaintenanceFormV2({
   const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
   const speechBaseTextRef = useRef("");
+  const attachedFilesRef = useRef([]);
 
   // Initialize device location early so photo watermarking is instant & reliable
   useEffect(() => {
@@ -562,10 +563,16 @@ export default function MaintenanceFormV2({
     }));
   }, [vehicles, preselectedVehicle]);
 
-  // Clean up blob URLs when component unmounts
+  // Keep ref in sync so the unmount cleanup always has the latest list
+  useEffect(() => {
+    attachedFilesRef.current = attachedFiles;
+  }, [attachedFiles]);
+
+  // Clean up blob URLs only when component unmounts (not on every attachedFiles change,
+  // which would revoke URLs of previously-attached files and break their previews)
   useEffect(() => {
     return () => {
-      attachedFiles.forEach((item) => {
+      attachedFilesRef.current.forEach((item) => {
         if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
           try {
             URL.revokeObjectURL(item.previewUrl);
@@ -578,7 +585,7 @@ export default function MaintenanceFormV2({
         } catch (_) {}
       }
     };
-  }, [attachedFiles]);
+  }, []);
 
   const startListening = () => {
   if (!recognitionRef.current || isListening) return;
