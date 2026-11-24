@@ -71,9 +71,11 @@ export function getAllOrganizationsModel() {
         SELECT 
           o.*,
           COUNT(DISTINCT u.userId) as memberCount,
-          COUNT(DISTINCT CASE WHEN u.role = 'admin' THEN u.userId END) as adminCount
+          COUNT(DISTINCT CASE WHEN u.role = 'admin' THEN u.userId END) as adminCount,
+          COUNT(DISTINCT f.id) as fleetCount
         FROM organizations o
         LEFT JOIN users u ON u.orgId = o.orgId
+        LEFT JOIN fleets f ON f.orgId = o.orgId
         GROUP BY o.orgId
         ORDER BY o.orgId ASC
       `;

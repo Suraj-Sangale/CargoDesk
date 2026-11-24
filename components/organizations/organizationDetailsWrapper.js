@@ -490,7 +490,8 @@ export default function OrganizationDetailsWrapper({ initialData, currentUser })
 
               <button
                 type="button"
-                onClick={() => setIsFleetModalOpen(true)}
+                onClick={() =>{ setIsFleetModalOpen(true) 
+                  console.log("============")}}
                 className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <FiPlus className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -859,10 +860,10 @@ export default function OrganizationDetailsWrapper({ initialData, currentUser })
 
       {/* Modal 1: Add Fleet under this Organization */}
       <CommonModal
-        isOpen={isFleetModalOpen}
-        onClose={() => setIsFleetModalOpen(false)}
-        title={`Add New Fleet to ${organization.orgName}`}
-        width="max-w-4xl"
+        modalOpen={isFleetModalOpen}
+        setModalOpen={setIsFleetModalOpen}
+        modalTitle={`Add New Fleet to ${organization.orgName || "Organization"}`}
+        modalSize="w-11/12 md:w-[680px]"
       >
         <FleetForm
           preselectedOrgId={organization.orgId}

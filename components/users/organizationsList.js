@@ -13,6 +13,7 @@ import {
   FiUserPlus,
   FiLayers,
   FiArrowRight,
+  FiTruck,
 } from "react-icons/fi";
 
 export default function OrganizationsList({
@@ -126,20 +127,29 @@ export default function OrganizationsList({
                   </div>
 
                   {/* Metrics Badge */}
-                  <div className="mt-4 grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
+                  <div className="mt-4 grid grid-cols-3 gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-100 text-center">
+                    <div>
+                      <p className="text-[10px] font-bold text-blue-700 uppercase flex items-center justify-center gap-1">
+                        <FiTruck className="w-3 h-3" />
+                        Fleets
+                      </p>
+                      <p className="text-sm sm:text-base font-bold text-slate-800 mt-0.5">
+                        {Number(org.fleetCount) || 0}
+                      </p>
+                    </div>
                     <div>
                       <p className="text-[10px] font-bold text-purple-700 uppercase flex items-center justify-center gap-1">
                         <FiShield className="w-3 h-3" />
                         Admins
                       </p>
-                      <p className="text-base font-bold text-slate-800 mt-0.5">{adminCount}</p>
+                      <p className="text-sm sm:text-base font-bold text-slate-800 mt-0.5">{adminCount}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-blue-700 uppercase flex items-center justify-center gap-1">
+                      <p className="text-[10px] font-bold text-slate-600 uppercase flex items-center justify-center gap-1">
                         <FiUsers className="w-3 h-3" />
-                        Staff / Total
+                        Staff
                       </p>
-                      <p className="text-base font-bold text-slate-800 mt-0.5">{memberCount}</p>
+                      <p className="text-sm sm:text-base font-bold text-slate-800 mt-0.5">{memberCount}</p>
                     </div>
                   </div>
 
