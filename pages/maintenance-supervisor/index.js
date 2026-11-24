@@ -361,7 +361,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
 }
 
 // Dedicated standalone mobile-first layout: bypasses regular sidebar and dashboard header
-MaintenanceSupervisorPage.layoutName = "none";
+MaintenanceSupervisorPage.layoutName = "maintenance-supervisor";
 
 export const getServerSideProps = withUserSsr(
   async (context, { user }) => {

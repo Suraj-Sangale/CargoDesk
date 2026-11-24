@@ -10,7 +10,7 @@ export default function MyApp({ Component, pageProps }) {
       if (
         Component.layoutName === "login" ||
         Component.layoutName === "none" ||
-        Component.layoutName === "maintenance"
+        Component.layoutName === "maintenance-supervisorXX"
       ) {
         return <LoginLayout>{component}</LoginLayout>;
       }
