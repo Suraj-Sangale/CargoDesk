@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
@@ -23,14 +23,24 @@ import {
   FiCheckCircle,
   FiClock,
   FiAlertCircle,
+  FiDownload,
+  FiChevronDown,
+  FiPrinter,
+  FiFileText,
 } from "react-icons/fi";
+import { ImSpinner9 } from "react-icons/im";
 import { postApiData } from "@/utilities/services/apiService";
 import { showToast } from "@/utilities/toastService";
 import CommonModal from "@/components/common/commonModal";
 import FleetForm from "@/components/fleets/fleetForm";
+import DriverForm from "@/components/drivers/driverForm";
 import OrganizationModal from "@/components/users/organizationModal";
 import UserFormModal from "@/components/users/userFormModal";
 import { formatIndiaDateTime, formatIndiaDate } from "@/utilities/timeUtils";
+import {
+  exportMaintenanceHistoryCsv,
+  exportMaintenanceHistoryPdf,
+} from "@/utilities/exportUtils";
 
 export default function OrganizationDetailsWrapper({ initialData, currentUser }) {
   const router = useRouter();
@@ -48,10 +58,31 @@ export default function OrganizationDetailsWrapper({ initialData, currentUser })
 
   // Modals state
   const [isFleetModalOpen, setIsFleetModalOpen] = useState(false);
+  const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
   const [isEditOrgModalOpen, setIsEditOrgModalOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isSubmittingOrg, setIsSubmittingOrg] = useState(false);
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
+
+  // Maintenance export state
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const exportMenuRef = useRef(null);
+
+  // Close export dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
+        setExportMenuOpen(false);
+      }
+    }
+    if (exportMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [exportMenuOpen]);
 
   // Active status
   const isActive = organization?.status !== "Inactive";
@@ -92,6 +123,68 @@ export default function OrganizationDetailsWrapper({ initialData, currentUser })
     }));
     setIsFleetModalOpen(false);
     showToast(`Fleet "${newFleet.vehicle_number || "vehicle"}" added to ${organization.orgName}!`, "success");
+  };
+
+  // Handle driver added
+  const handleDriverAdded = (newDriver) => {
+    setDrivers((prev) => [newDriver, ...prev]);
+    setSummary((prev) => ({
+      ...prev,
+      totalDrivers: (prev.totalDrivers || 0) + 1,
+      assignedDrivers: newDriver.fleet_id
+        ? (prev.assignedDrivers || 0) + 1
+        : prev.assignedDrivers || 0,
+      availableDrivers: !newDriver.fleet_id
+        ? (prev.availableDrivers || 0) + 1
+        : prev.availableDrivers || 0,
+    }));
+    setIsDriverModalOpen(false);
+    showToast(
+      `Driver "${newDriver.driver_name || "New Driver"}" added to ${organization.orgName || "Organization"}!`,
+      "success"
+    );
+  };
+
+  // Handle export maintenance history (same logic as tabPanels.js)
+  const handleExportMaintenance = async (exportFormat = "csv") => {
+    if (!organization?.orgId) return;
+    setIsExporting(true);
+    try {
+      showToast(
+        `Preparing maintenance ${exportFormat.toUpperCase()} report...`,
+        "info"
+      );
+
+      const exportList = recentMaintenance;
+      const fleetContext = {
+        vehicle_number: `${organization.orgName || "Organization"} - All Vehicles`,
+        vehicle_model: organization.orgCode || `ORG-${organization.orgId}`,
+        organization_name: organization.orgName,
+        orgName: organization.orgName,
+      };
+
+      const exportSummary = {
+        ...summary,
+        orgName: organization.orgName || "CARGODESK",
+        total_records: recentMaintenance.length,
+        total_expenditure:
+          summary.totalMaintenanceCost ||
+          recentMaintenance.reduce((acc, m) => acc + Number(m.cost || 0), 0),
+      };
+
+      if (exportFormat === "csv") {
+        exportMaintenanceHistoryCsv(exportList, fleetContext, exportSummary);
+        showToast("Maintenance history CSV downloaded successfully", "success");
+      } else {
+        exportMaintenanceHistoryPdf(exportList, fleetContext, exportSummary);
+      }
+    } catch (err) {
+      console.error("Export error:", err);
+      showToast("Failed to export maintenance records", "error");
+    } finally {
+      setIsExporting(false);
+      setExportMenuOpen(false);
+    }
   };
 
   // Handle update organization
@@ -210,6 +303,15 @@ export default function OrganizationDetailsWrapper({ initialData, currentUser })
           >
             <FiPlus className="w-4 h-4 stroke-[2.5]" />
             <span>Add Fleet</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsDriverModalOpen(true)}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+          >
+            <FiPlus className="w-4 h-4 stroke-[2.5]" />
+            <span>Add Driver</span>
           </button>
 
           <button
@@ -721,15 +823,34 @@ export default function OrganizationDetailsWrapper({ initialData, currentUser })
                   Drivers associated with vehicles or registered for {organization.orgName}
                 </p>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setIsDriverModalOpen(true)}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <FiPlus className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Add Driver</span>
+              </button>
             </div>
 
             {drivers.length === 0 ? (
-              <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6 space-y-2">
+              <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6 space-y-3">
                 <FiUserCheck className="w-8 h-8 text-slate-400 mx-auto" />
-                <h4 className="text-sm font-bold text-slate-700">No drivers recorded</h4>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  No drivers are currently assigned to this organization.
-                </p>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-700">No drivers recorded</h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    No drivers are currently assigned to this organization.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsDriverModalOpen(true)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs inline-flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <FiPlus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Add First Driver</span>
+                </button>
               </div>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -783,13 +904,58 @@ export default function OrganizationDetailsWrapper({ initialData, currentUser })
         {/* Tab 4: Maintenance Records */}
         {activeTab === "maintenance" && (
           <div className="p-4 sm:p-6 space-y-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                Maintenance Activity History ({recentMaintenance.length})
-              </h3>
-              <p className="text-xs text-slate-500">
-                Latest service logs recorded for vehicles under {organization.orgName}
-              </p>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Maintenance Activity History ({recentMaintenance.length})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Latest service logs recorded for vehicles under {organization.orgName}
+                </p>
+              </div>
+
+              {/* Export Maintenance History Dropdown (same logic as tabPanels.js) */}
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setExportMenuOpen((prev) => !prev)}
+                  disabled={isExporting || recentMaintenance.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                  title="Export maintenance history report"
+                >
+                  {isExporting ? (
+                    <ImSpinner9 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  ) : (
+                    <FiDownload className="w-3.5 h-3.5 text-slate-600" />
+                  )}
+                  <span>Export</span>
+                  <FiChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+
+                {exportMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-slate-200/90 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="text-[10px] font-bold text-slate-400 px-3.5 py-1 uppercase tracking-wider">
+                      Maintenance Export
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleExportMaintenance("csv")}
+                      className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <FiFileText className="w-4 h-4 text-emerald-600" />
+                      <span>Export as CSV / Excel</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExportMaintenance("pdf")}
+                      className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <FiPrinter className="w-4 h-4 text-blue-600" />
+                      <span>Export as PDF (Print)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {recentMaintenance.length === 0 ? (
@@ -875,7 +1041,24 @@ export default function OrganizationDetailsWrapper({ initialData, currentUser })
         />
       </CommonModal>
 
-      {/* Modal 2: Edit Organization Profile */}
+      {/* Modal 2: Add Driver under this Organization */}
+      <CommonModal
+        modalOpen={isDriverModalOpen}
+        setModalOpen={setIsDriverModalOpen}
+        modalTitle={`Add New Driver to ${organization.orgName || "Organization"}`}
+        modalSize="w-11/12 md:w-[720px]"
+      >
+        <DriverForm
+          preselectedOrgId={organization.orgId}
+          organizations={[organization]}
+          currentUser={currentUser}
+          onSuccess={handleDriverAdded}
+          onClose={() => setIsDriverModalOpen(false)}
+          toggleModal={() => setIsDriverModalOpen(false)}
+        />
+      </CommonModal>
+
+      {/* Modal 3: Edit Organization Profile */}
       <OrganizationModal
         isOpen={isEditOrgModalOpen}
         onClose={() => setIsEditOrgModalOpen(false)}
@@ -885,7 +1068,7 @@ export default function OrganizationDetailsWrapper({ initialData, currentUser })
         isSubmitting={isSubmittingOrg}
       />
 
-      {/* Modal 3: Add User/Member to this Organization */}
+      {/* Modal 4: Add User/Member to this Organization */}
       <UserFormModal
         isOpen={isUserModalOpen}
         onClose={() => setIsUserModalOpen(false)}
