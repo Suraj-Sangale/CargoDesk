@@ -9,6 +9,7 @@ import {
   FiLogOut,
   FiSettings,
   FiUser,
+  FiBriefcase,
 } from "react-icons/fi";
 import { postApiData } from "@/utilities/services/apiService";
 import CommonModal from "../common/commonModal";
@@ -84,10 +85,11 @@ export default function TopHeader({
 
         {/* Brand Name (Smoothly slides and fades in when sidebar is closed) */}
         <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out shrink-0 flex items-center ${showBrandName
+          className={`overflow-hidden transition-all duration-300 ease-in-out shrink-0 flex items-center ${
+            showBrandName
               ? "max-w-[180px] opacity-100 translate-x-0"
               : "max-w-0 opacity-0 -translate-x-3 pointer-events-none"
-            }`}
+          }`}
           aria-hidden={!showBrandName}
         >
           <Link
@@ -181,16 +183,24 @@ export default function TopHeader({
           {dropdownOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-dropdown">
               <div className="px-4 py-2.5 border-b border-slate-100">
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="text-sm font-semibold text-slate-900 truncate">
                   {userName}
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5 truncate">
-                  {pageData?.user?.email || "admin@cargodesk.com"}
-                </p>
+                {pageData?.user?.email && (
+                  <p className="text-xs text-slate-400 mt-1 truncate">
+                    {pageData?.user?.email}
+                  </p>
+                )}
+                {pageData?.organization?.orgName && (
+                  <p className="text-xs text-indigo-600 font-medium mt-1 flex items-center gap-1.5 truncate">
+                    <FiBriefcase className="w-3 h-3 shrink-0" />
+                    {pageData?.organization?.orgName}
+                  </p>
+                )}
               </div>
 
               <div className="py-1">
-                <button
+                {/* <button
                   onClick={() => {
                     setDropdownOpen(false);
                     router.push("/settings");
@@ -199,7 +209,7 @@ export default function TopHeader({
                 >
                   <FiSettings className="w-4 h-4 text-slate-400" />
                   Account Settings
-                </button>
+                </button> */}
                 <button
                   onClick={() => {
                     setDropdownOpen(false);
