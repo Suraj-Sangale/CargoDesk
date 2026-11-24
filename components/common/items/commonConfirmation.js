@@ -9,7 +9,7 @@ const CommonConfirmation = ({
 }) => {
   return (
     <div className="px-4">
-      {title !== "" && <p className="text-black m-5">{title}</p>}
+      {title !== "" && <p className="text-black my-5">{title}</p>}
 
       <div className="flex justify-end">
         <div className="flex space-x-4 my-3 ">
