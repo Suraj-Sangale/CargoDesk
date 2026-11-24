@@ -388,9 +388,10 @@ export default function FleetForm({
               required
               placeholder="e.g. Tata Prima 5530.S / Ashok Leyland 2820"
               error={errors.vehicle_model}
-              {...register("vehicle_model", {
-                required: "Make & Model is required",
-              })}
+              {...register("vehicle_model")}
+              //  {
+              //   required: "Make & Model is required",
+              // }
             />
           </div>
 
@@ -399,12 +400,12 @@ export default function FleetForm({
             <Controller
               name="vehicle_type"
               control={control}
-              rules={{ required: "Vehicle Type is required" }}
+              // rules={{}} //{ required: "Vehicle Type is required" }
               render={({ field }) => (
                 <FloatingSelect
                   id="fleet_vehicle_type"
                   label="Vehicle Type / Body"
-                  required
+                  // required
                   options={FLEET_VEHICLE_TYPES}
                   value={field.value || ""}
                   selectedValue={field.value || ""}
@@ -480,9 +481,10 @@ export default function FleetForm({
               placeholder="e.g. 25 Tons / 35 Tons / 18 Cu.M"
               className="font-semibold"
               error={errors.capacity}
-              {...register("capacity", {
-                required: "Payload Capacity is required",
-              })}
+              {...register("capacity")}
+              // , {
+              //   required: "Payload Capacity is required",
+              // }
             />
           </div>
 
