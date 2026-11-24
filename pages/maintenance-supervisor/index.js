@@ -19,8 +19,6 @@ import {
   FiRefreshCw,
   FiCheck,
   FiX,
-  FiTool,
-  FiUser,
   FiFileText,
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
