@@ -346,7 +346,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
         {/* ============================================================
             4. Minimal Footer
             ============================================================ */}
-        <footer className="py-2 text-center text-xs text-slate-400 border-t border-slate-200/60 bg-white -mx-4">
+        <footer className="py-2 text-center text-xs text-slate-400 border-t border-slate-200/60 bg-white -mx-4 md:-mx-20">
           <p className="font-semibold text-slate-500">Powered by CargoDesk</p>
           {/* <p className="text-[10px] text-slate-400 mt-0.5">
             Transport & Fleet Management System
