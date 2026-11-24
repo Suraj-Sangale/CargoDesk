@@ -15,6 +15,7 @@ import {
   FiX,
   FiChevronRight,
   FiUsers,
+  FiTool,
 } from "react-icons/fi";
 import { HiOutlineTruck } from "react-icons/hi";
 import { HiOutlineUserGroup } from "react-icons/hi";
@@ -65,6 +66,18 @@ export default function Sidebar({
     //   icon: FiFileText,
     //   path: "/expenses",
     // },
+    {
+      id: "maintenance-supervisor",
+      name: "Maintenance",
+      icon: FiTool,
+      path: "/maintenance-supervisor",
+      moduleId: "fleets",
+      visibleTo: [
+        "super_admin",
+        "admin",
+        "maintenance_supervisor",
+      ],
+    },
     {
       id: "messager",
       name: "Messenger",
@@ -179,7 +192,10 @@ export default function Sidebar({
     // 1. Organization-level Module Access: If blocked for user's organization, hide for all roles in that organization
     if (!isSuperAdmin && Array.isArray(user?.orgModules)) {
       const moduleId =
-        item.id || (item.path === "/" ? "dashboard" : item.path.replace(/^\//, "").split("/")[0]);
+        item.moduleId ||
+        (item.id === "maintenance-supervisor" ? "fleets" : null) ||
+        item.id ||
+        (item.path === "/" ? "dashboard" : item.path.replace(/^\//, "").split("/")[0]);
       if (moduleId && !user.orgModules.includes(moduleId)) {
         return false;
       }
@@ -201,8 +217,11 @@ export default function Sidebar({
     // 3. Check custom permissions list if assigned
     if (Array.isArray(user?.permissions) && user.permissions.length > 0) {
       const moduleKey =
-        item.id || (item.path === "/" ? "dashboard" : item.path.replace(/^\//, "").split("/")[0]);
-      if (user.permissions.includes(moduleKey)) return true;
+        item.moduleId ||
+        (item.id === "maintenance-supervisor" ? "fleets" : null) ||
+        item.id ||
+        (item.path === "/" ? "dashboard" : item.path.replace(/^\//, "").split("/")[0]);
+      if (user.permissions.includes(moduleKey) || user.permissions.includes(item.id)) return true;
     }
 
     if (Array.isArray(item.visibleTo) && item.visibleTo.length > 0) {
@@ -224,6 +243,12 @@ export default function Sidebar({
       return true;
     }
     if (item.path === "/users" && currentPath.startsWith("/users")) {
+      return true;
+    }
+    if (
+      item.path === "/maintenance-supervisor" &&
+      (currentPath.startsWith("/maintenance-supervisor") || currentPath.startsWith("/maintenance"))
+    ) {
       return true;
     }
     return currentPath === item.path || currentPath.startsWith(item.path + "/");

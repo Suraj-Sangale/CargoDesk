@@ -114,7 +114,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="min-h-screen flex flex-col selection:bg-blue-500 selection:text-white -mx-2">
+      <div className="min-h-screen flex flex-col selection:bg-blue-500 selection:text-white pb-6">
         {/* ============================================================
             1. Clean Mobile-First Header
             ============================================================ */}
@@ -218,7 +218,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
           {/* ============================================================
               3. Recent Maintenance Records Section (Collapsed by default on mobile)
               ============================================================ */}
-          <div className="bg-white rounded-t-2xl border border-slate-200/90 shadow-2xs overflow-hidden -mx-4">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
             <button
               type="button"
               onClick={() => setShowRecent((prev) => !prev)}
@@ -346,11 +346,8 @@ export default function MaintenanceSupervisorPage({ pageData }) {
         {/* ============================================================
             4. Minimal Footer
             ============================================================ */}
-        <footer className="py-2 text-center text-xs text-slate-400 border-t border-slate-200/60 bg-white -mx-4 md:-mx-20">
+        <footer className="py-3 text-center text-xs text-slate-400 border-t border-slate-200/60 bg-white/70 rounded-2xl mt-6">
           <p className="font-semibold text-slate-500">Powered by CargoDesk</p>
-          {/* <p className="text-[10px] text-slate-400 mt-0.5">
-            Transport & Fleet Management System
-          </p> */}
         </footer>
       </div>
     </>
