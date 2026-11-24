@@ -36,14 +36,14 @@ export function withUserSsr(handler, options = {}) {
     if (user?.role === "maintenance_supervisor") {
       const currentUrl = context.resolvedUrl || context.req?.url || "/";
       const cleanPath = currentUrl.split("?")[0];
-      // if (cleanPath !== "/maintenance-supervisor" && !cleanPath.startsWith("/api/")) {
-      //   return {
-      //     redirect: {
-      //       destination: "/maintenance-supervisor",
-      //       permanent: false,
-      //     },
-      //   };
-      // }
+      if (cleanPath !== "/maintenance-supervisor" && !cleanPath.startsWith("/api/")) {
+        return {
+          redirect: {
+            destination: "/maintenance-supervisor",
+            permanent: false,
+          },
+        };
+      }
     }
 
     const isSuperAdmin =
