@@ -51,9 +51,9 @@ const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
 const SUPPORTED_LANGUAGES = [
-  { code: "en-IN", label: "English" },
-  { code: "hi-IN", label: "हिन्दी (Hindi)" },
   { code: "mr-IN", label: "मराठी (Marathi)" },
+  { code: "hi-IN", label: "हिन्दी (Hindi)" },
+  { code: "en-IN", label: "English" },
 ];
 
 /**
@@ -105,7 +105,7 @@ export default function MaintenanceFormV2({
     initialData?.description || "",
   );
   const [isListening, setIsListening] = useState(false);
-  const [selectedLang, setSelectedLang] = useState("en-IN");
+  const [selectedLang, setSelectedLang] = useState("mr-IN");
   const [speechSupported, setSpeechSupported] = useState(true);
   const [speechError, setSpeechError] = useState(null);
 
@@ -1680,7 +1680,7 @@ const stopListening = () => {
                   type="button"
                   onClick={() => handleChipClick(chip)}
                   disabled={isSubmitting}
-                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border ${
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[15px] font-semibold transition-all cursor-pointer border ${
                     isSelected
                       ? "bg-blue-600 text-white border-blue-600 shadow-xs"
                       : "bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
