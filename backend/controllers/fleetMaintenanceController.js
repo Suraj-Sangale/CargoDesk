@@ -162,6 +162,28 @@ export async function getMaintenanceListByVehicleController(vehicleId, query = {
     return { status: false, code: 400, message: "Invalid vehicle ID." };
   }
 
+  // Enforce organization boundary access control when request context is available
+  if (req) {
+    try {
+      const authUser = getAuthUserFromReq(req);
+      if (authUser && (authUser.role === "maintenance_supervisor" || authUser.role === "admin")) {
+        let supervisorOrgId = authUser.orgId ? Number(authUser.orgId) : null;
+        if (!supervisorOrgId && authUser.userId) {
+          const uRows = await executeQuery("SELECT orgId FROM users WHERE userId = ? LIMIT 1", [authUser.userId]);
+          if (uRows?.[0]?.orgId) supervisorOrgId = Number(uRows[0].orgId);
+        }
+        if (supervisorOrgId) {
+          const vCheck = await executeQuery("SELECT id, orgId FROM fleets WHERE id = ? LIMIT 1", [vid]);
+          if (!vCheck?.[0] || Number(vCheck[0].orgId) !== supervisorOrgId) {
+            return { status: false, code: 403, message: "Access denied. Vehicle not found in your organization." };
+          }
+        }
+      }
+    } catch (authErr) {
+      console.warn("Could not check organization access for maintenance list:", authErr?.message);
+    }
+  }
+
   try {
     const result = await getMaintenanceListByVehicleModel({
       vehicleId: vid,
@@ -169,6 +191,8 @@ export async function getMaintenanceListByVehicleController(vehicleId, query = {
       limit: query.limit,
       status: query.status,
       maintenanceType: query.maintenance_type,
+      dateFilter: query.dateFilter || query.date_filter,
+      sortBy: query.sortBy || query.sort_by,
       search: query.search,
       exportAll: query.exportAll || query.isExport,
     });
