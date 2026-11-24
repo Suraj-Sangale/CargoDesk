@@ -828,80 +828,81 @@ export const MaintenancePanel = React.memo(function MaintenancePanel({ fleet, on
     }
   };
 
+  const summaryCards = [
+  {
+    label: "Total Services",
+    value: summary.total_records,
+    description: "", // "Logged Entries",
+    icon: FiTool,
+    iconStyle: "bg-blue-50 text-blue-600",
+  },
+  {
+    label: "Total Expense",
+    value: `₹${Number(summary.total_expenditure || 0).toLocaleString("en-IN")}`,
+    description: "", //"Maintenance Cost",
+    icon: FiDollarSign,
+    iconStyle: "bg-emerald-50 text-emerald-600",
+  },
+  {
+    label: "Last Service",
+    value: summary.last_maintenance_date
+      ? moment(summary.last_maintenance_date).format("DD MMM YYYY")
+      : "None Recorded",
+    icon: FiCalendar,
+    iconStyle: "bg-indigo-50 text-indigo-600",
+  },
+  {
+    label: "Latest Status",
+    value: summary.latest_status || "N/A",
+    icon: FiCheckCircle,
+    iconStyle: "bg-purple-50 text-purple-600",
+    isStatus: true,
+  },
+];
+
   return (
     <div className="space-y-6">
       {/* 1. Summary Cards Section */}
-      <div className="grid grid-cols-4 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Records */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-              Total Services
-            </span>
-            <div className="desktopOnly w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <FiTool className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex md:flex-row flex-col items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900">{summary.total_records}</span>
-            <span className="desktopOnly text-xs text-slate-500 font-medium">Logged Entries</span>
+     <div className="grid grid-cols-4 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  {summaryCards.map((card, index) => {
+    const Icon = card.icon;
+
+    return (
+      <div
+        key={index}
+        className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            {card.label}
+          </span>
+
+          <div className={`desktopOnly w-8 h-8 rounded-xl flex items-center justify-center ${card.iconStyle}`}>
+            <Icon className="w-4 h-4" />
           </div>
         </div>
 
-        {/* Total Expenditure */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Total Expense
+        <div className="mt-2 flex md:flex-row flex-col items-baseline gap-2">
+          {card.isStatus ? (
+            <span className={`text-[8px] md:text-[10px] px-2.5 py-1 rounded-full font-bold border ${getStatusBadge(card.value)}`}>
+              {card.value}
             </span>
-            <div className="desktopOnly w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <FiDollarSign className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex md:flex-row flex-col items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900">
-              ₹{Number(summary.total_expenditure || 0).toLocaleString("en-IN")}
+          ) : (
+            <span className="text-2xl font-bold text-slate-900 truncate">
+              {card.value}
             </span>
-            <span className="desktopOnly text-xs text-slate-500 font-medium">Maintenance Cost</span>
-          </div>
-        </div>
+          )}
 
-        {/* Last Maintenance Date */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Last Service
+          {card.description && (
+            <span className="desktopOnly text-xs text-slate-500 font-medium">
+              {card.description}
             </span>
-            <div className="desktopOnly w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <FiCalendar className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-base font-bold text-slate-900 truncate">
-              {summary.last_maintenance_date
-                ? moment(summary.last_maintenance_date).format("DD MMM YYYY")
-                : "None Recorded"}
-            </span>
-          </div>
-        </div>
-
-        {/* Current / Latest Status */}
-        <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Latest Status
-            </span>
-            <div className="desktopOnly w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-              <FiCheckCircle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <span className={`text-[8px] md:text-[10px] px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusBadge(summary.latest_status)}`}>
-              {summary.latest_status}
-            </span>
-          </div>
+          )}
         </div>
       </div>
+    );
+  })}
+</div>
 
       {/* 2. Controls & Actions Row */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 sm:p-5 flex flex-col md:items-startd justify-between gap-3">

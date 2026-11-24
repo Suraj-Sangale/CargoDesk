@@ -315,3 +315,171 @@ export function deleteOrganizationModel(orgId) {
     }
   });
 }
+
+/**
+ * Super Admin-only: Fetches comprehensive organization details including
+ * organization profile, assigned fleets, associated users, drivers, maintenance history & summary metrics.
+ */
+export function getOrganizationDetailsModel(orgId, authUser = null) {
+  return new Promise(async (resolve) => {
+    try {
+      await ensureOrganizationsTable();
+
+      const id = Number(orgId);
+      if (!id || isNaN(id)) {
+        return resolve({ status: false, message: "Valid organization ID required" });
+      }
+
+      // 1. Authorization: strictly allow Super Admin only
+      const isSuperAdmin =
+        authUser?.role === "super_admin" || authUser?.email === "suraj@agnibyte.com";
+      if (authUser && !isSuperAdmin) {
+        return resolve({
+          status: false,
+          code: 403,
+          message: "Access denied. Organization details are accessible by Super Admin only.",
+        });
+      }
+
+      // 2. Fetch Organization Record
+      const orgRows = await executeQuery(
+        `SELECT * FROM organizations WHERE orgId = ? LIMIT 1`,
+        [id]
+      );
+      if (!Array.isArray(orgRows) || orgRows.length === 0) {
+        return resolve({ status: false, message: "Organization not found" });
+      }
+
+      const org = orgRows[0];
+      let modules = [];
+      if (org.allowedModules) {
+        try {
+          modules =
+            typeof org.allowedModules === "string"
+              ? JSON.parse(org.allowedModules)
+              : org.allowedModules;
+        } catch (_) {
+          modules = String(org.allowedModules)
+            .split(",")
+            .map((m) => m.trim());
+        }
+      } else {
+        modules = ALL_MODULE_IDS;
+      }
+      org.allowedModules = Array.isArray(modules) && modules.length > 0 ? modules : ALL_MODULE_IDS;
+
+      // 3. Fetch all associated fleets, users, drivers, and recent maintenance in parallel
+      const [fleetsRows, usersRows, driversRows, maintenanceRows] = await Promise.all([
+        executeQuery(
+          `SELECT 
+            f.*,
+            d.id AS driver_id,
+            d.driver_name AS driver_name,
+            d.contact_number AS driver_contact,
+            d.status AS driver_status
+          FROM fleets f
+          LEFT JOIN drivers d ON d.fleet_id = f.id
+          WHERE f.orgId = ?
+          ORDER BY f.id DESC`,
+          [id]
+        ),
+        executeQuery(
+          `SELECT 
+            u.userId,
+            u.firstName,
+            u.lastName,
+            u.email,
+            u.phone,
+            u.role,
+            u.status,
+            u.orgId,
+            u.permissions,
+            u.createdAt,
+            u.updatedAt
+          FROM users u
+          WHERE u.orgId = ?
+          ORDER BY u.userId DESC`,
+          [id]
+        ),
+        executeQuery(
+          `SELECT 
+            d.*,
+            f.vehicle_number,
+            f.vehicle_model
+          FROM drivers d
+          LEFT JOIN fleets f ON f.id = d.fleet_id
+          WHERE d.orgId = ? OR d.fleet_id IN (SELECT id FROM fleets WHERE orgId = ?)
+          ORDER BY d.id DESC`,
+          [id, id]
+        ),
+        executeQuery(
+          `SELECT 
+            m.*,
+            f.vehicle_number,
+            f.vehicle_model,
+            (SELECT COUNT(*) FROM fleet_maintenance_media WHERE maintenance_id = m.id) AS media_count
+          FROM fleet_maintenance m
+          INNER JOIN fleets f ON f.id = m.vehicle_id
+          WHERE f.orgId = ?
+          ORDER BY m.id DESC
+          LIMIT 10`,
+          [id]
+        ),
+      ]);
+
+      const fleets = Array.isArray(fleetsRows) ? fleetsRows : [];
+      const users = Array.isArray(usersRows) ? usersRows : [];
+      const drivers = Array.isArray(driversRows) ? driversRows : [];
+      const recentMaintenance = Array.isArray(maintenanceRows) ? maintenanceRows : [];
+
+      // 4. Compute comprehensive summary statistics
+      const totalFleets = fleets.length;
+      const activeFleets = fleets.filter((f) => f.status === "Active").length;
+      const totalUsers = users.length;
+      const adminCount = users.filter((u) => u.role === "admin").length;
+      const supervisorCount = users.filter((u) => u.role === "maintenance_supervisor").length;
+      const staffCount = totalUsers - adminCount - supervisorCount;
+      const totalDrivers = drivers.length;
+      const assignedDrivers = drivers.filter((d) => d.fleet_id).length;
+      const totalMaintenance = recentMaintenance.length;
+      const totalMaintenanceCost = recentMaintenance.reduce(
+        (sum, m) => sum + (parseFloat(m.cost) || 0),
+        0
+      );
+
+      const summary = {
+        totalFleets,
+        activeFleets,
+        inactiveFleets: totalFleets - activeFleets,
+        totalUsers,
+        adminCount,
+        supervisorCount,
+        staffCount: Math.max(0, staffCount),
+        totalDrivers,
+        assignedDrivers,
+        availableDrivers: totalDrivers - assignedDrivers,
+        totalMaintenance,
+        totalMaintenanceCost,
+      };
+
+      resolve({
+        status: true,
+        data: {
+          organization: org,
+          summary,
+          fleets,
+          users,
+          drivers,
+          recentMaintenance,
+        },
+        message: "Organization details fetched successfully",
+      });
+    } catch (error) {
+      console.error("Error fetching organization details:", error);
+      resolve({
+        status: false,
+        message: error?.message || "Failed to fetch organization details",
+      });
+    }
+  });
+}

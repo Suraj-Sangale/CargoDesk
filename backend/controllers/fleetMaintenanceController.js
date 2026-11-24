@@ -32,9 +32,21 @@ export async function presignMaintenanceUploadsController(req) {
   }
 
   // Verify vehicle exists
-  const vehicle = await executeQuery("SELECT id FROM fleets WHERE id = ? LIMIT 1", [vid]);
+  const vehicle = await executeQuery("SELECT id, orgId FROM fleets WHERE id = ? LIMIT 1", [vid]);
   if (!Array.isArray(vehicle) || vehicle.length === 0) {
     return { status: false, code: 404, message: "Vehicle not found." };
+  }
+
+  // Prevent maintenance supervisor from accessing vehicles belonging to other organizations
+  if (authUser?.role === "maintenance_supervisor") {
+    let supervisorOrgId = authUser.orgId ? Number(authUser.orgId) : null;
+    if (!supervisorOrgId && authUser.userId) {
+      const uRows = await executeQuery("SELECT orgId FROM users WHERE userId = ? LIMIT 1", [authUser.userId]);
+      if (uRows?.[0]?.orgId) supervisorOrgId = Number(uRows[0].orgId);
+    }
+    if (!supervisorOrgId || Number(vehicle[0].orgId) !== supervisorOrgId) {
+      return { status: false, code: 403, message: "Access denied. Vehicle does not belong to your organization." };
+    }
   }
 
   if (!Array.isArray(files) || files.length === 0) {

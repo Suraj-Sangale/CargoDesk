@@ -80,7 +80,7 @@ export function getModuleIdFromPath(pathname = "") {
   if (cleanPath.startsWith("/fleet")) return "fleets";
   if (cleanPath.startsWith("/driver")) return "drivers";
   if (cleanPath.startsWith("/document")) return "documents";
-  if (cleanPath.startsWith("/user")) return "users";
+  if (cleanPath.startsWith("/user") || cleanPath.startsWith("/organization")) return "users";
   if (cleanPath.startsWith("/app")) return "apps";
 
   return null;

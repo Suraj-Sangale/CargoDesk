@@ -9,6 +9,7 @@ import {
   FiLogOut,
   FiSettings,
   FiUser,
+  FiBriefcase,
 } from "react-icons/fi";
 import { postApiData } from "@/utilities/services/apiService";
 import CommonModal from "../common/commonModal";
@@ -70,7 +71,7 @@ export default function TopHeader({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between h-18 px-4 md:px-8 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
+    <header className="sticky top-0 z-30 flex items-center justify-between h-16 md:h-18 px-4 md:px-8 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
       {/* Left side: Hamburger Toggle + Smooth Brand Name + Search Bar */}
       <div className="flex items-center gap-2 sm:gap-3 md:gap-4 flex-1 max-w-2xl">
         <button
@@ -84,10 +85,11 @@ export default function TopHeader({
 
         {/* Brand Name (Smoothly slides and fades in when sidebar is closed) */}
         <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out shrink-0 flex items-center ${showBrandName
+          className={`overflow-hidden transition-all duration-300 ease-in-out shrink-0 flex items-center ${
+            showBrandName
               ? "max-w-[180px] opacity-100 translate-x-0"
               : "max-w-0 opacity-0 -translate-x-3 pointer-events-none"
-            }`}
+          }`}
           aria-hidden={!showBrandName}
         >
           <Link
@@ -102,7 +104,7 @@ export default function TopHeader({
         </div>
 
         {/* Search input field */}
-        <form
+        {/* <form
           onSubmit={handleSearchSubmit}
           className="relative flex-1 max-w-md transition-all duration-300 ease-in-out"
         >
@@ -116,22 +118,21 @@ export default function TopHeader({
               className="w-full pl-10 pr-4 py-2 text-sm bg-slate-100/90 hover:bg-slate-100 focus:bg-white text-slate-800 placeholder-slate-400 rounded-xl border border-transparent focus:border-blue-500/40 focus:ring-3 focus:ring-blue-500/15 transition-all outline-none"
             />
           </div>
-        </form>
+        </form> */}
       </div>
 
       {/* Right side: Notifications & User Profile */}
       <div className="flex items-center gap-3 md:gap-5">
         {/* Notification Bell */}
         <div className="relative" ref={notifRef}>
-          <button
+          {/* <button
             onClick={() => setNotificationsOpen(!notificationsOpen)}
             className="relative p-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors focus:outline-none"
             aria-label="Notifications"
           >
             <FiBell className="w-5 h-5" />
-            {/* Notification Badge Dot */}
             <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white animate-pulse" />
-          </button>
+          </button> */}
 
           {/* Notifications Dropdown Preview */}
           {notificationsOpen && (
@@ -182,16 +183,24 @@ export default function TopHeader({
           {dropdownOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-dropdown">
               <div className="px-4 py-2.5 border-b border-slate-100">
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="text-sm font-semibold text-slate-900 truncate">
                   {userName}
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5 truncate">
-                  {pageData?.user?.email || "admin@cargodesk.com"}
-                </p>
+                {pageData?.user?.email && (
+                  <p className="text-xs text-slate-400 mt-1 truncate">
+                    {pageData?.user?.email}
+                  </p>
+                )}
+                {pageData?.organization?.orgName && (
+                  <p className="text-xs text-indigo-600 font-medium mt-1 flex items-center gap-1.5 truncate">
+                    <FiBriefcase className="w-3 h-3 shrink-0" />
+                    {pageData?.organization?.orgName}
+                  </p>
+                )}
               </div>
 
               <div className="py-1">
-                <button
+                {/* <button
                   onClick={() => {
                     setDropdownOpen(false);
                     router.push("/settings");
@@ -200,7 +209,7 @@ export default function TopHeader({
                 >
                   <FiSettings className="w-4 h-4 text-slate-400" />
                   Account Settings
-                </button>
+                </button> */}
                 <button
                   onClick={() => {
                     setDropdownOpen(false);

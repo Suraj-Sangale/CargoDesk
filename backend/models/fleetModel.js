@@ -109,7 +109,7 @@ export function getAllFleetsModel(requestOrUser = {}, authUser = null) {
   });
 }
 
-export function getFleetByIdModel(id) {
+export function getFleetByIdModel(id, authUser = null) {
   return new Promise(async (resolve, reject) => {
     try {
       const fleetId = Number(id);
@@ -143,6 +143,18 @@ export function getFleetByIdModel(id) {
       }
 
       const fleet = rows[0];
+
+      // Access control check for maintenance supervisor
+      if (authUser?.role === "maintenance_supervisor") {
+        let supervisorOrgId = authUser.orgId ? Number(authUser.orgId) : null;
+        if (!supervisorOrgId && authUser.userId) {
+          const uRows = await executeQuery("SELECT orgId FROM users WHERE userId = ? LIMIT 1", [authUser.userId]);
+          if (uRows?.[0]?.orgId) supervisorOrgId = Number(uRows[0].orgId);
+        }
+        if (!supervisorOrgId || Number(fleet.orgId) !== supervisorOrgId) {
+          return resolve({ status: false, message: "Access denied. Fleet not found in your organization." });
+        }
+      }
 
       const docQuery = `SELECT * FROM vehicle_documents WHERE fleet_id = ? OR (fleet_id IS NULL AND REPLACE(REPLACE(vehicleNo, ' ', ''), '-', '') COLLATE utf8mb4_general_ci = REPLACE(REPLACE(?, ' ', ''), '-', '') COLLATE utf8mb4_general_ci) ORDER BY id DESC`;
       const emiQuery = `SELECT * FROM emi_master WHERE (fleet_id IS NOT NULL AND fleet_id = ?) OR (fleet_id IS NULL AND REPLACE(REPLACE(vehicle_number, ' ', ''), '-', '') COLLATE utf8mb4_general_ci = REPLACE(REPLACE(?, ' ', ''), '-', '') COLLATE utf8mb4_general_ci) ORDER BY id DESC`;

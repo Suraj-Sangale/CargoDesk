@@ -27,13 +27,25 @@ export async function createMaintenanceRecordModel(data, authUser = null) {
 
   // Verify that the vehicle exists
   const vehicleCheck = await executeQuery(
-    "SELECT id, vehicle_number, vehicle_model, status FROM fleets WHERE id = ? LIMIT 1",
+    "SELECT id, vehicle_number, vehicle_model, status, orgId FROM fleets WHERE id = ? LIMIT 1",
     [vehicleId]
   );
   if (!Array.isArray(vehicleCheck) || vehicleCheck.length === 0) {
     throw new Error("Selected vehicle does not exist");
   }
   const vehicle = vehicleCheck[0];
+
+  // Prevent maintenance supervisor from creating records for vehicles belonging to other organizations
+  if (authUser?.role === "maintenance_supervisor") {
+    let supervisorOrgId = authUser.orgId ? Number(authUser.orgId) : null;
+    if (!supervisorOrgId && authUser.userId) {
+      const uRows = await executeQuery("SELECT orgId FROM users WHERE userId = ? LIMIT 1", [authUser.userId]);
+      if (uRows?.[0]?.orgId) supervisorOrgId = Number(uRows[0].orgId);
+    }
+    if (!supervisorOrgId || Number(vehicle.orgId) !== supervisorOrgId) {
+      throw new Error("Access denied. You can only record maintenance for vehicles in your organization.");
+    }
+  }
 
   const parsedCost = cost !== undefined && cost !== null && cost !== "" ? Math.max(0, parseFloat(cost)) : 0.0;
   const parsedOdometer =

@@ -19,16 +19,16 @@ import {
   FiRefreshCw,
   FiCheck,
   FiX,
-  FiTool,
-  FiUser,
   FiFileText,
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 import Image from "next/image";
 import { useFleetDriver } from "@/context/fleetDriverContext";
+import executeQuery from "@/helpers/dbConnection";
 
 export default function MaintenanceSupervisorPage({ pageData }) {
   const user = pageData?.user || null;
+  const organization = pageData?.organization || null;
   const [recentRecords, setRecentRecords] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
@@ -81,6 +81,9 @@ export default function MaintenanceSupervisorPage({ pageData }) {
     setRecentRecords((prev) =>
       [newItem, ...prev.filter((r) => r.id !== newItem.id)].slice(0, 5),
     );
+
+    // Re-fetch in background to ensure database-consistent state and media counts
+    fetchRecentRecords();
   };
 
   const getStatusBadge = (status) => {
@@ -111,13 +114,13 @@ export default function MaintenanceSupervisorPage({ pageData }) {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="min-h-screen bg-slate-100 flex flex-col selection:bg-blue-500 selection:text-white">
+      <div className="min-h-screen flex flex-col selection:bg-blue-500 selection:text-white -mx-2">
         {/* ============================================================
             1. Clean Mobile-First Header
             ============================================================ */}
-        <header className="sticky top-0 z-30 bg-white border-b border-slate-200/80 shadow-xs">
+        {/* <header className="sticky top-0 z-30 bg-white border-b border-slate-200/80 shadow-xs">
           <div className="w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3">
-            {/* Brand Logo & Page Title */}
+            {/* Brand Logo & Page Title
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-10 h-10 rounded-xl text-white flex items-center justify-center shadow-md shadow-blue-600/30 shrink-0">
                 <Image src="/logo.png" alt="Logo" width={32} height={32} />
@@ -126,22 +129,19 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                 <h1 className="text-base sm:text-lg font-black text-slate-900 leading-tight tracking-tight truncate">
                   Vehicle Maintenance
                 </h1>
-                {/* <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wide truncate">
-                  CargoDesk Workshop
-                </p> */}
+                
               </div>
             </div>
 
-            {/* Supervisor Info & Logout Action */}
             <div className="flex items-center gap-2 shrink-0">
               <div className="hidden sm:flex flex-col text-right">
-                <span className="text-xs font-bold text-slate-800 truncate max-w-[140px]">
+                <span className="text-xs font-bold text-slate-800 truncate max-w-[160px]">
                   {user?.firstName
                     ? `${user.firstName} ${user.lastName || ""}`.trim()
                     : user?.email || "Supervisor"}
                 </span>
-                <span className="text-[10px] font-semibold text-slate-500">
-                  Supervisor
+                <span className="text-[10px] font-semibold text-slate-500 truncate max-w-[160px]">
+                  {organization?.orgName ? `${organization.orgName} • Supervisor` : "Supervisor"}
                 </span>
               </div>
 
@@ -157,12 +157,12 @@ export default function MaintenanceSupervisorPage({ pageData }) {
               </button>
             </div>
           </div>
-        </header>
+        </header> */} 
 
         {/* ============================================================
             2. Main Content Container (Full Width Responsive)
             ============================================================ */}
-        <main className="flex-1 w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl mx-auto px-0 sm:px-4 md:px-6 py-0 sm:py-6 space-y-3.5 sm:space-y-5">
+        <main className="flex-1 w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl mx-auto px-0 sm:px-4 md:px-6 py-0 space-y-3.5 sm:space-y-5">
           {/* Success Banner (displayed after submitting a record) */}
           {lastSubmittedRecord && (
             <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 shadow-xs flex items-start justify-between gap-3 animate-fadeIn">
@@ -192,7 +192,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
           )}
 
           {/* Primary Form Card */}
-          <div className="w-full bg-white rounded-b-2xl sm:rounded-3xl border border-slate-200/90 shadow-sm relative">
+          <div className="w-full relative mt-3">
             {/* Visual Quick Banner */}
             {/* <div className="px-5 py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -211,13 +211,14 @@ export default function MaintenanceSupervisorPage({ pageData }) {
               onSuccess={handleRecordSuccess}
               resetOnSuccess={true}
               submitButtonText="Save Maintenance Record"
+              userOrgId={user?.orgId}
             />
           </div>
 
           {/* ============================================================
               3. Recent Maintenance Records Section (Collapsed by default on mobile)
               ============================================================ */}
-          <div className="bg-white rounded-t-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+          <div className="bg-white rounded-t-2xl border border-slate-200/90 shadow-2xs overflow-hidden -mx-4">
             <button
               type="button"
               onClick={() => setShowRecent((prev) => !prev)}
@@ -233,7 +234,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                     Recent Maintenance Logs
                   </h3>
                   <p className="text-[11px] text-slate-500 font-medium">
-                    Latest {recentRecords.length} recorded vehicle entries
+                    Your last {recentRecords.length} maintenance {recentRecords.length === 1 ? "entry" : "entries"}
                   </p>
                 </div>
               </div>
@@ -345,11 +346,11 @@ export default function MaintenanceSupervisorPage({ pageData }) {
         {/* ============================================================
             4. Minimal Footer
             ============================================================ */}
-        <footer className="py-5 text-center text-xs text-slate-400 border-t border-slate-200/60 bg-white">
+        <footer className="py-2 text-center text-xs text-slate-400 border-t border-slate-200/60 bg-white -mx-4 md:-mx-20">
           <p className="font-semibold text-slate-500">Powered by CargoDesk</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">
+          {/* <p className="text-[10px] text-slate-400 mt-0.5">
             Transport & Fleet Management System
-          </p>
+          </p> */}
         </footer>
       </div>
     </>
@@ -357,13 +358,38 @@ export default function MaintenanceSupervisorPage({ pageData }) {
 }
 
 // Dedicated standalone mobile-first layout: bypasses regular sidebar and dashboard header
-MaintenanceSupervisorPage.layoutName = "none";
+MaintenanceSupervisorPage.layoutName = "maintenance-supervisor";
 
 export const getServerSideProps = withUserSsr(
   async (context, { user }) => {
+    let organization = null;
+    let userOrgId = user?.orgId ? Number(user.orgId) : null;
+    if (!userOrgId && user?.userId) {
+      try {
+        const uRows = await executeQuery(
+          "SELECT orgId FROM users WHERE userId = ? LIMIT 1",
+          [user.userId]
+        );
+        if (uRows?.[0]?.orgId) userOrgId = Number(uRows[0].orgId);
+      } catch (_) {}
+    }
+
+    if (userOrgId) {
+      try {
+        const orgRows = await executeQuery(
+          "SELECT orgId, orgName, orgCode FROM organizations WHERE orgId = ? LIMIT 1",
+          [userOrgId]
+        );
+        if (orgRows?.[0]) organization = orgRows[0];
+      } catch (_) {}
+    }
+
     return {
       props: {
-        pageData: { user },
+        pageData: {
+          user: { ...user, orgId: userOrgId },
+          organization,
+        },
       },
     };
   },

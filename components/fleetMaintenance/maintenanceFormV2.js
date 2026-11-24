@@ -51,9 +51,9 @@ const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
 const SUPPORTED_LANGUAGES = [
-  { code: "en-IN", label: "English" },
-  { code: "hi-IN", label: "हिन्दी (Hindi)" },
   { code: "mr-IN", label: "मराठी (Marathi)" },
+  { code: "hi-IN", label: "हिन्दी (Hindi)" },
+  { code: "en-IN", label: "English" },
 ];
 
 /**
@@ -70,6 +70,7 @@ export default function MaintenanceFormV2({
   onSuccess,
   resetOnSuccess = false,
   submitButtonText = "Save Maintenance Record",
+  userOrgId = null,
 }) {
   // 1. Vehicles Selection State
   const [vehicles, setVehicles] = useState([]);
@@ -104,7 +105,7 @@ export default function MaintenanceFormV2({
     initialData?.description || "",
   );
   const [isListening, setIsListening] = useState(false);
-  const [selectedLang, setSelectedLang] = useState("en-IN");
+  const [selectedLang, setSelectedLang] = useState("mr-IN");
   const [speechSupported, setSpeechSupported] = useState(true);
   const [speechError, setSpeechError] = useState(null);
 
@@ -152,6 +153,7 @@ export default function MaintenanceFormV2({
   const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
   const speechBaseTextRef = useRef("");
+  const attachedFilesRef = useRef([]);
 
   // Initialize device location early so photo watermarking is instant & reliable
   useEffect(() => {
@@ -413,7 +415,8 @@ export default function MaintenanceFormV2({
       if (preselectedVehicle) return;
       setLoadingVehicles(true);
       try {
-        const json = await postApiData("GET_VEHICLES_LIST");
+        const payload = userOrgId ? { orgId: userOrgId } : {};
+        const json = await postApiData("GET_VEHICLES_LIST", payload);
         if (isMounted && json?.status && Array.isArray(json.data)) {
           setVehicles(json.data);
         }
@@ -428,7 +431,7 @@ export default function MaintenanceFormV2({
     return () => {
       isMounted = false;
     };
-  }, [preselectedVehicle]);
+  }, [preselectedVehicle, userOrgId]);
 
   // Selected Vehicle Object
   const selectedVehicle = useMemo(() => {
@@ -562,10 +565,16 @@ export default function MaintenanceFormV2({
     }));
   }, [vehicles, preselectedVehicle]);
 
-  // Clean up blob URLs when component unmounts
+  // Keep ref in sync so the unmount cleanup always has the latest list
+  useEffect(() => {
+    attachedFilesRef.current = attachedFiles;
+  }, [attachedFiles]);
+
+  // Clean up blob URLs only when component unmounts (not on every attachedFiles change,
+  // which would revoke URLs of previously-attached files and break their previews)
   useEffect(() => {
     return () => {
-      attachedFiles.forEach((item) => {
+      attachedFilesRef.current.forEach((item) => {
         if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
           try {
             URL.revokeObjectURL(item.previewUrl);
@@ -578,96 +587,102 @@ export default function MaintenanceFormV2({
         } catch (_) {}
       }
     };
-  }, [attachedFiles]);
+  }, []);
 
+  const startListening = () => {
+  if (!recognitionRef.current || isListening) return;
+  speechBaseTextRef.current = problemDescription || ""; // snapshot current text
+  try {
+    recognitionRef.current.start();
+  } catch (_) {}
+};
+
+const stopListening = () => {
+  try {
+    recognitionRef.current?.stop();
+  } catch (_) {}
+};
   // Initialize Speech Recognition
   useEffect(() => {
-    const SpeechRecognition =
-      typeof window !== "undefined"
-        ? window.SpeechRecognition || window.webkitSpeechRecognition
-        : null;
+  const SpeechRecognition =
+    typeof window !== "undefined"
+      ? window.SpeechRecognition || window.webkitSpeechRecognition
+      : null;
 
-    if (!SpeechRecognition) {
-      setSpeechSupported(false);
-      return;
-    }
+  if (!SpeechRecognition) {
+    setSpeechSupported(false);
+    return;
+  }
 
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = selectedLang;
+  const recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = selectedLang;
 
-      recognition.onstart = () => {
-        setIsListening(true);
-        setSpeechError(null);
-      };
+  recognition.onstart = () => {
+    setIsListening(true);
+    setSpeechError(null);
+  };
 
-      recognition.onresult = (event) => {
-        let finalTranscript = "";
-        let interimTranscript = "";
+  recognition.onresult = (event) => {
+    // Ignore events from a recognizer that has been replaced
+    if (recognitionRef.current !== recognition) return;
 
-        // Iterate over full session results to compute current complete transcript
-        for (let i = 0; i < event.results.length; i++) {
-          const res = event.results[i];
-          const transcript = res[0]?.transcript || "";
-          if (res.isFinal) {
-            finalTranscript += (finalTranscript ? " " : "") + transcript.trim();
-          } else {
-            interimTranscript +=
-              (interimTranscript ? " " : "") + transcript.trim();
-          }
-        }
+    let finalTranscript = "";
+    let interimTranscript = "";
 
-        const sessionSpeech = (
-          finalTranscript + (interimTranscript ? " " + interimTranscript : "")
-        ).trim();
-        if (sessionSpeech) {
-          const base = speechBaseTextRef.current
-            ? speechBaseTextRef.current.trim()
-            : "";
-          const combined = base ? `${base} ${sessionSpeech}` : sessionSpeech;
-          setProblemDescription(combined);
-          setFormError(null);
-        }
-      };
-
-      recognition.onerror = (event) => {
-        console.warn("Speech recognition error:", event.error);
-        if (event.error === "not-allowed") {
-          setSpeechError(
-            "Microphone permission denied. Please allow microphone in browser.",
-          );
-        } else if (event.error === "network") {
-          setSpeechError("Network error during speech recognition.");
-        } else if (event.error !== "no-speech") {
-          setSpeechError(`Speech error: ${event.error}`);
-        }
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        setProblemDescription((current) => {
-          speechBaseTextRef.current = (current || "").trim();
-          return current;
-        });
-      };
-
-      recognitionRef.current = recognition;
-    } catch (e) {
-      console.warn("SpeechRecognition init error:", e);
-      setSpeechSupported(false);
-    }
-
-    return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (_) {}
+    for (let i = 0; i < event.results.length; i++) {
+      const res = event.results[i];
+      const transcript = (res[0]?.transcript || "").trim();
+      if (!transcript) continue;
+      if (res.isFinal) {
+        finalTranscript += (finalTranscript ? " " : "") + transcript;
+      } else {
+        interimTranscript += (interimTranscript ? " " : "") + transcript;
       }
-    };
-  }, [selectedLang]);
+    }
+
+    const sessionSpeech = [finalTranscript, interimTranscript]
+      .filter(Boolean)
+      .join(" ");
+
+    if (sessionSpeech) {
+      const base = speechBaseTextRef.current.trim();
+      setProblemDescription(base ? `${base} ${sessionSpeech}` : sessionSpeech);
+      setFormError(null);
+    }
+  };
+
+  recognition.onerror = (event) => {
+    if (event.error === "not-allowed") {
+      setSpeechError("Microphone permission denied. Please allow microphone in browser.");
+    } else if (event.error === "network") {
+      setSpeechError("Network error during speech recognition.");
+    } else if (event.error !== "no-speech" && event.error !== "aborted") {
+      setSpeechError(`Speech error: ${event.error}`);
+    }
+    setIsListening(false);
+  };
+
+  recognition.onend = () => {
+    setIsListening(false);
+    // Do NOT touch speechBaseTextRef here
+  };
+
+  recognitionRef.current = recognition;
+
+  return () => {
+    // Detach handlers first so a dying instance can't write anything
+    recognition.onresult = null;
+    recognition.onend = null;
+    recognition.onerror = null;
+    recognition.onstart = null;
+    try {
+      recognition.abort();
+    } catch (_) {}
+    if (recognitionRef.current === recognition) recognitionRef.current = null;
+  };
+}, [selectedLang]);
 
   // Toggle voice listening
   const toggleListening = () => {
@@ -1083,7 +1098,7 @@ export default function MaintenanceFormV2({
       {/* Form Body */}
       <form
         onSubmit={handleSubmit}
-        className="w-full p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6"
+        className="w-full space-y-4 sm:space-y-6"
       >
         {/* Error Alert */}
         {formError && (
@@ -1415,9 +1430,9 @@ export default function MaintenanceFormV2({
               </button> */}
             </div>
           ) : skipWatermark ? (
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-row sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-700 shadow-2xs">
+            <div className="p-2 bg-slate-50 border border-slate-200 rounded-2xl flex flex-row sm:flex-row items-center justify-between gap-3 text-xs text-slate-700 shadow-2xs">
               <div className="flex items-start gap-2.5 min-w-0">
-                <FiSlash className="w-4 h-4 text-slate-500 shrink-0 " />
+                {/* <FiSlash className="w-4 h-4 text-slate-500 shrink-0 " /> */}
                 <div className="min-w-0">
                   <span className="font-bold block text-slate-900">
                     GPS Watermark Skipped
@@ -1431,7 +1446,7 @@ export default function MaintenanceFormV2({
                 <button
                   type="button"
                   onClick={() => setShowEnableLocationPopup(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  className="px-3.5 py-1.5 rounded-xl bg-violet-500 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
                 >
                   Enable Location
                 </button>
@@ -1495,7 +1510,7 @@ export default function MaintenanceFormV2({
                 isProcessingMedia ||
                 attachedFiles.length >= MAX_ATTACHMENTS
               }
-              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 text-blue-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-blue-300 hover:border-blue-500 bg-white hover:bg-blue-50 text-blue-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                 {isProcessingMedia ? (
@@ -1530,7 +1545,7 @@ export default function MaintenanceFormV2({
                 isProcessingMedia ||
                 attachedFiles.length >= MAX_ATTACHMENTS
               }
-              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/100 hover:bg-amber-50/40 text-amber-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/100 hover:bg-amber-100/80 text-amber-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="w-12 h-12 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                 <FiUploadCloud className="w-6 h-6" />
@@ -1636,7 +1651,7 @@ export default function MaintenanceFormV2({
 
             {/* Language Switcher Pill for Speech */}
             {speechSupported && (
-              <div className="flex items-center gap-1 bg-slate-100 rounded-xl px-2.5 py-1 border border-slate-200">
+              <div className="flex items-center gap-1 bg-white rounded-xl px-2.5 py-1 border border-slate-200">
                 <FiGlobe className="w-3.5 h-3.5 text-slate-500" />
                 <select
                   value={selectedLang}
@@ -1665,10 +1680,10 @@ export default function MaintenanceFormV2({
                   type="button"
                   onClick={() => handleChipClick(chip)}
                   disabled={isSubmitting}
-                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border ${
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[15px] font-semibold transition-all cursor-pointer border ${
                     isSelected
                       ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                      : "bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
+                      : "bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
                   }`}
                 >
                   {chip.label}
