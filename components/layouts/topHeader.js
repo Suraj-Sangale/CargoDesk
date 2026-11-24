@@ -102,7 +102,7 @@ export default function TopHeader({
         </div>
 
         {/* Search input field */}
-        <form
+        {/* <form
           onSubmit={handleSearchSubmit}
           className="relative flex-1 max-w-md transition-all duration-300 ease-in-out"
         >
@@ -116,22 +116,21 @@ export default function TopHeader({
               className="w-full pl-10 pr-4 py-2 text-sm bg-slate-100/90 hover:bg-slate-100 focus:bg-white text-slate-800 placeholder-slate-400 rounded-xl border border-transparent focus:border-blue-500/40 focus:ring-3 focus:ring-blue-500/15 transition-all outline-none"
             />
           </div>
-        </form>
+        </form> */}
       </div>
 
       {/* Right side: Notifications & User Profile */}
       <div className="flex items-center gap-3 md:gap-5">
         {/* Notification Bell */}
         <div className="relative" ref={notifRef}>
-          <button
+          {/* <button
             onClick={() => setNotificationsOpen(!notificationsOpen)}
             className="relative p-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors focus:outline-none"
             aria-label="Notifications"
           >
             <FiBell className="w-5 h-5" />
-            {/* Notification Badge Dot */}
             <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white animate-pulse" />
-          </button>
+          </button> */}
 
           {/* Notifications Dropdown Preview */}
           {notificationsOpen && (
