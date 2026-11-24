@@ -71,7 +71,7 @@ export default function TopHeader({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between h-18 px-4 md:px-8 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
+    <header className="sticky top-0 z-30 flex items-center justify-between h-16 md:h-18 px-4 md:px-8 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
       {/* Left side: Hamburger Toggle + Smooth Brand Name + Search Bar */}
       <div className="flex items-center gap-2 sm:gap-3 md:gap-4 flex-1 max-w-2xl">
         <button
