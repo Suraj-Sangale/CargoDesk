@@ -1098,7 +1098,7 @@ const stopListening = () => {
       {/* Form Body */}
       <form
         onSubmit={handleSubmit}
-        className="w-full p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6"
+        className="w-full space-y-4 sm:space-y-6"
       >
         {/* Error Alert */}
         {formError && (
@@ -1446,7 +1446,7 @@ const stopListening = () => {
                 <button
                   type="button"
                   onClick={() => setShowEnableLocationPopup(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  className="px-3.5 py-1.5 rounded-xl bg-violet-500 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
                 >
                   Enable Location
                 </button>
@@ -1510,7 +1510,7 @@ const stopListening = () => {
                 isProcessingMedia ||
                 attachedFiles.length >= MAX_ATTACHMENTS
               }
-              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 text-blue-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-blue-300 hover:border-blue-500 bg-white hover:bg-blue-50 text-blue-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                 {isProcessingMedia ? (
@@ -1545,7 +1545,7 @@ const stopListening = () => {
                 isProcessingMedia ||
                 attachedFiles.length >= MAX_ATTACHMENTS
               }
-              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/100 hover:bg-amber-50/40 text-amber-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/100 hover:bg-amber-100/80 text-amber-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="w-12 h-12 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                 <FiUploadCloud className="w-6 h-6" />
@@ -1651,7 +1651,7 @@ const stopListening = () => {
 
             {/* Language Switcher Pill for Speech */}
             {speechSupported && (
-              <div className="flex items-center gap-1 bg-slate-100 rounded-xl px-2.5 py-1 border border-slate-200">
+              <div className="flex items-center gap-1 bg-white rounded-xl px-2.5 py-1 border border-slate-200">
                 <FiGlobe className="w-3.5 h-3.5 text-slate-500" />
                 <select
                   value={selectedLang}
@@ -1683,7 +1683,7 @@ const stopListening = () => {
                   className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border ${
                     isSelected
                       ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                      : "bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
+                      : "bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
                   }`}
                 >
                   {chip.label}
