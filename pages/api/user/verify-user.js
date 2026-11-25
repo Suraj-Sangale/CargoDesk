@@ -12,6 +12,8 @@ export default async function handler(req, res) {
 
       if (response.status) {
         const user = response.user; // Get the user role or any other user data you want to store in the token
+         const SESSION_EXPIRY_DAYS = Number(process.env.SESSION_EXPIRY_DAYS) || 15;
+
         // Successful login
         const token = jwt.sign(
           {
@@ -24,7 +26,7 @@ export default async function handler(req, res) {
             orgId: user.orgId ? Number(user.orgId) : null,
           },
           process.env.SECRET_KEY,
-          { expiresIn: "1d" }
+          { expiresIn: `${SESSION_EXPIRY_DAYS}d` }
         );
 
         // Set the JWT token in the cookies
@@ -35,7 +37,7 @@ export default async function handler(req, res) {
         cookies.set("auth_token", token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
-          maxAge: 24 * 60 * 60 * 1000,
+          maxAge: SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
           path: "/",
           sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
         });
