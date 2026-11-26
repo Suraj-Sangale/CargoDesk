@@ -190,7 +190,7 @@ export default function EmiSection() {
       </div>
 
       {/* Main EMI Table Container */}
-      <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-5 md:p-6 space-y-5">
+      <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-5 md:p-6 space-y-5 -mx-3 md:mx-0">
         {/* Header Row */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

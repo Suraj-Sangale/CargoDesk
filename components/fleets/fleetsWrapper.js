@@ -303,7 +303,7 @@ export default function FleetsWrapper({ pageData }) {
       </div>
 
       {/* Main White Container: Toolbar + DocumentTable */}
-      <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-5 md:p-6 space-y-5">
+      <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-5 md:p-6 space-y-5  -mx-3 md:mx-0">
         {/* Toolbar: Search, Filter, + Add Fleet CTA */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Left: Title + Count */}
