@@ -590,99 +590,103 @@ export default function MaintenanceFormV2({
   }, []);
 
   const startListening = () => {
-  if (!recognitionRef.current || isListening) return;
-  speechBaseTextRef.current = problemDescription || ""; // snapshot current text
-  try {
-    recognitionRef.current.start();
-  } catch (_) {}
-};
+    if (!recognitionRef.current || isListening) return;
+    speechBaseTextRef.current = problemDescription || ""; // snapshot current text
+    try {
+      recognitionRef.current.start();
+    } catch (_) {}
+  };
 
-const stopListening = () => {
-  try {
-    recognitionRef.current?.stop();
-  } catch (_) {}
-};
+  const stopListening = () => {
+    try {
+      recognitionRef.current?.stop();
+    } catch (_) {}
+  };
   // Initialize Speech Recognition
   useEffect(() => {
-  const SpeechRecognition =
-    typeof window !== "undefined"
-      ? window.SpeechRecognition || window.webkitSpeechRecognition
-      : null;
+    const SpeechRecognition =
+      typeof window !== "undefined"
+        ? window.SpeechRecognition || window.webkitSpeechRecognition
+        : null;
 
-  if (!SpeechRecognition) {
-    setSpeechSupported(false);
-    return;
-  }
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
+    }
 
-  const recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = selectedLang;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = selectedLang;
 
-  recognition.onstart = () => {
-    setIsListening(true);
-    setSpeechError(null);
-  };
+    recognition.onstart = () => {
+      setIsListening(true);
+      setSpeechError(null);
+    };
 
-  recognition.onresult = (event) => {
-    // Ignore events from a recognizer that has been replaced
-    if (recognitionRef.current !== recognition) return;
+    recognition.onresult = (event) => {
+      // Ignore events from a recognizer that has been replaced
+      if (recognitionRef.current !== recognition) return;
 
-    let finalTranscript = "";
-    let interimTranscript = "";
+      let finalTranscript = "";
+      let interimTranscript = "";
 
-    for (let i = 0; i < event.results.length; i++) {
-      const res = event.results[i];
-      const transcript = (res[0]?.transcript || "").trim();
-      if (!transcript) continue;
-      if (res.isFinal) {
-        finalTranscript += (finalTranscript ? " " : "") + transcript;
-      } else {
-        interimTranscript += (interimTranscript ? " " : "") + transcript;
+      for (let i = 0; i < event.results.length; i++) {
+        const res = event.results[i];
+        const transcript = (res[0]?.transcript || "").trim();
+        if (!transcript) continue;
+        if (res.isFinal) {
+          finalTranscript += (finalTranscript ? " " : "") + transcript;
+        } else {
+          interimTranscript += (interimTranscript ? " " : "") + transcript;
+        }
       }
-    }
 
-    const sessionSpeech = [finalTranscript, interimTranscript]
-      .filter(Boolean)
-      .join(" ");
+      const sessionSpeech = [finalTranscript, interimTranscript]
+        .filter(Boolean)
+        .join(" ");
 
-    if (sessionSpeech) {
-      const base = speechBaseTextRef.current.trim();
-      setProblemDescription(base ? `${base} ${sessionSpeech}` : sessionSpeech);
-      setFormError(null);
-    }
-  };
+      if (sessionSpeech) {
+        const base = speechBaseTextRef.current.trim();
+        setProblemDescription(
+          base ? `${base} ${sessionSpeech}` : sessionSpeech,
+        );
+        setFormError(null);
+      }
+    };
 
-  recognition.onerror = (event) => {
-    if (event.error === "not-allowed") {
-      setSpeechError("Microphone permission denied. Please allow microphone in browser.");
-    } else if (event.error === "network") {
-      setSpeechError("Network error during speech recognition.");
-    } else if (event.error !== "no-speech" && event.error !== "aborted") {
-      setSpeechError(`Speech error: ${event.error}`);
-    }
-    setIsListening(false);
-  };
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed") {
+        setSpeechError(
+          "Microphone permission denied. Please allow microphone in browser.",
+        );
+      } else if (event.error === "network") {
+        setSpeechError("Network error during speech recognition.");
+      } else if (event.error !== "no-speech" && event.error !== "aborted") {
+        setSpeechError(`Speech error: ${event.error}`);
+      }
+      setIsListening(false);
+    };
 
-  recognition.onend = () => {
-    setIsListening(false);
-    // Do NOT touch speechBaseTextRef here
-  };
+    recognition.onend = () => {
+      setIsListening(false);
+      // Do NOT touch speechBaseTextRef here
+    };
 
-  recognitionRef.current = recognition;
+    recognitionRef.current = recognition;
 
-  return () => {
-    // Detach handlers first so a dying instance can't write anything
-    recognition.onresult = null;
-    recognition.onend = null;
-    recognition.onerror = null;
-    recognition.onstart = null;
-    try {
-      recognition.abort();
-    } catch (_) {}
-    if (recognitionRef.current === recognition) recognitionRef.current = null;
-  };
-}, [selectedLang]);
+    return () => {
+      // Detach handlers first so a dying instance can't write anything
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.onstart = null;
+      try {
+        recognition.abort();
+      } catch (_) {}
+      if (recognitionRef.current === recognition) recognitionRef.current = null;
+    };
+  }, [selectedLang]);
 
   // Toggle voice listening
   const toggleListening = () => {
@@ -884,53 +888,105 @@ const stopListening = () => {
     }
   };
 
-  // Submit Handler
-  const handleSubmit = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    setFormError(null);
+  const validateForm = () => {
+    setFormError("");
+    setFileError("");
 
-    const vid = selectedVehicleId ? Number(selectedVehicleId) : null;
-    if (!vid) {
-      setFormError("Please select a vehicle number before submitting.");
-      showToast({ message: "Please select a vehicle number", type: "error" });
-      return;
-    }
+    const vid = Number(selectedVehicleId);
 
-    if (!problemDescription || problemDescription.trim() === "") {
-      setFormError(
-        "Please describe the problem or use the microphone to speak.",
-      );
-      showToast({ message: "Please describe the problem", type: "error" });
-      return;
-    }
+    // Resolve maintenance type (supports edit mode)
+    const resolvedMaintenanceType =
+      maintenanceType?.trim() || initialData?.maintenance_type || "";
 
-    if (attachedFiles.length === 0) {
-      setFileError(
-        "Photo or video evidence is compulsory. Please take a photo or upload a file.",
-      );
-      setFormError("Please take a photo or upload a file as evidence.");
-      showToast({
+    // Check existing and newly attached media
+    const hasExistingMedia =
+      Array.isArray(initialData?.media) && initialData.media.length > 0;
+
+    const hasNewMedia = attachedFiles?.length > 0;
+
+    const validations = [
+      {
+        invalid: !selectedVehicleId || !Number.isFinite(vid) || vid <= 0,
+        message: "Please select a vehicle number",
+        error: "Please select a vehicle number before submitting.",
+      },
+      {
+        invalid: !resolvedMaintenanceType.trim(),
+        message: "Please select a maintenance type",
+        error: "Please select a maintenance type.",
+      },
+      {
+        invalid: !problemDescription?.trim(),
+        message: "Please describe the problem",
+        error: "Please describe the problem or use the microphone to speak.",
+      },
+      {
+        invalid: !hasExistingMedia && !hasNewMedia,
         message: "Photo or video evidence is compulsory",
-        type: "error",
-      });
-      return;
+        error: "Please take a photo or upload a file as evidence.",
+        fileError:
+          "Photo or video evidence is compulsory. Please take a photo or upload a file.",
+      },
+    ];
+
+    const failed = validations.find((item) => item.invalid);
+
+    if (!failed) return true;
+
+    setFormError(failed.error);
+
+    if (failed.fileError) {
+      setFileError(failed.fileError);
     }
+
+    showToast({
+      message: failed.message,
+      type: "error",
+    });
+
+    return false;
+  };
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault?.();
+
+    // Prevent duplicate submissions
+    if (isSubmitting) return;
+
+    if (!validateForm()) return;
+
+    const vid = Number(selectedVehicleId);
+
+    // Resolve maintenance category
+    const resolvedMaintenanceType =
+      maintenanceType?.trim() ||
+      initialData?.maintenance_type ||
+      (problemDescription
+        ? FLEET_MAINTENANCE_TYPES.find(
+            (c) =>
+              problemDescription.toLowerCase().includes(c.type.toLowerCase()) ||
+              problemDescription.toLowerCase().includes(c.text.toLowerCase()),
+          )?.type
+        : null) ||
+      FLEET_MAINTENANCE_TYPES[0]?.type ||
+      "Breakdown";
 
     // Stop speech recognition if listening
     if (isListening && recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch (_) {}
+
       setIsListening(false);
     }
 
     setIsSubmitting(true);
     setSubmissionProgress("Preparing report...");
 
-    try {
-      const uploadedMediaItems = [];
+    const uploadedMediaItems = [];
 
-      // Step 1: Upload media files if any
+    try {
+      // STEP 1: Upload media files to S3
       if (attachedFiles.length > 0) {
         setSubmissionProgress(`Authorizing ${attachedFiles.length} file(s)...`);
 
@@ -947,6 +1003,7 @@ const stopListening = () => {
           "PRESIGN_MAINTENANCE_UPLOADS",
           presignPayload,
         );
+
         if (!presignJson?.status || !Array.isArray(presignJson.data)) {
           throw new Error(
             presignJson?.message ||
@@ -954,23 +1011,25 @@ const stopListening = () => {
           );
         }
 
-        const presignedMap = {};
-        presignJson.data.forEach((item) => {
-          presignedMap[item.fileName] = item;
-        });
+        // Map presigned URLs by filename
+        const presignedMap = Object.fromEntries(
+          presignJson.data.map((item) => [item.fileName, item]),
+        );
 
+        // Upload files sequentially
         for (let i = 0; i < attachedFiles.length; i++) {
           const item = attachedFiles[i];
+
           const presignedInfo = presignedMap[item.fileName];
 
-          if (!presignedInfo || !presignedInfo.uploadUrl) {
+          if (!presignedInfo?.uploadUrl) {
             throw new Error(
               `Upload authorization missing for file: ${item.fileName}`,
             );
           }
 
           setSubmissionProgress(
-            `Uploading photo ${i + 1} of ${attachedFiles.length}...`,
+            `Uploading file ${i + 1} of ${attachedFiles.length}...`,
           );
 
           await uploadMediaFile({
@@ -990,26 +1049,8 @@ const stopListening = () => {
         }
       }
 
-      // Step 2: Save maintenance record in database with India local date and time
+      // STEP 2: Prepare maintenance payload
       setSubmissionProgress("Submitting problem report...");
-
-      // Determine proper maintenance category
-      const resolvedMaintenanceType =
-        maintenanceType ||
-        initialData?.maintenance_type ||
-        (problemDescription
-          ? FLEET_MAINTENANCE_TYPES.find(
-              (c) =>
-                problemDescription
-                  .toLowerCase()
-                  .includes(c.type.toLowerCase()) ||
-                problemDescription
-                  .toLowerCase()
-                  .includes(c.text.toLowerCase()),
-            )?.type
-          : null) ||
-        FLEET_MAINTENANCE_TYPES[0]?.type ||
-        "Breakdown";
 
       const payload = {
         vehicle_id: vid,
@@ -1018,20 +1059,24 @@ const stopListening = () => {
         maintenance_date: getIndiaDateString(),
         created_at: getIndiaISOString(),
         status: "Reported",
-        cost: expenseCost ? parseFloat(expenseCost) || "0.00" : "0.00",
+        cost: Number(expenseCost) || 0,
         odometer_reading: initialData?.odometer_reading ?? null,
         garage_name: initialData?.garage_name ?? null,
         invoice_number: initialData?.invoice_number ?? null,
         additional_notes: initialData?.additional_notes ?? null,
       };
 
+      // STEP 3: Add or update maintenance record
       let saveJson;
+
       if (isEdit && initialData?.id) {
         payload.id = initialData.id;
         payload.newMedia = uploadedMediaItems;
+
         saveJson = await postApiData("UPDATE_MAINTENANCE_RECORD", payload);
       } else {
         payload.media = uploadedMediaItems;
+
         saveJson = await postApiData("ADD_NEW_MAINTENANCE", payload);
       }
 
@@ -1041,32 +1086,37 @@ const stopListening = () => {
         );
       }
 
+      // STEP 4: Success notification
       showToast({
-        message: "Maintenance Record Saved Successfully!",
+        message: isEdit
+          ? "Maintenance Record Updated Successfully!"
+          : "Maintenance Record Saved Successfully!",
         type: "success",
       });
 
-      // Reset form if resetOnSuccess is enabled or when used standalone without a modal onClose
+      // STEP 5: Reset form when required
       if (resetOnSuccess || !onClose) {
         if (!preselectedVehicle) {
           setSelectedVehicleId("");
           setVehicleSearchQuery("");
         }
+
         setProblemDescription("");
         setMaintenanceType(initialData?.maintenance_type || "");
         setExpenseCost("");
+
         attachedFiles.forEach((item) => {
-          if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
-            try {
-              URL.revokeObjectURL(item.previewUrl);
-            } catch (_) {}
+          if (item.previewUrl?.startsWith("blob:")) {
+            URL.revokeObjectURL(item.previewUrl);
           }
         });
+
         setAttachedFiles([]);
         setFileError(null);
         setFormError(null);
       }
 
+      // STEP 6: Success callback
       if (onSuccess) {
         onSuccess(saveJson.data, {
           vehicle: selectedVehicle,
@@ -1074,17 +1124,21 @@ const stopListening = () => {
           description: payload.description,
         });
       }
+
       if (onClose) {
         onClose();
       }
     } catch (err) {
       console.error("V2 submission error:", err);
-      setFormError(
+
+      const errorMessage =
         err.message ||
-          "Failed to submit report. Please check connection and try again.",
-      );
+        "Failed to submit report. Please check connection and try again.";
+
+      setFormError(errorMessage);
+
       showToast({
-        message: err.message || "Failed to submit maintenance report.",
+        message: errorMessage,
         type: "error",
       });
     } finally {
@@ -1096,10 +1150,7 @@ const stopListening = () => {
   return (
     <div className="w-full">
       {/* Form Body */}
-      <form
-        onSubmit={handleSubmit}
-        className="w-full space-y-4 sm:space-y-6"
-      >
+      <form onSubmit={handleSubmit} className="w-full space-y-4 sm:space-y-6">
         {/* Error Alert */}
         {formError && (
           <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-xs font-semibold text-rose-700 animate-fadeIn">
@@ -1326,7 +1377,7 @@ const stopListening = () => {
             )}
           </div>
 
-        {/* Selected vehicle preview pill or guidance text */}
+          {/* Selected vehicle preview pill or guidance text */}
           {/* {selectedVehicle && (
             <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-xl px-3 py-2 text-xs animate-fadeIn">
               <div className="flex items-center gap-2 min-w-0">
@@ -1780,7 +1831,9 @@ const stopListening = () => {
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
             <FiDollarSign className="w-3.5 h-3.5 text-emerald-600" />
             <span>Maintenance Expense / Cost (₹)</span>
-            <span className="text-slate-400 font-normal text-[11px]">(Optional)</span>
+            <span className="text-slate-400 font-normal text-[11px]">
+              (Optional)
+            </span>
           </div>
           <div className="relative">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">
