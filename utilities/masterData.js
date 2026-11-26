@@ -208,57 +208,57 @@ export const FLEET_STATUS_OPTIONS = [
 
 export const FLEET_MAINTENANCE_TYPES = [
   {
-    label: "🛠️ Regular Service",
+    label: "🛠️Regular Service",
     type: "Regular Service",
     // text: "Routine service due",
   },
   {
-    label: "⚠️ Engine",
+    label: "⚠️Engine",
     type: "Engine",
     // text: "Engine overheating / smoke from hood",
   },
   {
-    label: "🛞 Tyre",
+    label: "🛞Tyre",
     type: "Tyre",
     // text: "Tyre puncture / flat tyre",
   },
   {
-    label: "🛑 Brakes",
+    label: "🛑Brakes",
     type: "Brakes",
     // text: "Brakes not working properly / strange noise",
   },
   {
-    label: "⚡ Electricals",
+    label: "⚡Electricals",
     type: "Electricals",
     // text: "Lights, horn, wiring or electrical not working",
   },
   {
-    label: "🔋 Battery",
+    label: "🔋Battery",
     type: "Battery",
     // text: "Battery dead / vehicle not starting",
   },
   {
-    label: "💧 Oil Filters",
+    label: "💧Oil Filters",
     type: "Oil & Filters",
     // text: "Engine oil or coolant leakage",
   },
   {
-    label: "🔧 Suspension",
+    label: "🔧Suspension",
     type: "Suspension & Steering",
     // text: "Steering heavy / suspension noise / vehicle pulling to one side",
   },
   {
-    label: "💥 Accident",
+    label: "💥Accident",
     type: "Accident Damage",
     // text: "Accident / body damage to vehicle",
   },
   {
-    label: "🚨 Breakdown",
+    label: "🚨Breakdown",
     type: "Breakdown",
     // text: "Vehicle breakdown / stopped on road",
   },
   {
-    label: "📝 Other",
+    label: "📝Other",
     type: "Other",
     // text: "Other problem (details below)",
   },
