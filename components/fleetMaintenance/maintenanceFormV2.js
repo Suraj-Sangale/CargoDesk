@@ -154,6 +154,9 @@ export default function MaintenanceFormV2({
       ? String(initialData.cost)
       : "",
   );
+  const [isExpenseFocused, setIsExpenseFocused] = useState(false);
+
+const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
 
   // References
   const cameraInputRef = useRef(null);
@@ -922,7 +925,7 @@ export default function MaintenanceFormV2({
     const hasNewMedia = attachedFiles?.length > 0;
 
     const hasValidCoordinates = Boolean(
-      locationStatus?.latitude && locationStatus?.longitude
+      locationStatus?.latitude && locationStatus?.longitude,
     );
 
     const validations = [
@@ -1186,7 +1189,7 @@ export default function MaintenanceFormV2({
   return (
     <div className="w-full">
       {/* Form Body */}
-      <form onSubmit={handleSubmit} className="w-full space-y-4 sm:space-y-6">
+      <form onSubmit={handleSubmit} className="w-full space-y-1 sm:space-y-6">
         {/* Error Alert */}
         {formError && (
           <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-xs font-semibold text-rose-700 animate-fadeIn">
@@ -1212,7 +1215,7 @@ export default function MaintenanceFormV2({
         {/* 2. Vehicle Number Selection - Direct Typeable Field with Results at Bottom */}
         <div
           ref={vehicleDropdownRef}
-          className={`space-y-2 w-full relative transition-all ${
+          className={`space-y-1 w-full relative transition-all ${
             isVehicleDropdownOpen && !preselectedVehicle ? "z-50" : "z-10"
           }`}
         >
@@ -1222,8 +1225,8 @@ export default function MaintenanceFormV2({
               className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-800"
             >
               {/* <FiTruck className="w-4 h-4 text-blue-600" /> */}
-              <span>Select Vehicle Number</span>
-              <span className="text-rose-500">*</span>
+              {/* <span>Select Vehicle Number</span>
+              <span className="text-rose-500">*</span> */}
             </label>
             {preselectedVehicle && (
               <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
@@ -1434,9 +1437,9 @@ export default function MaintenanceFormV2({
         {/* 3. Capture Photo & Upload File - Two Large Side-by-Side Buttons (Compulsory) */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="block text-xs sm:text-sm font-bold text-slate-800">
+            {/* <label className="block text-xs sm:text-sm font-bold text-slate-800">
               Photos or Videos Evidence <span className="text-rose-500">*</span>
-            </label>
+            </label> */}
             {attachedFiles.length > 0 && (
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
                 <FiCheck className="w-3 h-3 text-emerald-600" />
@@ -1540,21 +1543,19 @@ export default function MaintenanceFormV2({
               </div>
             </div>
           ) : (
-            <div className="p-3.5 bg-amber-50/95 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-2xs">
-              <div className="flex items-start gap-2.5 min-w-0">
+            <div className="p-2 bg-amber-50/95 border border-amber-200/90 rounded-2xl flex flex-row sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-2xs">
+              <div className="flex justify-center gap-2.5 min-w-0">
                 <FiAlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   <span className="font-bold block">
                     {requireLocationCoordinates
-                      ? "GPS Location coordinates are compulsory to submit maintenance"
-                      : "GPS Location needed for photo watermark"}
+                      ? "GPS coordinates mandatory for submission."
+                      : "GPS Location needed"}
                   </span>
-                  {/* <span className="text-[11px] text-amber-800 block">
-                    Tap &ldquo;Enable&rdquo; to turn on device GPS, or &ldquo;Skip&rdquo; to upload without watermark.
-                  </span> */}
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+
+              <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
                 {!requireLocationCoordinates && (
                   <button
                     type="button"
@@ -1762,28 +1763,28 @@ export default function MaintenanceFormV2({
           </div>
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
-         
-          <div className="flex flex-wrap content-start gap-2 gap-x-3 overflow-x-auto h-[90px] pb-1 scrollbar-none my-3">
-  {FLEET_MAINTENANCE_TYPES.map((chip, idx) => {
-    const isSelected = maintenanceType === chip.type;
 
-    return (
-      <button
-        key={idx}
-        type="button"
-        onClick={() => handleChipClick(chip)}
-        disabled={isSubmitting}
-        className={`shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg text-[13px] font-semibold transition-all cursor-pointer border ${
-          isSelected
-            ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-            : "bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
-        }`}
-      >
-        {chip.label}
-      </button>
-    );
-  })}
-</div>
+          <div className="flex flex-wrap content-start gap-2 gap-x-3 overflow-x-auto h-[90px] pb-1 scrollbar-none my-3">
+            {FLEET_MAINTENANCE_TYPES.map((chip, idx) => {
+              const isSelected = maintenanceType === chip.type;
+
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleChipClick(chip)}
+                  disabled={isSubmitting}
+                  className={`shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg text-[13px] font-semibold transition-all cursor-pointer border ${
+                    isSelected
+                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                      : "bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
 
           {/* Textarea + Large Microphone Button */}
           <div className="relative">
@@ -1869,30 +1870,96 @@ export default function MaintenanceFormV2({
         </div>
 
         {/* 5. Expense / Cost Field (Single Simple Input) */}
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-            <FiDollarSign className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Maintenance Expense / Cost (₹)</span>
-            <span className="text-slate-400 font-normal text-[11px]">
-              (Optional)
-            </span>
-          </div>
-          <div className="relative">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">
-              ₹
-            </span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={expenseCost}
-              onChange={(e) => setExpenseCost(e.target.value)}
-              disabled={isSubmitting}
-              placeholder="e.g. 1500 (Optional, leave blank if not known yet)"
-              className="w-full pl-8 pr-3.5 py-2.5 text-sm font-medium text-slate-900 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-400 disabled:opacity-60"
-            />
-          </div>
-        </div>
+
+{/* <div className="relative">
+  <fieldset
+    className={`border rounded-xl px-3.5 pb-1.5 pt-1 transition-all ${
+      isExpenseFocused
+        ? "border-blue-500 ring-2 ring-blue-100"
+        : "border-slate-300"
+    }`}
+  >
+    <legend
+      className={`px-1 text-[11px] font-medium ${
+        isExpenseFocused ? "text-blue-600" : "text-slate-500"
+      }`}
+    >
+      Maintenance Expense / Cost (Optional)
+    </legend>
+
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-semibold text-slate-500">₹</span>
+
+      <input
+        id="expenseCost"
+        type="number"
+        min="0"
+        step="0.01"
+        value={expenseCost}
+        onChange={(e) => setExpenseCost(e.target.value)}
+        onFocus={() => setIsExpenseFocused(true)}
+        onBlur={() => setIsExpenseFocused(false)}
+        disabled={isSubmitting}
+        placeholder="Enter amount"
+        className="w-full bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+      />
+    </div>
+  </fieldset>
+</div> */}
+
+<div className="relative">
+  <fieldset
+    className={`border rounded-xl px-3.5 pb-2 pt-2 transition-all duration-200 ${
+      isExpenseFocused
+        ? "border-blue-500 ring-2 ring-blue-100"
+        : "border-slate-300"
+    }`}
+  >
+    <legend
+      className={`px-1 transition-all duration-200 text-sm ${
+        isExpenseFloating
+          ? " font-medium"
+          : ""
+      } ${
+        isExpenseFocused ? "text-blue-600" : "text-slate-500"
+      }`}
+    >
+      {isExpenseFloating
+        ? "Maintenance Expense / Cost (Optional)"
+        : ""}
+    </legend>
+
+    <div className="relative flex items-center gap-2">
+      <span className="text-sm font-semibold text-slate-500">₹</span>
+
+      <input
+        id="expenseCost"
+        type="number"
+        min="0"
+        step="0.01"
+        value={expenseCost}
+        onChange={(e) => setExpenseCost(e.target.value)}
+        onFocus={() => setIsExpenseFocused(true)}
+        onBlur={() => setIsExpenseFocused(false)}
+        disabled={isSubmitting}
+        placeholder={
+          isExpenseFocused ? "Enter amount" : " "
+        }
+        className="w-full bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+      />
+
+      {!isExpenseFloating && (
+        <label
+          htmlFor="expenseCost"
+          className="absolute left-7 text-sm text-slate-400 pointer-events-none"
+        >
+          Maintenance Expense / Cost (Optional)
+        </label>
+      )}
+    </div>
+  </fieldset>
+</div>
+
 
         {/* 6. Prominent Full-Width Submit Button */}
         <div className="pt-2 space-y-2.5">
