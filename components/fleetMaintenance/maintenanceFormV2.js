@@ -1762,26 +1762,28 @@ export default function MaintenanceFormV2({
           </div>
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none my-3">
-            {FLEET_MAINTENANCE_TYPES.map((chip, idx) => {
-              const isSelected = maintenanceType === chip.type;
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleChipClick(chip)}
-                  disabled={isSubmitting}
-                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[15px] font-semibold transition-all cursor-pointer border ${
-                    isSelected
-                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                      : "bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              );
-            })}
-          </div>
+         
+          <div className="flex flex-wrap content-start gap-2 gap-x-3 overflow-x-auto h-[90px] pb-1 scrollbar-none my-3">
+  {FLEET_MAINTENANCE_TYPES.map((chip, idx) => {
+    const isSelected = maintenanceType === chip.type;
+
+    return (
+      <button
+        key={idx}
+        type="button"
+        onClick={() => handleChipClick(chip)}
+        disabled={isSubmitting}
+        className={`shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg text-[13px] font-semibold transition-all cursor-pointer border ${
+          isSelected
+            ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+            : "bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
+        }`}
+      >
+        {chip.label}
+      </button>
+    );
+  })}
+</div>
 
           {/* Textarea + Large Microphone Button */}
           <div className="relative">
