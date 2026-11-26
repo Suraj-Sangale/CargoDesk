@@ -69,6 +69,192 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
   const [activeMediaModal, setActiveMediaModal] = useState(null); // { record, mediaList, activeIndex }
   const [selectedRecordDetails, setSelectedRecordDetails] = useState(null);
 
+  // Searchable Vehicles Dropdown State (Matching maintenanceFormV2)
+  const [vehicles, setVehicles] = useState([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(false);
+  const [vehicleSearchQuery, setVehicleSearchQuery] = useState(vehicle?.vehicle_number || "");
+  const [isVehicleDropdownOpen, setIsVehicleDropdownOpen] = useState(false);
+  const [highlightedVehicleIndex, setHighlightedVehicleIndex] = useState(0);
+  const vehicleDropdownRef = useRef(null);
+  const vehicleInputRef = useRef(null);
+
+  // Load vehicles list for switching vehicles
+  useEffect(() => {
+    let isMounted = true;
+    async function loadVehicles() {
+      setLoadingVehicles(true);
+      try {
+        const userOrgId = pageData?.user?.orgId || pageData?.user?.org_id;
+        const payload = userOrgId ? { orgId: userOrgId } : {};
+        const json = await postApiData("GET_VEHICLES_LIST", payload);
+        if (isMounted && json?.status && Array.isArray(json.data)) {
+          setVehicles(json.data);
+        }
+      } catch (err) {
+        console.error("Error loading vehicles list for dropdown:", err);
+      } finally {
+        if (isMounted) setLoadingVehicles(false);
+      }
+    }
+
+    loadVehicles();
+    return () => {
+      isMounted = false;
+    };
+  }, [pageData?.user?.orgId, pageData?.user?.org_id]);
+
+  // Sync state when switching to another vehicle / when pageData updates
+  useEffect(() => {
+    if (pageData?.vehicle) {
+      setVehicleSearchQuery(pageData.vehicle.vehicle_number || "");
+    }
+    if (pageData?.initialRecords) {
+      setRecords(pageData.initialRecords);
+    }
+    if (pageData?.initialSummary) {
+      setSummary(pageData.initialSummary);
+    }
+    if (pageData?.initialPagination) {
+      setPagination(pageData.initialPagination);
+    }
+    setSearchQuery("");
+    setDebouncedSearch("");
+    setTypeFilter("all");
+    setDateFilter("all");
+    setSortBy("newest");
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageData?.vehicle?.id]);
+
+  // Filter vehicles live as user types directly in the field
+  const filteredVehicles = useMemo(() => {
+    const query = vehicleSearchQuery.trim().toLowerCase();
+    if (!query) return vehicles;
+
+    // If query matches currently selected vehicle number, show all vehicles so user can pick another
+    if (vehicle && vehicle.vehicle_number?.toLowerCase() === query) {
+      return vehicles;
+    }
+
+    return vehicles.filter((v) => {
+      const num = (v.vehicle_number || "").toLowerCase();
+      const model = (v.vehicle_model || "").toLowerCase();
+      const type = (v.vehicle_type || "").toLowerCase();
+      return num.includes(query) || model.includes(query) || type.includes(query);
+    });
+  }, [vehicles, vehicleSearchQuery, vehicle]);
+
+  // Close dropdown on outside click and restore selected vehicle number
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (vehicleDropdownRef.current && !vehicleDropdownRef.current.contains(event.target)) {
+        setIsVehicleDropdownOpen(false);
+        if (vehicle?.vehicle_number) {
+          setVehicleSearchQuery(vehicle.vehicle_number);
+        }
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [vehicle]);
+
+  // Handle vehicle selection from dropdown
+  const handleSelectVehicle = (v) => {
+    if (!v?.id) return;
+    setVehicleSearchQuery(v.vehicle_number);
+    setIsVehicleDropdownOpen(false);
+    if (String(v.id) !== String(vehicle?.id)) {
+      router.push(`/maintenance/vehicle-history/${v.id}`);
+    }
+  };
+
+  // Keyboard navigation inside vehicle search input
+  const handleVehicleKeyDown = (e) => {
+    if (!isVehicleDropdownOpen) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        setIsVehicleDropdownOpen(true);
+        return;
+      }
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedVehicleIndex((prev) =>
+        prev < filteredVehicles.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedVehicleIndex((prev) =>
+        prev > 0 ? prev - 1 : filteredVehicles.length - 1
+      );
+    } else if (e.key === "Enter") {
+      if (isVehicleDropdownOpen && filteredVehicles[highlightedVehicleIndex]) {
+        e.preventDefault();
+        handleSelectVehicle(filteredVehicles[highlightedVehicleIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setIsVehicleDropdownOpen(false);
+      if (vehicle?.vehicle_number) {
+        setVehicleSearchQuery(vehicle.vehicle_number);
+      }
+    }
+  };
+
+  // Auto-open record modal if ?recordId=... is passed in query (from supervisor card or direct link)
+  const autoOpenedRecordIdRef = useRef(null);
+  useEffect(() => {
+    const queryRecordId = router.query?.recordId;
+    if (!queryRecordId) return;
+    if (autoOpenedRecordIdRef.current === String(queryRecordId)) return;
+
+    // Check currently loaded records list first
+    const foundInList = records.find((r) => String(r.id) === String(queryRecordId));
+    if (foundInList) {
+      setSelectedRecordDetails(foundInList);
+      autoOpenedRecordIdRef.current = String(queryRecordId);
+      return;
+    }
+
+    // If not found in current records, fetch single record details
+    let isMounted = true;
+    async function loadRecordById() {
+      try {
+        const res = await postApiData("GET_MAINTENANCE_RECORD", { id: queryRecordId });
+        if (isMounted && res?.status && res.data) {
+          setSelectedRecordDetails(res.data);
+          autoOpenedRecordIdRef.current = String(queryRecordId);
+        }
+      } catch (err) {
+        console.error("Error loading maintenance record details:", err);
+      }
+    }
+
+    loadRecordById();
+    return () => {
+      isMounted = false;
+    };
+  }, [router.query?.recordId, records]);
+
+  // Clean close for record details modal: removes query parameter so URL is clean
+  const handleCloseRecordDetails = () => {
+    setSelectedRecordDetails(null);
+    if (router.query?.recordId) {
+      const { recordId, ...restQuery } = router.query;
+      router.replace(
+        {
+          pathname: router.pathname,
+          query: restQuery,
+        },
+        undefined,
+        { shallow: true }
+      );
+    }
+  };
+
   // Debounce search query (350ms)
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -288,65 +474,228 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
         <div className="w-full space-y-3 sm:space-y-3.5 py-1 sm:py-2">
 
           {/* ============================================================
-              1. Top Navigation & Back Button
+              Top Bar: Back Button (Left) + Searchable Vehicle Dropdown (Right)
               ============================================================ */}
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 relative z-30">
+            {/* Back Button on Left Side */}
             <button
               type="button"
               onClick={() => router.push("/maintenance-supervisor")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 active:scale-95 text-slate-700 text-xs sm:text-sm font-bold border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 sm:px-3.5 sm:py-3 rounded-2xl bg-white hover:bg-slate-50 active:scale-95 text-slate-700 text-xs sm:text-sm font-bold border-2 border-slate-200/90 shadow-2xs hover:shadow-xs transition-all cursor-pointer shrink-0 group"
               title="Return to Maintenance Portal"
             >
-              <FiArrowLeft className="w-4 h-4 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
-              <span>Back to Maintenance</span>
+              <FiArrowLeft className="w-4 h-4 text-slate-600 group-hover:-translate-x-0.5 transition-transform" />
+              <span className="hidden sm:inline">Back</span>
             </button>
 
-            {/* Quick status on top right */}
-            <div className="flex items-center gap-2">
-              <span className="hidden sm:inline-flex text-xs font-bold text-slate-500">
-                Vehicle ID: <span className="font-mono text-slate-800 ml-1">FL-{String(vehicle.id).padStart(6, "0")}</span>
-              </span>
+            {/* Searchable Vehicle Dropdown (Matches maintenanceFormV2) */}
+            <div
+              ref={vehicleDropdownRef}
+              className={`flex-1 relative transition-all ${
+                isVehicleDropdownOpen ? "z-50" : "z-20"
+              }`}
+            >
+              <div className="relative w-full">
+                <div
+                  onClick={() => {
+                    if (vehicleInputRef.current) {
+                      vehicleInputRef.current.focus();
+                      setIsVehicleDropdownOpen(true);
+                    }
+                  }}
+                  className={`w-full min-h-[44px] sm:min-h-[48px] px-3 sm:px-3.5 py-1.5 sm:py-2 flex items-center gap-2 sm:gap-2.5 bg-white rounded-2xl border-2 transition-all duration-200 shadow-2xs cursor-text ${
+                    isVehicleDropdownOpen
+                      ? "border-blue-600 ring-4 ring-blue-100/70"
+                      : "border-slate-200 hover:border-blue-500"
+                  }`}
+                >
+                  <FiSearch className="w-4 h-4 text-blue-600 shrink-0" />
+
+                  <input
+                    ref={vehicleInputRef}
+                    id="vehicle_history_select_input"
+                    type="text"
+                    autoComplete="off"
+                    value={vehicleSearchQuery}
+                    placeholder={
+                      loadingVehicles
+                        ? "Loading vehicle list..."
+                        : "Type vehicle number to switch (e.g. MH 12 AB 1234)..."
+                    }
+                    onFocus={() => setIsVehicleDropdownOpen(true)}
+                    onChange={(e) => {
+                      setVehicleSearchQuery(e.target.value);
+                      setIsVehicleDropdownOpen(true);
+                    }}
+                    onKeyDown={handleVehicleKeyDown}
+                    className="w-full bg-transparent text-slate-900 font-bold text-xs sm:text-sm outline-none placeholder:text-slate-400 placeholder:font-normal"
+                  />
+
+                  {/* Clear button */}
+                  {vehicleSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setVehicleSearchQuery("");
+                        setIsVehicleDropdownOpen(true);
+                        if (vehicleInputRef.current) vehicleInputRef.current.focus();
+                      }}
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0 cursor-pointer"
+                      title="Clear search"
+                    >
+                      <FiX className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  {/* Toggle Dropdown Chevron */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsVehicleDropdownOpen((prev) => !prev);
+                      if (!isVehicleDropdownOpen && vehicleInputRef.current) {
+                        vehicleInputRef.current.focus();
+                      }
+                    }}
+                    className={`p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all shrink-0 cursor-pointer ${
+                      isVehicleDropdownOpen ? "rotate-180 text-blue-600 bg-blue-50" : ""
+                    }`}
+                    title="Toggle vehicle list"
+                  >
+                    <FiChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Dropdown Results List */}
+                {isVehicleDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-2xl border-2 border-slate-200/90 shadow-2xl max-h-64 overflow-y-auto divide-y divide-slate-100 animate-slide-down">
+                    {loadingVehicles ? (
+                      <div className="p-4 text-center text-slate-500 flex items-center justify-center gap-2">
+                        <ImSpinner9 className="w-4 h-4 animate-spin text-blue-600" />
+                        <span className="text-xs font-semibold">Loading vehicles...</span>
+                      </div>
+                    ) : filteredVehicles.length > 0 ? (
+                      filteredVehicles.map((v, index) => {
+                        const isSelected = String(v.id) === String(vehicle?.id);
+                        const isHighlighted = index === highlightedVehicleIndex;
+                        return (
+                          <div
+                            key={v.id}
+                            onClick={() => handleSelectVehicle(v)}
+                            onMouseEnter={() => setHighlightedVehicleIndex(index)}
+                            className={`p-2.5 sm:p-3 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                              isSelected
+                                ? "bg-blue-50/80 text-blue-900"
+                                : isHighlighted
+                                ? "bg-slate-50 text-slate-900"
+                                : "hover:bg-slate-50 text-slate-800"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div
+                                className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
+                                  isSelected
+                                    ? "bg-blue-600 text-white shadow-xs"
+                                    : "bg-slate-100 text-slate-700 border border-slate-200"
+                                }`}
+                              >
+                                <FiTruck className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs sm:text-sm text-slate-900 truncate">
+                                  {v.vehicle_number}
+                                </div>
+                                <div className="text-[11px] text-slate-500 font-medium truncate">
+                                  {v.vehicle_model || v.vehicle_type || "Vehicle"}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                  v.status === "Active"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-amber-50 text-amber-700 border-amber-200"
+                                }`}
+                              >
+                                {v.status || "Active"}
+                              </span>
+                              {isSelected && (
+                                <FiCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="p-4 text-center space-y-1">
+                        <p className="text-xs font-bold text-slate-700">No vehicles found</p>
+                        <p className="text-[11px] text-slate-400">
+                          No vehicle matches &ldquo;{vehicleSearchQuery}&rdquo;.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* ============================================================
-              2. Vehicle Banner Card (Hero Image + Info)
+              1 & 2. Vehicle Banner Card (End-to-end Hero Image + Floating Back Button + Info)
               ============================================================ */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-100/70 via-purple-50/50 to-indigo-100/60 border border-slate-200/80 p-3 sm:p-4 shadow-xs">
-            {/* Soft decorative background radial circle */}
-            <div className="absolute -top-12 -right-12 w-48 h-48 bg-purple-300/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative overflow-hidden rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+            {/* Top / Left / Right End-to-End Image Container with Zero Padding */}
+            <div className="relative w-full h-44 sm:h-52 md:h-60 bg-slate-900 overflow-hidden group">
+              <Image
+                src={imgSrc || DEFAULT_HERO}
+                alt={vehicle.vehicle_number}
+                fill
+                unoptimized
+                sizes="100vw"
+                className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                priority
+                onError={() => setImgSrc(DEFAULT_HERO)}
+              />
 
-            <div className="relative flex flex-col sm:flex-row items-center sm:items-center gap-3.5 sm:gap-4.5 z-10">
-              {/* Vehicle Hero Image */}
-              <div className="relative w-full sm:w-44 md:w-48 h-28 sm:h-28 rounded-xl overflow-hidden shadow-xs border border-white/80 bg-white shrink-0 group">
-                <Image
-                  src={imgSrc || DEFAULT_HERO}
-                  alt={vehicle.vehicle_number}
-                  fill
-                  unoptimized
-                  sizes="(max-width: 640px) 100vw, 250px"
-                  className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                  priority
-                  onError={() => setImgSrc(DEFAULT_HERO)}
-                />
+              {/* Subtle top & bottom dark gradients for high contrast on floating controls */}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/40 pointer-events-none" />
+
+              {/* Floating Back Button on Top-Left */}
+              <button
+                type="button"
+                onClick={() => router.push("/maintenance-supervisor")}
+                className="absolute top-3 left-3 z-20 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/65 hover:bg-slate-900/85 active:scale-95 text-white text-xs sm:text-sm font-semibold backdrop-blur-md border border-white/20 shadow-md transition-all cursor-pointer group"
+                title="Return to Maintenance Portal"
+              >
+                <FiArrowLeft className="w-4 h-4 text-white/90 group-hover:-translate-x-0.5 transition-transform" />
+                <span>Back</span>
+              </button>
+
+              {/* Floating Vehicle ID on Top-Right */}
+              <div className="absolute top-3 right-3 z-20">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-xl bg-slate-900/65 text-white/90 font-mono text-xs font-semibold backdrop-blur-md border border-white/20 shadow-md">
+                  FL-{String(vehicle.id).padStart(6, "0")}
+                </span>
               </div>
+            </div>
 
-              {/* Title & Metadata Info */}
-              <div className="flex-1 min-w-0 text-center sm:text-left space-y-1.5 w-full">
-                <h1 className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-tight">
-                  Vehicle Maintenance History
-                </h1>
-
-                {/* Registration & Status Badges */}
-                <div className="flex items-center justify-center sm:justify-start flex-wrap gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-white/90 text-slate-900 font-mono font-bold text-xs sm:text-sm border border-purple-200/80 shadow-2xs">
+            {/* Bottom Info Bar below edge-to-edge image */}
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-blue-50/70 via-white to-indigo-50/60 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center flex-wrap gap-2">
+                  <h1 className="text-base sm:text-lg md:text-xl font-black text-slate-900 tracking-tight">
+                    Vehicle Maintenance History
+                  </h1>
+                  <span className="px-2.5 py-0.5 rounded-full bg-white text-slate-900 font-mono font-bold text-xs sm:text-sm border border-purple-200 shadow-2xs">
                     {vehicle.vehicle_number}
                   </span>
-
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
                       (vehicle.status || "Active").toLowerCase() === "active"
-                        ? "bg-emerald-100/80 text-emerald-800 border border-emerald-300/60"
+                        ? "bg-emerald-100/90 text-emerald-800 border border-emerald-300/70"
                         : "bg-blue-100 text-blue-800 border border-blue-200"
                     }`}
                   >
@@ -356,21 +705,17 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
                 </div>
 
                 {/* Model, Year, Fuel specs line */}
-                <div className="flex items-center justify-center sm:justify-start flex-wrap gap-2 text-xs font-semibold text-slate-600">
+                <div className="flex items-center flex-wrap gap-2 text-xs font-semibold text-slate-600">
                   <span className="inline-flex items-center gap-1">
                     <FiTruck className="w-3.5 h-3.5 text-blue-600" />
                     <span>{vehicle.vehicle_model || vehicle.vehicle_type || "Commercial Vehicle"}</span>
                   </span>
-
-                  <span className="text-slate-300 hidden sm:inline">|</span>
-
+                  <span className="text-slate-300">•</span>
                   <span className="inline-flex items-center gap-1">
                     <FiCalendar className="w-3 h-3 text-slate-500" />
                     <span>{vehicle.manufacturing_year || "2019"}</span>
                   </span>
-
-                  <span className="text-slate-300 hidden sm:inline">|</span>
-
+                  <span className="text-slate-300">•</span>
                   <span className="inline-flex items-center gap-1">
                     <FiTool className="w-3 h-3 text-slate-500" />
                     <span>{vehicle.fuel_type || "Diesel"}</span>
@@ -381,73 +726,73 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
           </div>
 
           {/* ============================================================
-              3. Four KPI Summary Cards Grid
+              3. Four KPI Summary Cards Grid (4 in a single row)
               ============================================================ */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5 md:gap-3">
             {/* Card 1: Total Records */}
-            <div className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-3.5 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold shrink-0">
-                  <FiTool className="w-4 h-4" />
+            <div className="bg-white rounded-xl border border-slate-200/80 p-2 sm:p-2.5 md:p-3 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-1 sm:mb-1.5">
+                <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-lg sm:rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold shrink-0">
+                  <FiTool className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
                 </div>
               </div>
-              <div>
-                <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              <div className="min-w-0">
+                <div className="text-xs sm:text-base md:text-xl font-black text-slate-900 tracking-tight truncate">
                   {totalCount}
                 </div>
-                <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
-                  Total Maintenance Records
+                <div className="text-[9px] sm:text-[10px] md:text-xs font-semibold text-slate-500 mt-0.5 truncate leading-tight">
+                  Total Records
                 </div>
               </div>
             </div>
 
             {/* Card 2: Total Expenditure */}
-            <div className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-3.5 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-sm shrink-0">
+            <div className="bg-white rounded-xl border border-slate-200/80 p-2 sm:p-2.5 md:p-3 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-1 sm:mb-1.5">
+                <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-lg sm:rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-xs sm:text-sm shrink-0">
                   ₹
                 </div>
               </div>
-              <div>
-                <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
+              <div className="min-w-0">
+                <div className="text-xs sm:text-base md:text-xl font-black text-slate-900 tracking-tight truncate">
                   ₹{totalExpenseFormatted}
                 </div>
-                <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
-                  Total Expenditure
+                <div className="text-[9px] sm:text-[10px] md:text-xs font-semibold text-slate-500 mt-0.5 truncate leading-tight">
+                  Total Cost
                 </div>
               </div>
             </div>
 
             {/* Card 3: Latest Maintenance Date */}
-            <div className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-3.5 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold shrink-0">
-                  <FiCalendar className="w-4 h-4" />
+            <div className="bg-white rounded-xl border border-slate-200/80 p-2 sm:p-2.5 md:p-3 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-1 sm:mb-1.5">
+                <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-lg sm:rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold shrink-0">
+                  <FiCalendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
                 </div>
               </div>
-              <div>
-                <div className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
+              <div className="min-w-0">
+                <div className="text-xs sm:text-base md:text-xl font-black text-slate-900 tracking-tight truncate">
                   {latestServiceDateFormatted}
                 </div>
-                <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
-                  Latest Maintenance
+                <div className="text-[9px] sm:text-[10px] md:text-xs font-semibold text-slate-500 mt-0.5 truncate leading-tight">
+                  Last Service
                 </div>
               </div>
             </div>
 
             {/* Card 4: Most Recent Type */}
-            <div className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-3.5 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center font-bold shrink-0">
-                  <FiSettings className="w-4 h-4" />
+            <div className="bg-white rounded-xl border border-slate-200/80 p-2 sm:p-2.5 md:p-3 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-1 sm:mb-1.5">
+                <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-lg sm:rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center font-bold shrink-0">
+                  <FiSettings className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
                 </div>
               </div>
-              <div>
-                <div className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
+              <div className="min-w-0">
+                <div className="text-xs sm:text-base md:text-xl font-black text-slate-900 tracking-tight truncate">
                   {mostRecentType}
                 </div>
-                <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
-                  Most Recent Type
+                <div className="text-[9px] sm:text-[10px] md:text-xs font-semibold text-slate-500 mt-0.5 truncate leading-tight">
+                  Recent Type
                 </div>
               </div>
             </div>
@@ -552,7 +897,7 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
               <p className="text-[11px] text-slate-400 mt-0.5">Retrieving service history</p>
             </div>
           ) : records.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-2.5">
               {records.map((item) => {
                 const hasAdditionalNotes =
                   item.additional_notes &&
@@ -563,36 +908,36 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
                   <div
                     key={item.id}
                     onClick={() => setSelectedRecordDetails(item)}
-                    className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs transition-all space-y-3.5 cursor-pointer"
+                    className="p-3 sm:p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs transition-all space-y-2 cursor-pointer"
                   >
-                    {/* Card Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/70 flex items-center justify-center font-bold shrink-0">
-                          <FiTool className="w-5 h-5" />
+                    {/* Card Header (Title, Badges, Cost & Odometer tightly aligned) */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 border border-amber-200/70 flex items-center justify-center font-bold shrink-0">
+                          <FiTool className="w-4 h-4" />
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-bold text-slate-900">
+                        <div className="min-w-0">
+                          <div className="flex items-center flex-wrap gap-1.5">
+                            <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
                               {item.maintenance_type || "General Service"}
                             </h4>
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${getStatusBadge(
+                              className={`px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border shrink-0 ${getStatusBadge(
                                 item.status
                               )}`}
                             >
                               {item.status || "Reported"}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                            <span className="flex items-center gap-1 font-medium">
-                              <FiCalendar className="w-3.5 h-3.5 text-slate-400" />
+                          <p className="text-[11px] sm:text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 truncate">
+                            <span className="flex items-center gap-1 font-medium shrink-0">
+                              <FiCalendar className="w-3 h-3 text-slate-400" />
                               {moment(item.maintenance_date || item.created_at).format("DD MMM YYYY")}
                             </span>
                             {item.garage_name && (
                               <>
-                                <span>•</span>
-                                <span className="truncate max-w-[200px]" title={item.garage_name}>
+                                <span className="text-slate-300">•</span>
+                                <span className="truncate max-w-[180px] sm:max-w-[280px]" title={item.garage_name}>
                                   {item.garage_name}
                                 </span>
                               </>
@@ -601,20 +946,18 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
                         </div>
                       </div>
 
-                      {/* Cost & Odometer */}
-                      <div className="flex items-start sm:text-right gap-3 sm:gap-4 self-start sm:self-center">
+                      {/* Cost & Odometer on the Top-Right */}
+                      <div className="flex items-center gap-2 sm:gap-3 text-right shrink-0">
                         {Number(item.cost || 0) > 0 && (
-                          <div>
-                            <span className="text-sm font-bold text-slate-900">
-                              ₹{Number(item.cost || 0).toLocaleString("en-IN")}
-                            </span>
-                          </div>
+                          <span className="text-xs sm:text-sm font-black text-slate-900">
+                            ₹{Number(item.cost || 0).toLocaleString("en-IN")}
+                          </span>
                         )}
 
                         {item.odometer_reading && (
-                          <div className={`pl-3 ${Number(item.cost || 0) > 0 ? "border-l border-slate-200/80" : ""}`}>
-                            <span className="text-[11px] font-semibold text-slate-400 block">Odometer</span>
-                            <span className="text-xs font-bold text-slate-700">
+                          <div className={`pl-2 ${Number(item.cost || 0) > 0 ? "border-l border-slate-200" : ""}`}>
+                            <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium block leading-none">Odometer</span>
+                            <span className="text-[11px] sm:text-xs font-bold text-slate-700">
                               {Number(item.odometer_reading).toLocaleString("en-IN")} KM
                             </span>
                           </div>
@@ -622,33 +965,31 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
                       </div>
                     </div>
 
-                    {/* Description Snippet */}
+                    {/* Description Snippet (compact, line-clamped) */}
                     {item.description && (
-                      <p className="text-xs text-slate-700 leading-relaxed font-medium bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+                      <p className="text-xs text-slate-600 font-medium bg-slate-50/80 px-2.5 py-1.5 rounded-lg border border-slate-100 line-clamp-2 leading-relaxed">
                         {item.description}
                       </p>
                     )}
 
-                    {/* Additional Notes (if distinct) */}
+                    {/* Additional Notes (compact) */}
                     {hasAdditionalNotes && (
-                      <div className="flex items-start gap-2 text-xs text-amber-900 bg-amber-50/60 p-2.5 rounded-xl border border-amber-200/60">
+                      <div className="flex items-start gap-1.5 text-xs text-amber-900 bg-amber-50/70 px-2.5 py-1.5 rounded-lg border border-amber-200/60">
                         <FiFileText className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                        <span className="font-medium leading-relaxed">{item.additional_notes}</span>
+                        <span className="font-medium leading-snug line-clamp-2">{item.additional_notes}</span>
                       </div>
                     )}
 
-                    {/* Attachments & Card Footer */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                      {/* Media Thumbnails Snippet */}
+                    {/* Attachments & Card Footer (tight row) */}
+                    <div className="flex items-center justify-between gap-2 pt-0.5">
+                      {/* Media Thumbnails Snippet (if any) */}
                       {item.media && item.media.length > 0 ? (
-                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 min-w-0">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
                             <FiImage className="w-3 h-3 text-blue-500" />
-                            <span>
-                              {item.media.length} ATTACHMENT{item.media.length > 1 ? "S" : ""}:
-                            </span>
+                            <span>{item.media.length}</span>
                           </span>
-                          {item.media.slice(0, 4).map((m, mIdx) => (
+                          {item.media.slice(0, 3).map((m, mIdx) => (
                             <button
                               key={m.id || mIdx}
                               type="button"
@@ -656,7 +997,7 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
                                 e.stopPropagation();
                                 handleOpenMedia(item, mIdx);
                               }}
-                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-medium transition-colors cursor-pointer truncate max-w-[140px]"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] sm:text-[11px] font-medium transition-colors cursor-pointer truncate max-w-[120px]"
                               title={m.file_name}
                             >
                               {m.media_type === "video" || m.mime_type?.startsWith("video/") ? (
@@ -667,30 +1008,28 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
                               <span className="truncate">{m.file_name || `File ${mIdx + 1}`}</span>
                             </button>
                           ))}
-                          {item.media.length > 4 && (
-                            <span className="text-[11px] font-bold text-slate-400">
-                              +{item.media.length - 4} more
+                          {item.media.length > 3 && (
+                            <span className="text-[10px] font-bold text-slate-400">
+                              +{item.media.length - 3}
                             </span>
                           )}
                         </div>
                       ) : (
-                        <span className="text-[11px] text-slate-400 font-medium">No media attached</span>
+                        <div />
                       )}
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedRecordDetails(item);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
-                        >
-                          <FiEye className="w-3.5 h-3.5 text-blue-600" />
-                          <span>View</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRecordDetails(item);
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer shadow-2xs shrink-0 ml-auto"
+                      >
+                        <FiEye className="w-3.5 h-3.5 text-blue-600" />
+                        <span>View</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -973,7 +1312,7 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
         {selectedRecordDetails && (
           <div
             className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
-            onClick={() => setSelectedRecordDetails(null)}
+            onClick={handleCloseRecordDetails}
           >
             <div
               className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto"
@@ -996,8 +1335,9 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
 
                 <button
                   type="button"
-                  onClick={() => setSelectedRecordDetails(null)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                  onClick={handleCloseRecordDetails}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
+                  title="Close popup"
                 >
                   <FiX className="w-4 h-4" />
                 </button>
@@ -1075,9 +1415,9 @@ export default function VehicleMaintenanceHistoryPage({ pageData }) {
                   type="button"
                   onClick={() => {
                     handleOpenMedia(selectedRecordDetails, 0);
-                    setSelectedRecordDetails(null);
+                    handleCloseRecordDetails();
                   }}
-                  className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors"
+                  className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
                 >
                   <FiImage className="w-4 h-4" />
                   <span>View {selectedRecordDetails.media.length} Evidence Attachment{selectedRecordDetails.media.length > 1 ? "s" : ""}</span>

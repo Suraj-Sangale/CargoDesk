@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
 import moment from "moment";
 import { formatIndiaDateTime, getIndiaISOString } from "@/utilities/timeUtils";
 import MaintenanceFormV2 from "@/components/fleetMaintenance/maintenanceFormV2";
@@ -27,6 +28,7 @@ import { useFleetDriver } from "@/context/fleetDriverContext";
 import executeQuery from "@/helpers/dbConnection";
 
 export default function MaintenanceSupervisorPage({ pageData }) {
+  const router = useRouter();
   const user = pageData?.user || null;
   const organization = pageData?.organization || null;
   const [recentRecords, setRecentRecords] = useState([]);
@@ -67,6 +69,7 @@ export default function MaintenanceSupervisorPage({ pageData }) {
 
     const newItem = {
       ...record,
+      vehicle_id: record.vehicle_id ?? ctx.vehicle?.id ?? record.vehicleId,
       vehicle_number: record.vehicle_number ?? ctx.vehicle?.vehicle_number,
       vehicle_model:
         record.vehicle_model ??
@@ -278,60 +281,74 @@ export default function MaintenanceSupervisorPage({ pageData }) {
                   </div>
                 ) : recentRecords.length > 0 ? (
                   <div className="space-y-2.5">
-                    {recentRecords.map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:border-slate-300 transition-all space-y-2"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-bold text-xs sm:text-sm text-slate-900 font-mono truncate">
-                              {item.vehicle_number || "Vehicle"}
-                            </span>
-                            <span className="text-[10px] text-slate-500 truncate">
-                              {item.vehicle_model || ""}
+                    {recentRecords.map((item) => {
+                      const vId = item.vehicle_id;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => {
+                            if (vId) {
+                              router.push(`/maintenance/vehicle-history/${vId}?recordId=${item.id}`);
+                            } else {
+                              showToast({
+                                message: "Vehicle details not available for this record",
+                                type: "warning",
+                              });
+                            }
+                          }}
+                          className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:border-blue-400 hover:shadow-xs transition-all space-y-2 cursor-pointer group"
+                          title={`Click to view vehicle history & open record #${item.id} popup`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-bold text-xs sm:text-sm text-slate-900 font-mono truncate group-hover:text-blue-600 transition-colors">
+                                {item.vehicle_number || "Vehicle"}
+                              </span>
+                              <span className="text-[10px] text-slate-500 truncate">
+                                {item.vehicle_model || ""}
+                              </span>
+                            </div>
+
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadge(
+                                item.status,
+                              )}`}
+                            >
+                              {item.status || "Reported"}
                             </span>
                           </div>
 
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadge(
-                              item.status,
-                            )}`}
-                          >
-                            {item.status || "Reported"}
-                          </span>
-                        </div>
+                          {item.description && (
+                            <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed font-medium">
+                              {item.description}
+                            </p>
+                          )}
 
-                        {item.description && (
-                          <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed font-medium">
-                            {item.description}
-                          </p>
-                        )}
-
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/50">
-                          <span className="flex items-center gap-1">
-                            <FiClock className="w-3 h-3 text-slate-400" />
-                            {formatIndiaDateTime(item.created_at || item.maintenance_date)}
-                          </span>
-
-                          <div className="flex items-center gap-2">
-                            {Number(item.media_count || 0) > 0 ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
-                                <FiCamera className="w-3 h-3" />
-                                <span>{item.media_count} Media</span>
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 font-medium">
-                                No media
-                              </span>
-                            )}
-                            <span className="text-[10px] font-semibold text-slate-500">
-                              #{item.id}
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/50">
+                            <span className="flex items-center gap-1">
+                              <FiClock className="w-3 h-3 text-slate-400" />
+                              {formatIndiaDateTime(item.created_at || item.maintenance_date)}
                             </span>
+
+                            <div className="flex items-center gap-2">
+                              {Number(item.media_count || 0) > 0 ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                                  <FiCamera className="w-3 h-3" />
+                                  <span>{item.media_count} Media</span>
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-medium">
+                                  No media
+                                </span>
+                              )}
+                              <span className="text-[10px] font-semibold text-slate-500 group-hover:text-blue-600 transition-colors">
+                                #{item.id} &rarr;
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="py-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
