@@ -147,6 +147,7 @@ export default function MaintenanceFormV2({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionProgress, setSubmissionProgress] = useState("");
   const [formError, setFormError] = useState(null);
+  const [validationErrorField, setValidationErrorField] = useState(null);
 
   // 5. Expense / Cost Field State
   const [expenseCost, setExpenseCost] = useState(
@@ -165,6 +166,9 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
   const recognitionRef = useRef(null);
   const speechBaseTextRef = useRef("");
   const attachedFilesRef = useRef([]);
+  const mediaSectionRef = useRef(null);
+  const typeSectionRef = useRef(null);
+  const locationSectionRef = useRef(null);
 
   // Initialize device location early so photo watermarking is instant & reliable
   useEffect(() => {
@@ -521,6 +525,7 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
     setVehicleSearchQuery(v.vehicle_number);
     setIsVehicleDropdownOpen(false);
     if (formError) setFormError(null);
+    setValidationErrorField((prev) => (prev === "vehicle" ? null : prev));
   };
 
   // Clear vehicle selection and focus input to type again
@@ -738,6 +743,7 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
       if (!incomingFileList || incomingFileList.length === 0) return;
       if (isProcessingMedia) return;
       setFileError(null);
+      setValidationErrorField((prev) => (prev === "media" ? null : prev));
 
       const incomingArr = Array.from(incomingFileList);
 
@@ -903,6 +909,11 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
       setMaintenanceType(chip.type);
     }
 
+    if (formError) setFormError(null);
+    setValidationErrorField((prev) =>
+      prev === "type" || prev === "description" ? null : prev,
+    );
+
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
@@ -911,6 +922,7 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
   const validateForm = () => {
     setFormError("");
     setFileError("");
+    setValidationErrorField(null);
 
     const vid = Number(selectedVehicleId);
 
@@ -930,33 +942,45 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
 
     const validations = [
       {
+        id: "vehicle",
         invalid: !selectedVehicleId || !Number.isFinite(vid) || vid <= 0,
         message: "Please select a vehicle number",
         error: "Please select a vehicle number before submitting.",
+        ref: vehicleDropdownRef,
+        focusInput: () => vehicleInputRef.current?.focus(),
       },
       {
-        invalid: !resolvedMaintenanceType.trim(),
-        message: "Please select a maintenance type",
-        error: "Please select a maintenance type.",
-      },
-      {
-        invalid: !problemDescription?.trim(),
-        message: "Please describe the problem",
-        error: "Please describe the problem or use the microphone to speak.",
-      },
-      {
+        id: "media",
         invalid: !hasExistingMedia && !hasNewMedia,
         message: "Photo or video evidence is compulsory",
         error: "Please take a photo or upload a file as evidence.",
         fileError:
           "Photo or video evidence is compulsory. Please take a photo or upload a file.",
+        ref: mediaSectionRef,
       },
       {
+        id: "type",
+        invalid: !resolvedMaintenanceType.trim(),
+        message: "Please select a maintenance type",
+        error: "Please select a maintenance type.",
+        ref: typeSectionRef,
+      },
+      {
+        id: "description",
+        invalid: !problemDescription?.trim(),
+        message: "Please describe the problem",
+        error: "Please describe the problem or use the microphone to speak.",
+        ref: textareaRef,
+        focusInput: () => textareaRef.current?.focus(),
+      },
+      {
+        id: "location",
         invalid: requireLocationCoordinates && !hasValidCoordinates,
         message: "GPS Location coordinates are compulsory. Please enable GPS.",
         error:
           "GPS Location coordinates are compulsory to submit maintenance. Please turn on device GPS or set location before submitting.",
         isLocationError: true,
+        ref: locationSectionRef,
       },
     ];
 
@@ -964,6 +988,7 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
 
     if (!failed) return true;
 
+    setValidationErrorField(failed.id);
     setFormError(failed.error);
 
     if (failed.fileError) {
@@ -978,6 +1003,26 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
       message: failed.message,
       type: "error",
     });
+
+    // Smoothly scroll to the missing/invalid field and highlight it
+    if (failed.ref?.current) {
+      try {
+        failed.ref.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      } catch (_) {
+        failed.ref.current.scrollIntoView();
+      }
+
+      if (failed.focusInput) {
+        setTimeout(() => {
+          try {
+            failed.focusInput();
+          } catch (_) {}
+        }, 350);
+      }
+    }
 
     return false;
   };
@@ -1251,11 +1296,13 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
               className={`w-full min-h-[52px] px-3.5 py-2.5 flex items-center gap-2.5 bg-white rounded-2xl border-2 transition-all duration-200 shadow-xs cursor-text ${
                 Boolean(preselectedVehicle) || isSubmitting
                   ? "bg-slate-100 opacity-70 cursor-not-allowed border-slate-200"
-                  : isVehicleDropdownOpen
-                    ? "border-blue-600 ring-4 ring-blue-100/70"
-                    : selectedVehicleId
-                      ? "border-blue-500 bg-blue-50/20 hover:border-blue-600"
-                      : "border-slate-300 hover:border-blue-500"
+                  : validationErrorField === "vehicle"
+                    ? "border-rose-500 ring-4 ring-rose-100 bg-rose-50/20"
+                    : isVehicleDropdownOpen
+                      ? "border-blue-600 ring-4 ring-blue-100/70"
+                      : selectedVehicleId
+                        ? "border-blue-500 bg-blue-50/20 hover:border-blue-600"
+                        : "border-slate-300 hover:border-blue-500"
               }`}
             >
               <FiSearch className="w-5 h-5 text-blue-600 shrink-0" />
@@ -1291,6 +1338,9 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
                     setSelectedVehicleId("");
                   }
                   if (formError) setFormError(null);
+                  if (validationErrorField === "vehicle") {
+                    setValidationErrorField(null);
+                  }
                 }}
                 onKeyDown={handleVehicleKeyDown}
                 className="w-full bg-transparent text-slate-900 font-semibold text-sm sm:text-base outline-none placeholder:text-slate-400 placeholder:font-normal"
@@ -1432,6 +1482,13 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
               </span>
             </div>
           )} */}
+
+          {validationErrorField === "vehicle" && (
+            <p className="text-xs font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
+              <FiAlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>Please select a vehicle number before submitting.</span>
+            </p>
+          )}
         </div>
 
         {/* 3. Capture Photo & Upload File - Two Large Side-by-Side Buttons (Compulsory) */}
@@ -1505,6 +1562,14 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
                 <FiRefreshCcw className="w-4 h-4" />
               </button>
             </div> */}
+          <div
+            ref={locationSectionRef}
+            className={`transition-all rounded-2xl ${
+              validationErrorField === "location"
+                ? "border-2 border-rose-500 ring-4 ring-rose-200 p-0.5"
+                : ""
+            }`}
+          >
           {locationStatus.resolved ? null : locationStatus.loading ? (
             <div className="flex items-center justify-between px-3.5 py-2.5 bg-blue-50/90 border border-blue-200 rounded-2xl text-xs text-blue-900 shadow-2xs">
               <div className="flex items-center gap-2">
@@ -1576,12 +1641,22 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
               </div>
             </div>
           )}
+          </div>
+
+          {validationErrorField === "location" && (
+            <p className="text-xs font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
+              <FiAlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>GPS Location coordinates are compulsory. Please enable device location.</span>
+            </p>
+          )}
 
           {/* Side by side 50% buttons */}
           <div
+            ref={mediaSectionRef}
             className={`grid grid-cols-2 gap-3 sm:gap-4 transition-all rounded-2xl ${
-              fileError && attachedFiles.length === 0
-                ? "ring-2 ring-rose-300 p-1 bg-rose-50/30"
+              validationErrorField === "media" ||
+              (fileError && attachedFiles.length === 0)
+                ? "border-2 border-rose-500 ring-4 ring-rose-200 p-1.5 bg-rose-50/40"
                 : ""
             }`}
           >
@@ -1734,7 +1809,7 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <label className="block text-xs sm:text-sm font-bold text-slate-800">
-                What is the problem? <span className="text-rose-500">*</span>
+                Maintenance Type <span className="text-rose-500">*</span>
               </label>
               {/* <p className="text-[11px] text-slate-500 font-medium">
                 Type details or tap the microphone to speak
@@ -1764,7 +1839,14 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
 
-          <div className="flex flex-wrap content-start gap-2 gap-x-3 overflow-x-auto h-[90px] pb-1 scrollbar-none my-3">
+          <div
+            ref={typeSectionRef}
+            className={`flex flex-wrap content-start gap-2 gap-x-3 overflow-x-auto h-[90px] pb-1 scrollbar-none my-3 transition-all rounded-xl ${
+              validationErrorField === "type"
+                ? "border-2 border-rose-500 ring-4 ring-rose-200 p-2 bg-rose-50/40"
+                : ""
+            }`}
+          >
             {FLEET_MAINTENANCE_TYPES.map((chip, idx) => {
               const isSelected = maintenanceType === chip.type;
 
@@ -1786,6 +1868,13 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
             })}
           </div>
 
+          {validationErrorField === "type" && (
+            <p className="text-xs font-semibold text-rose-600 -mt-1 mb-2 flex items-center gap-1 animate-fadeIn">
+              <FiAlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>Please select a maintenance category before submitting.</span>
+            </p>
+          )}
+
           {/* Textarea + Large Microphone Button */}
           <div className="relative">
             <textarea
@@ -1797,13 +1886,18 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
                 setProblemDescription(val);
                 speechBaseTextRef.current = val;
                 if (formError) setFormError(null);
+                if (validationErrorField === "description") {
+                  setValidationErrorField(null);
+                }
               }}
               disabled={isSubmitting}
               placeholder="e.g. Brake noise, engine overheating, tyre flat, vehicle stopped on highway..."
-              className={`w-full px-4 py-3 pb-14 text-sm sm:text-base font-normal text-slate-900 bg-white border rounded-2xl outline-none transition-all placeholder:text-slate-400 shadow-2xs resize-none ${
-                isListening
-                  ? "border-rose-400 ring-2 ring-rose-200"
-                  : "border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className={`w-full px-4 py-3 pb-14 text-sm sm:text-base font-normal text-slate-900 bg-white border-2 rounded-2xl outline-none transition-all placeholder:text-slate-400 shadow-2xs resize-none ${
+                validationErrorField === "description"
+                  ? "border-rose-500 ring-4 ring-rose-200 bg-rose-50/10"
+                  : isListening
+                    ? "border-rose-400 ring-2 ring-rose-200"
+                    : "border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               }`}
             />
 
@@ -1865,6 +1959,13 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
             <p className="text-xs text-rose-600 font-medium flex items-center gap-1">
               <FiAlertCircle className="w-3.5 h-3.5" />
               <span>{speechError}</span>
+            </p>
+          )}
+
+          {validationErrorField === "description" && (
+            <p className="text-xs font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
+              <FiAlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>Please describe the problem or use the microphone to speak.</span>
             </p>
           )}
         </div>
