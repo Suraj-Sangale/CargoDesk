@@ -210,57 +210,57 @@ export const FLEET_MAINTENANCE_TYPES = [
   {
     label: "🛠️Regular Service",
     type: "Regular Service",
-    // text: "Routine service due",
+    text: "", //"Routine service due",
   },
   {
     label: "⚠️Engine",
     type: "Engine",
-    // text: "Engine overheating / smoke from hood",
+    text: "", //"Engine overheating / smoke from hood",
   },
   {
     label: "🛞Tyre",
     type: "Tyre",
-    // text: "Tyre puncture / flat tyre",
+    text: "", //"Tyre puncture / flat tyre",
   },
   {
     label: "🛑Brakes",
     type: "Brakes",
-    // text: "Brakes not working properly / strange noise",
+    text: "", //"Brakes not working properly / strange noise",
   },
   {
     label: "⚡Electricals",
     type: "Electricals",
-    // text: "Lights, horn, wiring or electrical not working",
+    text: "", //"Lights, horn, wiring or electrical not working",
   },
   {
     label: "🔋Battery",
     type: "Battery",
-    // text: "Battery dead / vehicle not starting",
+    text: "", //"Battery dead / vehicle not starting",
   },
   {
     label: "💧Oil Filters",
     type: "Oil & Filters",
-    // text: "Engine oil or coolant leakage",
+    text: "", //"Engine oil or coolant leakage",
   },
   {
     label: "🔧Suspension",
     type: "Suspension & Steering",
-    // text: "Steering heavy / suspension noise / vehicle pulling to one side",
+    text: "", //"Steering heavy / suspension noise / vehicle pulling to one side",
   },
   {
     label: "💥Accident",
     type: "Accident Damage",
-    // text: "Accident / body damage to vehicle",
+    text: "", //"Accident / body damage to vehicle",
   },
   {
     label: "🚨Breakdown",
     type: "Breakdown",
-    // text: "Vehicle breakdown / stopped on road",
+    text: "", //"Vehicle breakdown / stopped on road",
   },
   {
     label: "📝Other",
     type: "Other",
-    // text: "Other problem (details below)",
+    text: "", //"Other problem (details below)",
   },
 ];
 
