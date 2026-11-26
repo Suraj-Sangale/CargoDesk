@@ -170,7 +170,7 @@ export default function DocumentsSection({
       </div>
 
       {/* All Records White Container */}
-      <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-5 md:p-6 space-y-5">
+      <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-5 md:p-6 space-y-5 -mx-3 md:mx-0">
         {/* Header Toolbar: Search, Filter, + Add Document */}
         <RecordsToolbar
           totalCount={totalRecords || finalDisplayData.length}

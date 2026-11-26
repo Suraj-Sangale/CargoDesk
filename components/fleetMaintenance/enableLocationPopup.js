@@ -15,6 +15,7 @@ export default function EnableLocationPopup({
   onClose,
   onEnable,
   onSkip,
+  allowSkip = true,
   isLoading = false,
   isPermissionDenied = false,
   errorMessage = null,
@@ -37,6 +38,11 @@ export default function EnableLocationPopup({
           <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
             Enable Location for Photo Verification
           </h3>
+          {!allowSkip && (
+            <p className="text-xs font-medium text-amber-800 bg-amber-50/90 py-1.5 px-3 rounded-lg border border-amber-200">
+              GPS location coordinates are compulsory to submit maintenance records.
+            </p>
+          )}
           {/* <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-sm mx-auto">
             Device location is used to stamp accurate date, time, and GPS coordinates onto fleet maintenance photos.
           </p> */}
@@ -105,15 +111,17 @@ export default function EnableLocationPopup({
             )}
           </button>
 
-          {/* Secondary CTA: Skip */}
-          <button
-            type="button"
-            onClick={onSkip}
-            disabled={isLoading}
-            className="w-full py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.99] text-slate-700 hover:text-slate-900 text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
-          >
-            <span>Skip</span>
-          </button>
+          {/* Secondary CTA: Skip (hidden when location coordinates are compulsory) */}
+          {allowSkip && onSkip && (
+            <button
+              type="button"
+              onClick={onSkip}
+              disabled={isLoading}
+              className="w-full py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.99] text-slate-700 hover:text-slate-900 text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+            >
+              <span>Skip</span>
+            </button>
+          )}
 
           {/* Fallback option: Chembur Office */}
           {/* {onUseOfficeLocation && (

@@ -77,7 +77,7 @@ export function getModuleIdFromPath(pathname = "") {
   if (cleanPath.startsWith("/messager")) return "messager";
   if (cleanPath.startsWith("/invoice")) return "invoice";
   if (cleanPath.startsWith("/dailyorder")) return "dailyorders";
-  if (cleanPath.startsWith("/fleet")) return "fleets";
+  if (cleanPath.startsWith("/fleet") || cleanPath.startsWith("/maintenance")) return "fleets";
   if (cleanPath.startsWith("/driver")) return "drivers";
   if (cleanPath.startsWith("/document")) return "documents";
   if (cleanPath.startsWith("/user") || cleanPath.startsWith("/organization")) return "users";

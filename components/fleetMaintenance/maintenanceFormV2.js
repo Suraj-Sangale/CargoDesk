@@ -51,10 +51,17 @@ const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
 const SUPPORTED_LANGUAGES = [
-  { code: "en-IN", label: "English" },
-  { code: "hi-IN", label: "हिन्दी (Hindi)" },
   { code: "mr-IN", label: "मराठी (Marathi)" },
+  { code: "hi-IN", label: "हिन्दी (Hindi)" },
+  { code: "en-IN", label: "English" },
 ];
+
+// ============================================================================
+// CONFIGURATION: GPS Location Coordinates Requirement
+// Set to true to make GPS location coordinates compulsory before submitting.
+// To allow upload / submission without coordinates, change this one line to: false
+// ============================================================================
+export const REQUIRE_LOCATION_COORDINATES = false;
 
 /**
  * MaintenanceFormV2 - Ultra-Simple, Mobile-Friendly UI
@@ -71,6 +78,7 @@ export default function MaintenanceFormV2({
   resetOnSuccess = false,
   submitButtonText = "Save Maintenance Record",
   userOrgId = null,
+  requireLocationCoordinates = REQUIRE_LOCATION_COORDINATES,
 }) {
   // 1. Vehicles Selection State
   const [vehicles, setVehicles] = useState([]);
@@ -105,7 +113,7 @@ export default function MaintenanceFormV2({
     initialData?.description || "",
   );
   const [isListening, setIsListening] = useState(false);
-  const [selectedLang, setSelectedLang] = useState("en-IN");
+  const [selectedLang, setSelectedLang] = useState("mr-IN");
   const [speechSupported, setSpeechSupported] = useState(true);
   const [speechError, setSpeechError] = useState(null);
 
@@ -185,7 +193,7 @@ export default function MaintenanceFormV2({
               address: "",
               error: "denied",
             });
-            if (!hasAutoPromptedRef.current) {
+            if (!hasAutoPromptedRef.current && requireLocationCoordinates) {
               hasAutoPromptedRef.current = true;
               setShowEnableLocationPopup(true);
             }
@@ -224,7 +232,8 @@ export default function MaintenanceFormV2({
           });
           if (
             (loc?.permissionDenied || loc?.error === "denied") &&
-            !hasAutoPromptedRef.current
+            !hasAutoPromptedRef.current &&
+            requireLocationCoordinates
           ) {
             hasAutoPromptedRef.current = true;
             setShowEnableLocationPopup(true);
@@ -237,7 +246,7 @@ export default function MaintenanceFormV2({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [requireLocationCoordinates]);
 
   // Quick set known office location (Chembur)
   const handleSetChemburLocation = async (e) => {
@@ -392,6 +401,14 @@ export default function MaintenanceFormV2({
   };
 
   const handleSkipFromPopup = () => {
+    if (requireLocationCoordinates) {
+      showToast({
+        message:
+          "GPS Location coordinates are compulsory. Please enable GPS location.",
+        type: "warning",
+      });
+      return;
+    }
     setSkipWatermark(true);
     setShowEnableLocationPopup(false);
     showToast({
@@ -590,99 +607,103 @@ export default function MaintenanceFormV2({
   }, []);
 
   const startListening = () => {
-  if (!recognitionRef.current || isListening) return;
-  speechBaseTextRef.current = problemDescription || ""; // snapshot current text
-  try {
-    recognitionRef.current.start();
-  } catch (_) {}
-};
+    if (!recognitionRef.current || isListening) return;
+    speechBaseTextRef.current = problemDescription || ""; // snapshot current text
+    try {
+      recognitionRef.current.start();
+    } catch (_) {}
+  };
 
-const stopListening = () => {
-  try {
-    recognitionRef.current?.stop();
-  } catch (_) {}
-};
+  const stopListening = () => {
+    try {
+      recognitionRef.current?.stop();
+    } catch (_) {}
+  };
   // Initialize Speech Recognition
   useEffect(() => {
-  const SpeechRecognition =
-    typeof window !== "undefined"
-      ? window.SpeechRecognition || window.webkitSpeechRecognition
-      : null;
+    const SpeechRecognition =
+      typeof window !== "undefined"
+        ? window.SpeechRecognition || window.webkitSpeechRecognition
+        : null;
 
-  if (!SpeechRecognition) {
-    setSpeechSupported(false);
-    return;
-  }
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
+    }
 
-  const recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = selectedLang;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = selectedLang;
 
-  recognition.onstart = () => {
-    setIsListening(true);
-    setSpeechError(null);
-  };
+    recognition.onstart = () => {
+      setIsListening(true);
+      setSpeechError(null);
+    };
 
-  recognition.onresult = (event) => {
-    // Ignore events from a recognizer that has been replaced
-    if (recognitionRef.current !== recognition) return;
+    recognition.onresult = (event) => {
+      // Ignore events from a recognizer that has been replaced
+      if (recognitionRef.current !== recognition) return;
 
-    let finalTranscript = "";
-    let interimTranscript = "";
+      let finalTranscript = "";
+      let interimTranscript = "";
 
-    for (let i = 0; i < event.results.length; i++) {
-      const res = event.results[i];
-      const transcript = (res[0]?.transcript || "").trim();
-      if (!transcript) continue;
-      if (res.isFinal) {
-        finalTranscript += (finalTranscript ? " " : "") + transcript;
-      } else {
-        interimTranscript += (interimTranscript ? " " : "") + transcript;
+      for (let i = 0; i < event.results.length; i++) {
+        const res = event.results[i];
+        const transcript = (res[0]?.transcript || "").trim();
+        if (!transcript) continue;
+        if (res.isFinal) {
+          finalTranscript += (finalTranscript ? " " : "") + transcript;
+        } else {
+          interimTranscript += (interimTranscript ? " " : "") + transcript;
+        }
       }
-    }
 
-    const sessionSpeech = [finalTranscript, interimTranscript]
-      .filter(Boolean)
-      .join(" ");
+      const sessionSpeech = [finalTranscript, interimTranscript]
+        .filter(Boolean)
+        .join(" ");
 
-    if (sessionSpeech) {
-      const base = speechBaseTextRef.current.trim();
-      setProblemDescription(base ? `${base} ${sessionSpeech}` : sessionSpeech);
-      setFormError(null);
-    }
-  };
+      if (sessionSpeech) {
+        const base = speechBaseTextRef.current.trim();
+        setProblemDescription(
+          base ? `${base} ${sessionSpeech}` : sessionSpeech,
+        );
+        setFormError(null);
+      }
+    };
 
-  recognition.onerror = (event) => {
-    if (event.error === "not-allowed") {
-      setSpeechError("Microphone permission denied. Please allow microphone in browser.");
-    } else if (event.error === "network") {
-      setSpeechError("Network error during speech recognition.");
-    } else if (event.error !== "no-speech" && event.error !== "aborted") {
-      setSpeechError(`Speech error: ${event.error}`);
-    }
-    setIsListening(false);
-  };
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed") {
+        setSpeechError(
+          "Microphone permission denied. Please allow microphone in browser.",
+        );
+      } else if (event.error === "network") {
+        setSpeechError("Network error during speech recognition.");
+      } else if (event.error !== "no-speech" && event.error !== "aborted") {
+        setSpeechError(`Speech error: ${event.error}`);
+      }
+      setIsListening(false);
+    };
 
-  recognition.onend = () => {
-    setIsListening(false);
-    // Do NOT touch speechBaseTextRef here
-  };
+    recognition.onend = () => {
+      setIsListening(false);
+      // Do NOT touch speechBaseTextRef here
+    };
 
-  recognitionRef.current = recognition;
+    recognitionRef.current = recognition;
 
-  return () => {
-    // Detach handlers first so a dying instance can't write anything
-    recognition.onresult = null;
-    recognition.onend = null;
-    recognition.onerror = null;
-    recognition.onstart = null;
-    try {
-      recognition.abort();
-    } catch (_) {}
-    if (recognitionRef.current === recognition) recognitionRef.current = null;
-  };
-}, [selectedLang]);
+    return () => {
+      // Detach handlers first so a dying instance can't write anything
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.onstart = null;
+      try {
+        recognition.abort();
+      } catch (_) {}
+      if (recognitionRef.current === recognition) recognitionRef.current = null;
+    };
+  }, [selectedLang]);
 
   // Toggle voice listening
   const toggleListening = () => {
@@ -884,53 +905,120 @@ const stopListening = () => {
     }
   };
 
-  // Submit Handler
-  const handleSubmit = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    setFormError(null);
+  const validateForm = () => {
+    setFormError("");
+    setFileError("");
 
-    const vid = selectedVehicleId ? Number(selectedVehicleId) : null;
-    if (!vid) {
-      setFormError("Please select a vehicle number before submitting.");
-      showToast({ message: "Please select a vehicle number", type: "error" });
-      return;
-    }
+    const vid = Number(selectedVehicleId);
 
-    if (!problemDescription || problemDescription.trim() === "") {
-      setFormError(
-        "Please describe the problem or use the microphone to speak.",
-      );
-      showToast({ message: "Please describe the problem", type: "error" });
-      return;
-    }
+    // Resolve maintenance type (supports edit mode)
+    const resolvedMaintenanceType =
+      maintenanceType?.trim() || initialData?.maintenance_type || "";
 
-    if (attachedFiles.length === 0) {
-      setFileError(
-        "Photo or video evidence is compulsory. Please take a photo or upload a file.",
-      );
-      setFormError("Please take a photo or upload a file as evidence.");
-      showToast({
+    // Check existing and newly attached media
+    const hasExistingMedia =
+      Array.isArray(initialData?.media) && initialData.media.length > 0;
+
+    const hasNewMedia = attachedFiles?.length > 0;
+
+    const hasValidCoordinates = Boolean(
+      locationStatus?.latitude && locationStatus?.longitude
+    );
+
+    const validations = [
+      {
+        invalid: !selectedVehicleId || !Number.isFinite(vid) || vid <= 0,
+        message: "Please select a vehicle number",
+        error: "Please select a vehicle number before submitting.",
+      },
+      {
+        invalid: !resolvedMaintenanceType.trim(),
+        message: "Please select a maintenance type",
+        error: "Please select a maintenance type.",
+      },
+      {
+        invalid: !problemDescription?.trim(),
+        message: "Please describe the problem",
+        error: "Please describe the problem or use the microphone to speak.",
+      },
+      {
+        invalid: !hasExistingMedia && !hasNewMedia,
         message: "Photo or video evidence is compulsory",
-        type: "error",
-      });
-      return;
+        error: "Please take a photo or upload a file as evidence.",
+        fileError:
+          "Photo or video evidence is compulsory. Please take a photo or upload a file.",
+      },
+      {
+        invalid: requireLocationCoordinates && !hasValidCoordinates,
+        message: "GPS Location coordinates are compulsory. Please enable GPS.",
+        error:
+          "GPS Location coordinates are compulsory to submit maintenance. Please turn on device GPS or set location before submitting.",
+        isLocationError: true,
+      },
+    ];
+
+    const failed = validations.find((item) => item.invalid);
+
+    if (!failed) return true;
+
+    setFormError(failed.error);
+
+    if (failed.fileError) {
+      setFileError(failed.fileError);
     }
+
+    if (failed.isLocationError) {
+      setShowEnableLocationPopup(true);
+    }
+
+    showToast({
+      message: failed.message,
+      type: "error",
+    });
+
+    return false;
+  };
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault?.();
+
+    // Prevent duplicate submissions
+    if (isSubmitting) return;
+
+    if (!validateForm()) return;
+
+    const vid = Number(selectedVehicleId);
+
+    // Resolve maintenance category
+    const resolvedMaintenanceType =
+      maintenanceType?.trim() ||
+      initialData?.maintenance_type ||
+      (problemDescription
+        ? FLEET_MAINTENANCE_TYPES.find(
+            (c) =>
+              problemDescription.toLowerCase().includes(c.type.toLowerCase()) ||
+              problemDescription.toLowerCase().includes(c.text.toLowerCase()),
+          )?.type
+        : null) ||
+      FLEET_MAINTENANCE_TYPES[0]?.type ||
+      "Breakdown";
 
     // Stop speech recognition if listening
     if (isListening && recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch (_) {}
+
       setIsListening(false);
     }
 
     setIsSubmitting(true);
     setSubmissionProgress("Preparing report...");
 
-    try {
-      const uploadedMediaItems = [];
+    const uploadedMediaItems = [];
 
-      // Step 1: Upload media files if any
+    try {
+      // STEP 1: Upload media files to S3
       if (attachedFiles.length > 0) {
         setSubmissionProgress(`Authorizing ${attachedFiles.length} file(s)...`);
 
@@ -947,6 +1035,7 @@ const stopListening = () => {
           "PRESIGN_MAINTENANCE_UPLOADS",
           presignPayload,
         );
+
         if (!presignJson?.status || !Array.isArray(presignJson.data)) {
           throw new Error(
             presignJson?.message ||
@@ -954,23 +1043,25 @@ const stopListening = () => {
           );
         }
 
-        const presignedMap = {};
-        presignJson.data.forEach((item) => {
-          presignedMap[item.fileName] = item;
-        });
+        // Map presigned URLs by filename
+        const presignedMap = Object.fromEntries(
+          presignJson.data.map((item) => [item.fileName, item]),
+        );
 
+        // Upload files sequentially
         for (let i = 0; i < attachedFiles.length; i++) {
           const item = attachedFiles[i];
+
           const presignedInfo = presignedMap[item.fileName];
 
-          if (!presignedInfo || !presignedInfo.uploadUrl) {
+          if (!presignedInfo?.uploadUrl) {
             throw new Error(
               `Upload authorization missing for file: ${item.fileName}`,
             );
           }
 
           setSubmissionProgress(
-            `Uploading photo ${i + 1} of ${attachedFiles.length}...`,
+            `Uploading file ${i + 1} of ${attachedFiles.length}...`,
           );
 
           await uploadMediaFile({
@@ -990,26 +1081,8 @@ const stopListening = () => {
         }
       }
 
-      // Step 2: Save maintenance record in database with India local date and time
+      // STEP 2: Prepare maintenance payload
       setSubmissionProgress("Submitting problem report...");
-
-      // Determine proper maintenance category
-      const resolvedMaintenanceType =
-        maintenanceType ||
-        initialData?.maintenance_type ||
-        (problemDescription
-          ? FLEET_MAINTENANCE_TYPES.find(
-              (c) =>
-                problemDescription
-                  .toLowerCase()
-                  .includes(c.type.toLowerCase()) ||
-                problemDescription
-                  .toLowerCase()
-                  .includes(c.text.toLowerCase()),
-            )?.type
-          : null) ||
-        FLEET_MAINTENANCE_TYPES[0]?.type ||
-        "Breakdown";
 
       const payload = {
         vehicle_id: vid,
@@ -1018,20 +1091,28 @@ const stopListening = () => {
         maintenance_date: getIndiaDateString(),
         created_at: getIndiaISOString(),
         status: "Reported",
-        cost: expenseCost ? parseFloat(expenseCost) || "0.00" : "0.00",
+        cost: Number(expenseCost) || 0,
         odometer_reading: initialData?.odometer_reading ?? null,
         garage_name: initialData?.garage_name ?? null,
         invoice_number: initialData?.invoice_number ?? null,
         additional_notes: initialData?.additional_notes ?? null,
+        latitude: locationStatus.latitude ?? null,
+        longitude: locationStatus.longitude ?? null,
+        location_address:
+          locationStatus.address || locationStatus.placeName || null,
       };
 
+      // STEP 3: Add or update maintenance record
       let saveJson;
+
       if (isEdit && initialData?.id) {
         payload.id = initialData.id;
         payload.newMedia = uploadedMediaItems;
+
         saveJson = await postApiData("UPDATE_MAINTENANCE_RECORD", payload);
       } else {
         payload.media = uploadedMediaItems;
+
         saveJson = await postApiData("ADD_NEW_MAINTENANCE", payload);
       }
 
@@ -1041,32 +1122,37 @@ const stopListening = () => {
         );
       }
 
+      // STEP 4: Success notification
       showToast({
-        message: "Maintenance Record Saved Successfully!",
+        message: isEdit
+          ? "Maintenance Record Updated Successfully!"
+          : "Maintenance Record Saved Successfully!",
         type: "success",
       });
 
-      // Reset form if resetOnSuccess is enabled or when used standalone without a modal onClose
+      // STEP 5: Reset form when required
       if (resetOnSuccess || !onClose) {
         if (!preselectedVehicle) {
           setSelectedVehicleId("");
           setVehicleSearchQuery("");
         }
+
         setProblemDescription("");
         setMaintenanceType(initialData?.maintenance_type || "");
         setExpenseCost("");
+
         attachedFiles.forEach((item) => {
-          if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
-            try {
-              URL.revokeObjectURL(item.previewUrl);
-            } catch (_) {}
+          if (item.previewUrl?.startsWith("blob:")) {
+            URL.revokeObjectURL(item.previewUrl);
           }
         });
+
         setAttachedFiles([]);
         setFileError(null);
         setFormError(null);
       }
 
+      // STEP 6: Success callback
       if (onSuccess) {
         onSuccess(saveJson.data, {
           vehicle: selectedVehicle,
@@ -1074,17 +1160,21 @@ const stopListening = () => {
           description: payload.description,
         });
       }
+
       if (onClose) {
         onClose();
       }
     } catch (err) {
       console.error("V2 submission error:", err);
-      setFormError(
+
+      const errorMessage =
         err.message ||
-          "Failed to submit report. Please check connection and try again.",
-      );
+        "Failed to submit report. Please check connection and try again.";
+
+      setFormError(errorMessage);
+
       showToast({
-        message: err.message || "Failed to submit maintenance report.",
+        message: errorMessage,
         type: "error",
       });
     } finally {
@@ -1096,10 +1186,7 @@ const stopListening = () => {
   return (
     <div className="w-full">
       {/* Form Body */}
-      <form
-        onSubmit={handleSubmit}
-        className="w-full p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6"
-      >
+      <form onSubmit={handleSubmit} className="w-full space-y-4 sm:space-y-6">
         {/* Error Alert */}
         {formError && (
           <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-xs font-semibold text-rose-700 animate-fadeIn">
@@ -1326,7 +1413,7 @@ const stopListening = () => {
             )}
           </div>
 
-        {/* Selected vehicle preview pill or guidance text */}
+          {/* Selected vehicle preview pill or guidance text */}
           {/* {selectedVehicle && (
             <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-xl px-3 py-2 text-xs animate-fadeIn">
               <div className="flex items-center gap-2 min-w-0">
@@ -1429,7 +1516,7 @@ const stopListening = () => {
                 Use Chembur
               </button> */}
             </div>
-          ) : skipWatermark ? (
+          ) : skipWatermark && !requireLocationCoordinates ? (
             <div className="p-2 bg-slate-50 border border-slate-200 rounded-2xl flex flex-row sm:flex-row items-center justify-between gap-3 text-xs text-slate-700 shadow-2xs">
               <div className="flex items-start gap-2.5 min-w-0">
                 {/* <FiSlash className="w-4 h-4 text-slate-500 shrink-0 " /> */}
@@ -1446,7 +1533,7 @@ const stopListening = () => {
                 <button
                   type="button"
                   onClick={() => setShowEnableLocationPopup(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  className="px-3.5 py-1.5 rounded-xl bg-violet-500 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
                 >
                   Enable Location
                 </button>
@@ -1458,7 +1545,9 @@ const stopListening = () => {
                 <FiAlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   <span className="font-bold block">
-                    GPS Location needed for photo watermark
+                    {requireLocationCoordinates
+                      ? "GPS Location coordinates are compulsory to submit maintenance"
+                      : "GPS Location needed for photo watermark"}
                   </span>
                   {/* <span className="text-[11px] text-amber-800 block">
                     Tap &ldquo;Enable&rdquo; to turn on device GPS, or &ldquo;Skip&rdquo; to upload without watermark.
@@ -1466,14 +1555,16 @@ const stopListening = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                <button
-                  type="button"
-                  onClick={handleSkipFromPopup}
-                  className="px-3 py-1.5 rounded-xl border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-semibold transition-all cursor-pointer"
-                  title="Upload photos without watermark"
-                >
-                  Skip
-                </button>
+                {!requireLocationCoordinates && (
+                  <button
+                    type="button"
+                    onClick={handleSkipFromPopup}
+                    className="px-3 py-1.5 rounded-xl border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-semibold transition-all cursor-pointer"
+                    title="Upload photos without watermark"
+                  >
+                    Skip
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowEnableLocationPopup(true)}
@@ -1497,7 +1588,7 @@ const stopListening = () => {
             <button
               type="button"
               onClick={() => {
-                if (!locationStatus.resolved && !skipWatermark) {
+                if (requireLocationCoordinates && !locationStatus.resolved) {
                   setPendingCaptureType("camera");
                   setShowEnableLocationPopup(true);
                   return;
@@ -1510,7 +1601,7 @@ const stopListening = () => {
                 isProcessingMedia ||
                 attachedFiles.length >= MAX_ATTACHMENTS
               }
-              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 text-blue-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-blue-300 hover:border-blue-500 bg-white hover:bg-blue-50 text-blue-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                 {isProcessingMedia ? (
@@ -1533,7 +1624,7 @@ const stopListening = () => {
             <button
               type="button"
               onClick={() => {
-                if (!locationStatus.resolved && !skipWatermark) {
+                if (requireLocationCoordinates && !locationStatus.resolved) {
                   setPendingCaptureType("file");
                   setShowEnableLocationPopup(true);
                   return;
@@ -1545,7 +1636,7 @@ const stopListening = () => {
                 isProcessingMedia ||
                 attachedFiles.length >= MAX_ATTACHMENTS
               }
-              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/100 hover:bg-amber-50/40 text-amber-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group p-4 sm:p-5 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/100 hover:bg-amber-100/80 text-amber-700 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="w-12 h-12 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                 <FiUploadCloud className="w-6 h-6" />
@@ -1651,7 +1742,7 @@ const stopListening = () => {
 
             {/* Language Switcher Pill for Speech */}
             {speechSupported && (
-              <div className="flex items-center gap-1 bg-slate-100 rounded-xl px-2.5 py-1 border border-slate-200">
+              <div className="flex items-center gap-1 bg-white rounded-xl px-2.5 py-1 border border-slate-200">
                 <FiGlobe className="w-3.5 h-3.5 text-slate-500" />
                 <select
                   value={selectedLang}
@@ -1671,6 +1762,7 @@ const stopListening = () => {
           </div>
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
+         
           <div className="flex flex-wrap content-start gap-2 gap-x-3 overflow-x-auto h-[90px] pb-1 scrollbar-none my-3">
   {FLEET_MAINTENANCE_TYPES.map((chip, idx) => {
     const isSelected = maintenanceType === chip.type;
@@ -1781,7 +1873,9 @@ const stopListening = () => {
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
             <FiDollarSign className="w-3.5 h-3.5 text-emerald-600" />
             <span>Maintenance Expense / Cost (₹)</span>
-            <span className="text-slate-400 font-normal text-[11px]">(Optional)</span>
+            <span className="text-slate-400 font-normal text-[11px]">
+              (Optional)
+            </span>
           </div>
           <div className="relative">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">
@@ -1842,6 +1936,7 @@ const stopListening = () => {
           }}
           onEnable={handleEnableFromPopup}
           onSkip={handleSkipFromPopup}
+          allowSkip={!requireLocationCoordinates}
           isLoading={locationStatus.loading}
           isPermissionDenied={locationStatus.error === "denied"}
           errorMessage={
