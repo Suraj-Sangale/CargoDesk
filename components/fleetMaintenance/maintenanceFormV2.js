@@ -56,6 +56,13 @@ const SUPPORTED_LANGUAGES = [
   { code: "en-IN", label: "English" },
 ];
 
+// ============================================================================
+// CONFIGURATION: GPS Location Coordinates Requirement
+// Set to true to make GPS location coordinates compulsory before submitting.
+// To allow upload / submission without coordinates, change this one line to: false
+// ============================================================================
+export const REQUIRE_LOCATION_COORDINATES = false;
+
 /**
  * MaintenanceFormV2 - Ultra-Simple, Mobile-Friendly UI
  *
@@ -71,6 +78,7 @@ export default function MaintenanceFormV2({
   resetOnSuccess = false,
   submitButtonText = "Save Maintenance Record",
   userOrgId = null,
+  requireLocationCoordinates = REQUIRE_LOCATION_COORDINATES,
 }) {
   // 1. Vehicles Selection State
   const [vehicles, setVehicles] = useState([]);
@@ -185,7 +193,7 @@ export default function MaintenanceFormV2({
               address: "",
               error: "denied",
             });
-            if (!hasAutoPromptedRef.current) {
+            if (!hasAutoPromptedRef.current && requireLocationCoordinates) {
               hasAutoPromptedRef.current = true;
               setShowEnableLocationPopup(true);
             }
@@ -224,7 +232,8 @@ export default function MaintenanceFormV2({
           });
           if (
             (loc?.permissionDenied || loc?.error === "denied") &&
-            !hasAutoPromptedRef.current
+            !hasAutoPromptedRef.current &&
+            requireLocationCoordinates
           ) {
             hasAutoPromptedRef.current = true;
             setShowEnableLocationPopup(true);
@@ -237,7 +246,7 @@ export default function MaintenanceFormV2({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [requireLocationCoordinates]);
 
   // Quick set known office location (Chembur)
   const handleSetChemburLocation = async (e) => {
@@ -392,6 +401,14 @@ export default function MaintenanceFormV2({
   };
 
   const handleSkipFromPopup = () => {
+    if (requireLocationCoordinates) {
+      showToast({
+        message:
+          "GPS Location coordinates are compulsory. Please enable GPS location.",
+        type: "warning",
+      });
+      return;
+    }
     setSkipWatermark(true);
     setShowEnableLocationPopup(false);
     showToast({
@@ -904,6 +921,10 @@ export default function MaintenanceFormV2({
 
     const hasNewMedia = attachedFiles?.length > 0;
 
+    const hasValidCoordinates = Boolean(
+      locationStatus?.latitude && locationStatus?.longitude
+    );
+
     const validations = [
       {
         invalid: !selectedVehicleId || !Number.isFinite(vid) || vid <= 0,
@@ -927,6 +948,13 @@ export default function MaintenanceFormV2({
         fileError:
           "Photo or video evidence is compulsory. Please take a photo or upload a file.",
       },
+      {
+        invalid: requireLocationCoordinates && !hasValidCoordinates,
+        message: "GPS Location coordinates are compulsory. Please enable GPS.",
+        error:
+          "GPS Location coordinates are compulsory to submit maintenance. Please turn on device GPS or set location before submitting.",
+        isLocationError: true,
+      },
     ];
 
     const failed = validations.find((item) => item.invalid);
@@ -937,6 +965,10 @@ export default function MaintenanceFormV2({
 
     if (failed.fileError) {
       setFileError(failed.fileError);
+    }
+
+    if (failed.isLocationError) {
+      setShowEnableLocationPopup(true);
     }
 
     showToast({
@@ -1064,6 +1096,10 @@ export default function MaintenanceFormV2({
         garage_name: initialData?.garage_name ?? null,
         invoice_number: initialData?.invoice_number ?? null,
         additional_notes: initialData?.additional_notes ?? null,
+        latitude: locationStatus.latitude ?? null,
+        longitude: locationStatus.longitude ?? null,
+        location_address:
+          locationStatus.address || locationStatus.placeName || null,
       };
 
       // STEP 3: Add or update maintenance record
@@ -1480,7 +1516,7 @@ export default function MaintenanceFormV2({
                 Use Chembur
               </button> */}
             </div>
-          ) : skipWatermark ? (
+          ) : skipWatermark && !requireLocationCoordinates ? (
             <div className="p-2 bg-slate-50 border border-slate-200 rounded-2xl flex flex-row sm:flex-row items-center justify-between gap-3 text-xs text-slate-700 shadow-2xs">
               <div className="flex items-start gap-2.5 min-w-0">
                 {/* <FiSlash className="w-4 h-4 text-slate-500 shrink-0 " /> */}
@@ -1509,7 +1545,9 @@ export default function MaintenanceFormV2({
                 <FiAlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   <span className="font-bold block">
-                    GPS Location needed for photo watermark
+                    {requireLocationCoordinates
+                      ? "GPS Location coordinates are compulsory to submit maintenance"
+                      : "GPS Location needed for photo watermark"}
                   </span>
                   {/* <span className="text-[11px] text-amber-800 block">
                     Tap &ldquo;Enable&rdquo; to turn on device GPS, or &ldquo;Skip&rdquo; to upload without watermark.
@@ -1517,14 +1555,16 @@ export default function MaintenanceFormV2({
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                <button
-                  type="button"
-                  onClick={handleSkipFromPopup}
-                  className="px-3 py-1.5 rounded-xl border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-semibold transition-all cursor-pointer"
-                  title="Upload photos without watermark"
-                >
-                  Skip
-                </button>
+                {!requireLocationCoordinates && (
+                  <button
+                    type="button"
+                    onClick={handleSkipFromPopup}
+                    className="px-3 py-1.5 rounded-xl border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-semibold transition-all cursor-pointer"
+                    title="Upload photos without watermark"
+                  >
+                    Skip
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowEnableLocationPopup(true)}
@@ -1548,7 +1588,7 @@ export default function MaintenanceFormV2({
             <button
               type="button"
               onClick={() => {
-                if (!locationStatus.resolved && !skipWatermark) {
+                if (requireLocationCoordinates && !locationStatus.resolved) {
                   setPendingCaptureType("camera");
                   setShowEnableLocationPopup(true);
                   return;
@@ -1584,7 +1624,7 @@ export default function MaintenanceFormV2({
             <button
               type="button"
               onClick={() => {
-                if (!locationStatus.resolved && !skipWatermark) {
+                if (requireLocationCoordinates && !locationStatus.resolved) {
                   setPendingCaptureType("file");
                   setShowEnableLocationPopup(true);
                   return;
@@ -1894,6 +1934,7 @@ export default function MaintenanceFormV2({
           }}
           onEnable={handleEnableFromPopup}
           onSkip={handleSkipFromPopup}
+          allowSkip={!requireLocationCoordinates}
           isLoading={locationStatus.loading}
           isPermissionDenied={locationStatus.error === "denied"}
           errorMessage={
