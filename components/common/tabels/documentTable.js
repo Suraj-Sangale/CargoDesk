@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import Router from "next/router";
 import {
   FiEdit,
   FiCalendar,
@@ -36,12 +37,31 @@ import {
  * ============================================================================
  */
 
+// Navigation handler for links inside clickable table rows
+const handleFleetNavigation = (e, targetUrl) => {
+  e.stopPropagation();
+  // Allow Ctrl / Cmd / Middle click to natively open in a new tab via href
+  if (e.metaKey || e.ctrlKey || e.button === 1) {
+    return;
+  }
+  e.preventDefault();
+  if (targetUrl) {
+    Router.push(targetUrl);
+  }
+};
+
 // 1. Vehicle Plate Pill
 const renderVehicleCell = (value, row, tableName = "") => {
   const formatted = formatVehicleNumber(value) || value || "-";
   
   // 1. Check for explicit fleet ID on row
-  let fleetId = row?.fleet_id || row?.fleetId || row?.assigned_fleet_id;
+  let fleetId =
+    row?.fleet_id ||
+    row?.fleetId ||
+    row?.assigned_fleet_id ||
+    row?.assignedFleetId ||
+    row?.vehicle_id ||
+    row?.vehicleId;
 
   // 2. Direct fleet record if row is from fleets table or contains vehicle fields (not document/EMI/driver item)
   if (!fleetId && row?.id) {
@@ -60,17 +80,24 @@ const renderVehicleCell = (value, row, tableName = "") => {
     }
   }
 
-  if (fleetId) {
+  const targetUrl = fleetId
+    ? `/fleet/${fleetId}`
+    : formatted && formatted !== "-"
+      ? `/fleets?search=${encodeURIComponent(formatted)}`
+      : null;
+
+  if (targetUrl) {
     return (
-      <Link
-        href={`/fleet/${fleetId}`}
-        onClick={(e) => e.stopPropagation()}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-800 hover:bg-blue-600 hover:text-white border border-slate-200 hover:border-blue-600 uppercase tracking-wider transition-all cursor-pointer shadow-2xs group"
-        title="View Fleet Details & Activity History"
-      >
-        <span>{formatted}</span>
-        <FiExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity" />
-      </Link>
+     <Link
+  href={targetUrl}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md text-xs font-bold bg-slate-100 text-slate-800 hover:bg-blue-600 hover:text-white border border-slate-200 hover:border-blue-600 uppercase tracking-wider transition-all cursor-pointer shadow-2xs group -m-5"
+  title={fleetId ? "View Fleet Details & Activity History" : `Search for ${formatted} in Fleets`}
+>
+  <span>{formatted}</span>
+  <FiExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity" />
+</Link>
     );
   }
 
@@ -83,7 +110,13 @@ const renderVehicleCell = (value, row, tableName = "") => {
 
 // 1b. Vehicle Model & Make / Description
 const renderVehicleModelCell = (value, row, tableName = "") => {
-  let fleetId = row?.fleet_id || row?.fleetId || row?.assigned_fleet_id;
+  let fleetId =
+    row?.fleet_id ||
+    row?.fleetId ||
+    row?.assigned_fleet_id ||
+    row?.assignedFleetId ||
+    row?.vehicle_id ||
+    row?.vehicleId;
 
   if (!fleetId && row?.id) {
     if (
@@ -101,17 +134,20 @@ const renderVehicleModelCell = (value, row, tableName = "") => {
     }
   }
 
-  if (fleetId) {
+  const targetUrl = fleetId ? `/fleet/${fleetId}` : null;
+
+  if (targetUrl) {
     return (
-      <Link
-        href={`/fleet/${fleetId}`}
-        onClick={(e) => e.stopPropagation()}
-        className="font-semibold text-slate-800 hover:text-blue-600 hover:underline inline-flex items-center gap-1.5 transition-colors cursor-pointer group"
-        title="View Fleet Details & Activity History"
-      >
-        <span>{value || "-"}</span>
-        <FiExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 text-blue-500 transition-opacity" />
-      </Link>
+    <Link
+      href={targetUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="font-semibold text-slate-800 hover:text-blue-600 hover:underline inline-flex items-center gap-1.5 transition-colors cursor-pointer group"
+      title="View Fleet Details & Activity History"
+    >
+      <span>{value || "-"}</span>
+      <FiExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 text-blue-500 transition-opacity" />
+    </Link>
     );
   }
 

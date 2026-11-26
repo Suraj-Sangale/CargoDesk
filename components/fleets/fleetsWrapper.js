@@ -470,6 +470,7 @@ export default function FleetsWrapper({ pageData }) {
           searchTerm={searchTerm}
           rowsPerPageOptions={[5, 10, 25, 50]}
           isLoading={isLoading}
+          tableName="fleets"
         />
       </div>
 
