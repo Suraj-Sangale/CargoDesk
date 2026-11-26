@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import Link from "next/link";
 import Router from "next/router";
 import {
@@ -53,7 +59,7 @@ const handleFleetNavigation = (e, targetUrl) => {
 // 1. Vehicle Plate Pill
 const renderVehicleCell = (value, row, tableName = "") => {
   const formatted = formatVehicleNumber(value) || value || "-";
-  
+
   // 1. Check for explicit fleet ID on row
   let fleetId =
     row?.fleet_id ||
@@ -74,7 +80,11 @@ const renderVehicleCell = (value, row, tableName = "") => {
       row?.vehicle_type ||
       row?.seating_capacity ||
       row?.fuel_type ||
-      (row?.vehicle_number && !row?.documentType && !row?.loan_amount && !row?.document_id && !row?.license_number)
+      (row?.vehicle_number &&
+        !row?.documentType &&
+        !row?.loan_amount &&
+        !row?.document_id &&
+        !row?.license_number)
     ) {
       fleetId = row.id;
     }
@@ -88,16 +98,20 @@ const renderVehicleCell = (value, row, tableName = "") => {
 
   if (targetUrl) {
     return (
-     <Link
-  href={targetUrl}
-  target="_blank"
-  rel="noopener noreferrer"
-  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md text-xs font-bold bg-slate-100 text-slate-800 hover:bg-blue-600 hover:text-white border border-slate-200 hover:border-blue-600 uppercase tracking-wider transition-all cursor-pointer shadow-2xs group -m-5"
-  title={fleetId ? "View Fleet Details & Activity History" : `Search for ${formatted} in Fleets`}
->
-  <span>{formatted}</span>
-  <FiExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity" />
-</Link>
+      <Link
+        href={targetUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md text-xs font-bold bg-slate-100 text-slate-800 hover:bg-blue-600 hover:text-white border border-slate-200 hover:border-blue-600 uppercase tracking-wider transition-all cursor-pointer shadow-2xs group -m-5"
+        title={
+          fleetId
+            ? "View Fleet Details & Activity History"
+            : `Search for ${formatted} in Fleets`
+        }
+      >
+        <span>{formatted}</span>
+        <FiExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity" />
+      </Link>
     );
   }
 
@@ -128,7 +142,11 @@ const renderVehicleModelCell = (value, row, tableName = "") => {
       row?.vehicle_type ||
       row?.seating_capacity ||
       row?.fuel_type ||
-      (row?.vehicle_number && !row?.documentType && !row?.loan_amount && !row?.document_id && !row?.license_number)
+      (row?.vehicle_number &&
+        !row?.documentType &&
+        !row?.loan_amount &&
+        !row?.document_id &&
+        !row?.license_number)
     ) {
       fleetId = row.id;
     }
@@ -138,16 +156,16 @@ const renderVehicleModelCell = (value, row, tableName = "") => {
 
   if (targetUrl) {
     return (
-    <Link
-      href={targetUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="font-semibold text-slate-800 hover:text-blue-600 hover:underline inline-flex items-center gap-1.5 transition-colors cursor-pointer group"
-      title="View Fleet Details & Activity History"
-    >
-      <span>{value || "-"}</span>
-      <FiExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 text-blue-500 transition-opacity" />
-    </Link>
+      <Link
+        href={targetUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-semibold text-slate-800 hover:text-blue-600 hover:underline inline-flex items-center gap-1.5 transition-colors cursor-pointer group"
+        title="View Fleet Details & Activity History"
+      >
+        <span>{value || "-"}</span>
+        <FiExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 text-blue-500 transition-opacity" />
+      </Link>
     );
   }
 
@@ -157,13 +175,14 @@ const renderVehicleModelCell = (value, row, tableName = "") => {
 // 2. Avatar / Profile Photo
 const renderAvatarCell = (value, row) => {
   const name = row?.driver_name || row?.name || row?.title || "U";
-  const initials = name
-    .split(" ")
-    .filter(Boolean)
-    .map((n) => n[0])
-    .join("")
-    .substring(0, 2)
-    .toUpperCase() || "DR";
+  const initials =
+    name
+      .split(" ")
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase() || "DR";
 
   const rawPhoto = value || row?.profile_photo || row?.photo || row?.avatar;
   const photoUrl = resolveMediaUrl(rawPhoto);
@@ -491,7 +510,13 @@ const renderActionCell = ({
  * Dynamic Cell Value Resolver
  * ============================================================================
  */
-const resolveCellValue = (headCell, row, index, onClickDocuments, tableName) => {
+const resolveCellValue = (
+  headCell,
+  row,
+  index,
+  onClickDocuments,
+  tableName,
+) => {
   const rawValue = row[headCell.id];
 
   // 1. HIGHEST PRIORITY: Custom render function
@@ -506,8 +531,19 @@ const resolveCellValue = (headCell, row, index, onClickDocuments, tableName) => 
 
   // 3. Explicit or Inferred Column Type
   const typeMap = {
-    vehicle: ["vehicleNo", "vehicle_number", "assigned_vehicle", "vehicle", "vehicle_no"],
-    vehicleModel: ["vehicle_model", "assigned_vehicle_model", "vehicle_description", "model"],
+    vehicle: [
+      "vehicleNo",
+      "vehicle_number",
+      "assigned_vehicle",
+      "vehicle",
+      "vehicle_no",
+    ],
+    vehicleModel: [
+      "vehicle_model",
+      "assigned_vehicle_model",
+      "vehicle_description",
+      "model",
+    ],
     avatar: ["profile_photo", "photo"],
     documentType: ["documentType"],
     status: ["status"],
@@ -1005,7 +1041,10 @@ export default function DocumentTable({
       if (actionMenuRef.current && !actionMenuRef.current.contains(e.target)) {
         setActiveMenuId(null);
       }
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
+      if (
+        contextMenuRef.current &&
+        !contextMenuRef.current.contains(e.target)
+      ) {
         setContextMenu(null);
       }
     };
@@ -1100,10 +1139,10 @@ export default function DocumentTable({
   // Server-side vs Client-side pagination detection
   const isServerPagination = Boolean(
     pagination &&
-      (pagination.totalRecords !== undefined ||
-        pagination.totalPages !== undefined ||
-        pagination.total !== undefined ||
-        typeof onPageChange === "function"),
+    (pagination.totalRecords !== undefined ||
+      pagination.totalPages !== undefined ||
+      pagination.total !== undefined ||
+      typeof onPageChange === "function"),
   );
 
   const activePage = isServerPagination
@@ -1533,16 +1572,28 @@ export default function DocumentTable({
           ) : (
             <div className="flex items-center gap-3">
               <div>
-                Showing <span className="font-semibold text-slate-700">{startRecord}</span> to{" "}
-                <span className="font-semibold text-slate-700">{endRecord}</span> of{" "}
-                <span className="font-semibold text-slate-700">{totalCount}</span> records
+                Showing{" "}
+                <span className="font-semibold text-slate-700">
+                  {startRecord}
+                </span>{" "}
+                to{" "}
+                <span className="font-semibold text-slate-700">
+                  {endRecord}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold text-slate-700">
+                  {totalCount}
+                </span>{" "}
+                records
               </div>
               {rowsPerPageOptions && rowsPerPageOptions.length > 1 && (
                 <div className="flex items-center gap-1.5 text-xs">
                   <span className="text-slate-400">Rows:</span>
                   <select
                     value={currentLimit}
-                    onChange={(e) => handleRowsPerPageSelect(Number(e.target.value))}
+                    onChange={(e) =>
+                      handleRowsPerPageSelect(Number(e.target.value))
+                    }
                     disabled={isTableLoading}
                     className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-50"
                   >
@@ -1666,9 +1717,7 @@ export default function DocumentTable({
                 onClick={() => {
                   const targetRow = contextMenu.row;
                   const docs =
-                    targetRow.supporting_documents ||
-                    targetRow.documents ||
-                    [];
+                    targetRow.supporting_documents || targetRow.documents || [];
                   setContextMenu(null);
                   onClickDocuments(targetRow, docs);
                 }}
