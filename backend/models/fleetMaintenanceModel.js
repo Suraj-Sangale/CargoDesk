@@ -214,6 +214,8 @@ export async function getMaintenanceListByVehicleModel({
   limit = 10,
   status = null,
   maintenanceType = null,
+  dateFilter = null,
+  sortBy = "newest",
   search = null,
   exportAll = false,
 }) {
@@ -243,15 +245,37 @@ export async function getMaintenanceListByVehicleModel({
     params.push(maintenanceType);
   }
 
+  if (dateFilter && dateFilter !== "all") {
+    if (dateFilter === "30days") {
+      whereClauses.push("m.maintenance_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)");
+    } else if (dateFilter === "3months") {
+      whereClauses.push("m.maintenance_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)");
+    } else if (dateFilter === "6months") {
+      whereClauses.push("m.maintenance_date >= DATE_SUB(CURDATE(), INTERVAL 180 DAY)");
+    } else if (dateFilter === "1year" || dateFilter === "this_year") {
+      whereClauses.push("m.maintenance_date >= DATE_SUB(CURDATE(), INTERVAL 365 DAY)");
+    }
+  }
+
   if (search && String(search).trim() !== "") {
     whereClauses.push(
-      "(m.description LIKE ? OR m.garage_name LIKE ? OR m.invoice_number LIKE ? OR m.maintenance_type LIKE ?)"
+      "(m.description LIKE ? OR m.garage_name LIKE ? OR m.invoice_number LIKE ? OR m.maintenance_type LIKE ? OR m.additional_notes LIKE ?)"
     );
     const likeVal = `%${String(search).trim()}%`;
-    params.push(likeVal, likeVal, likeVal, likeVal);
+    params.push(likeVal, likeVal, likeVal, likeVal, likeVal);
   }
 
   const whereSQL = whereClauses.join(" AND ");
+
+  // Determine sort order
+  let orderSQL = "m.maintenance_date DESC, m.id DESC";
+  if (sortBy === "oldest") {
+    orderSQL = "m.maintenance_date ASC, m.id ASC";
+  } else if (sortBy === "cost_desc") {
+    orderSQL = "m.cost DESC, m.id DESC";
+  } else if (sortBy === "cost_asc") {
+    orderSQL = "m.cost ASC, m.id ASC";
+  }
 
   // 1. Fetch paginated records
   const querySQL = `
@@ -265,7 +289,7 @@ export async function getMaintenanceListByVehicleModel({
     LEFT JOIN fleets f ON f.id = m.vehicle_id
     LEFT JOIN users u ON u.userId = m.created_by
     WHERE ${whereSQL}
-    ORDER BY m.maintenance_date DESC, m.id DESC
+    ORDER BY ${orderSQL}
     LIMIT ? OFFSET ?
   `;
 
@@ -287,7 +311,14 @@ export async function getMaintenanceListByVehicleModel({
         WHERE vehicle_id = ? 
         ORDER BY maintenance_date DESC, id DESC 
         LIMIT 1
-      ) AS latest_status
+      ) AS latest_status,
+      (
+        SELECT maintenance_type 
+        FROM fleet_maintenance 
+        WHERE vehicle_id = ? 
+        ORDER BY maintenance_date DESC, id DESC 
+        LIMIT 1
+      ) AS latest_type
     FROM fleet_maintenance
     WHERE vehicle_id = ?
   `;
@@ -295,7 +326,7 @@ export async function getMaintenanceListByVehicleModel({
   const [records, countRes, summaryRes] = await Promise.all([
     executeQuery(querySQL, [...params, limitNum, offset]),
     executeQuery(countSQL, params),
-    executeQuery(summarySQL, [vid, vid]),
+    executeQuery(summarySQL, [vid, vid, vid]),
   ]);
 
   const total = countRes?.[0]?.total || 0;
@@ -306,6 +337,7 @@ export async function getMaintenanceListByVehicleModel({
     total_expenditure: parseFloat(summaryRow.total_expenditure) || 0.0,
     last_maintenance_date: summaryRow.last_maintenance_date || null,
     latest_status: summaryRow.latest_status || "No Records",
+    latest_type: summaryRow.latest_type || null,
   };
 
   // If there are records, fetch attachment previews for cards
