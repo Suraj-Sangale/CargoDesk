@@ -1277,7 +1277,7 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
               {/* <span>Select Vehicle Number</span>
               <span className="text-rose-500">*</span> */}
             </label>
-            {selectedVehicle?.id ? (
+            {/* {selectedVehicle?.id ? (
               <button
                 type="button"
                 onClick={() => {
@@ -1293,7 +1293,7 @@ const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
               <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
                 Locked to Current Fleet
               </span>
-            ) : null}
+            ) : null} */}
           </div>
 
           <div className="relative w-full">
