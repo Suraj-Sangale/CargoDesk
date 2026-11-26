@@ -147,6 +147,7 @@ export default function MaintenanceFormV2({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionProgress, setSubmissionProgress] = useState("");
   const [formError, setFormError] = useState(null);
+  const [validationErrorField, setValidationErrorField] = useState(null);
 
   // 5. Expense / Cost Field State
   const [expenseCost, setExpenseCost] = useState(
@@ -154,6 +155,9 @@ export default function MaintenanceFormV2({
       ? String(initialData.cost)
       : "",
   );
+  const [isExpenseFocused, setIsExpenseFocused] = useState(false);
+
+const isExpenseFloating = isExpenseFocused || Boolean(expenseCost);
 
   // References
   const cameraInputRef = useRef(null);
@@ -162,6 +166,9 @@ export default function MaintenanceFormV2({
   const recognitionRef = useRef(null);
   const speechBaseTextRef = useRef("");
   const attachedFilesRef = useRef([]);
+  const mediaSectionRef = useRef(null);
+  const typeSectionRef = useRef(null);
+  const locationSectionRef = useRef(null);
 
   // Initialize device location early so photo watermarking is instant & reliable
   useEffect(() => {
@@ -518,6 +525,7 @@ export default function MaintenanceFormV2({
     setVehicleSearchQuery(v.vehicle_number);
     setIsVehicleDropdownOpen(false);
     if (formError) setFormError(null);
+    setValidationErrorField((prev) => (prev === "vehicle" ? null : prev));
   };
 
   // Clear vehicle selection and focus input to type again
@@ -735,6 +743,7 @@ export default function MaintenanceFormV2({
       if (!incomingFileList || incomingFileList.length === 0) return;
       if (isProcessingMedia) return;
       setFileError(null);
+      setValidationErrorField((prev) => (prev === "media" ? null : prev));
 
       const incomingArr = Array.from(incomingFileList);
 
@@ -900,6 +909,11 @@ export default function MaintenanceFormV2({
       setMaintenanceType(chip.type);
     }
 
+    if (formError) setFormError(null);
+    setValidationErrorField((prev) =>
+      prev === "type" || prev === "description" ? null : prev,
+    );
+
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
@@ -908,6 +922,7 @@ export default function MaintenanceFormV2({
   const validateForm = () => {
     setFormError("");
     setFileError("");
+    setValidationErrorField(null);
 
     const vid = Number(selectedVehicleId);
 
@@ -922,38 +937,50 @@ export default function MaintenanceFormV2({
     const hasNewMedia = attachedFiles?.length > 0;
 
     const hasValidCoordinates = Boolean(
-      locationStatus?.latitude && locationStatus?.longitude
+      locationStatus?.latitude && locationStatus?.longitude,
     );
 
     const validations = [
       {
+        id: "vehicle",
         invalid: !selectedVehicleId || !Number.isFinite(vid) || vid <= 0,
         message: "Please select a vehicle number",
         error: "Please select a vehicle number before submitting.",
+        ref: vehicleDropdownRef,
+        focusInput: () => vehicleInputRef.current?.focus(),
       },
       {
-        invalid: !resolvedMaintenanceType.trim(),
-        message: "Please select a maintenance type",
-        error: "Please select a maintenance type.",
-      },
-      {
-        invalid: !problemDescription?.trim(),
-        message: "Please describe the problem",
-        error: "Please describe the problem or use the microphone to speak.",
-      },
-      {
+        id: "media",
         invalid: !hasExistingMedia && !hasNewMedia,
         message: "Photo or video evidence is compulsory",
         error: "Please take a photo or upload a file as evidence.",
         fileError:
           "Photo or video evidence is compulsory. Please take a photo or upload a file.",
+        ref: mediaSectionRef,
       },
       {
+        id: "type",
+        invalid: !resolvedMaintenanceType.trim(),
+        message: "Please select a maintenance type",
+        error: "Please select a maintenance type.",
+        ref: typeSectionRef,
+      },
+      {
+        id: "description",
+        invalid: !problemDescription?.trim(),
+        message: "Please describe the problem",
+        error: "Please describe the problem or use the microphone to speak.",
+        ref: textareaRef,
+        focusInput: () => textareaRef.current?.focus(),
+      },
+      {
+        id: "location",
         invalid: requireLocationCoordinates && !hasValidCoordinates,
         message: "GPS Location coordinates are compulsory. Please enable GPS.",
         error:
           "GPS Location coordinates are compulsory to submit maintenance. Please turn on device GPS or set location before submitting.",
         isLocationError: true,
+        ref: locationSectionRef,
       },
     ];
 
@@ -961,6 +988,7 @@ export default function MaintenanceFormV2({
 
     if (!failed) return true;
 
+    setValidationErrorField(failed.id);
     setFormError(failed.error);
 
     if (failed.fileError) {
@@ -975,6 +1003,26 @@ export default function MaintenanceFormV2({
       message: failed.message,
       type: "error",
     });
+
+    // Smoothly scroll to the missing/invalid field and highlight it
+    if (failed.ref?.current) {
+      try {
+        failed.ref.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      } catch (_) {
+        failed.ref.current.scrollIntoView();
+      }
+
+      if (failed.focusInput) {
+        setTimeout(() => {
+          try {
+            failed.focusInput();
+          } catch (_) {}
+        }, 350);
+      }
+    }
 
     return false;
   };
@@ -1186,7 +1234,7 @@ export default function MaintenanceFormV2({
   return (
     <div className="w-full">
       {/* Form Body */}
-      <form onSubmit={handleSubmit} className="w-full space-y-4 sm:space-y-6">
+      <form onSubmit={handleSubmit} className="w-full space-y-1 sm:space-y-6">
         {/* Error Alert */}
         {formError && (
           <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-xs font-semibold text-rose-700 animate-fadeIn">
@@ -1212,7 +1260,7 @@ export default function MaintenanceFormV2({
         {/* 2. Vehicle Number Selection - Direct Typeable Field with Results at Bottom */}
         <div
           ref={vehicleDropdownRef}
-          className={`space-y-2 w-full relative transition-all ${
+          className={`space-y-1 w-full relative transition-all ${
             isVehicleDropdownOpen && !preselectedVehicle ? "z-50" : "z-10"
           }`}
         >
@@ -1222,8 +1270,8 @@ export default function MaintenanceFormV2({
               className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-800"
             >
               {/* <FiTruck className="w-4 h-4 text-blue-600" /> */}
-              <span>Select Vehicle Number</span>
-              <span className="text-rose-500">*</span>
+              {/* <span>Select Vehicle Number</span>
+              <span className="text-rose-500">*</span> */}
             </label>
             {preselectedVehicle && (
               <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
@@ -1248,11 +1296,13 @@ export default function MaintenanceFormV2({
               className={`w-full min-h-[52px] px-3.5 py-2.5 flex items-center gap-2.5 bg-white rounded-2xl border-2 transition-all duration-200 shadow-xs cursor-text ${
                 Boolean(preselectedVehicle) || isSubmitting
                   ? "bg-slate-100 opacity-70 cursor-not-allowed border-slate-200"
-                  : isVehicleDropdownOpen
-                    ? "border-blue-600 ring-4 ring-blue-100/70"
-                    : selectedVehicleId
-                      ? "border-blue-500 bg-blue-50/20 hover:border-blue-600"
-                      : "border-slate-300 hover:border-blue-500"
+                  : validationErrorField === "vehicle"
+                    ? "border-rose-500 ring-4 ring-rose-100 bg-rose-50/20"
+                    : isVehicleDropdownOpen
+                      ? "border-blue-600 ring-4 ring-blue-100/70"
+                      : selectedVehicleId
+                        ? "border-blue-500 bg-blue-50/20 hover:border-blue-600"
+                        : "border-slate-300 hover:border-blue-500"
               }`}
             >
               <FiSearch className="w-5 h-5 text-blue-600 shrink-0" />
@@ -1288,6 +1338,9 @@ export default function MaintenanceFormV2({
                     setSelectedVehicleId("");
                   }
                   if (formError) setFormError(null);
+                  if (validationErrorField === "vehicle") {
+                    setValidationErrorField(null);
+                  }
                 }}
                 onKeyDown={handleVehicleKeyDown}
                 className="w-full bg-transparent text-slate-900 font-semibold text-sm sm:text-base outline-none placeholder:text-slate-400 placeholder:font-normal"
@@ -1429,14 +1482,21 @@ export default function MaintenanceFormV2({
               </span>
             </div>
           )} */}
+
+          {validationErrorField === "vehicle" && (
+            <p className="text-xs font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
+              <FiAlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>Please select a vehicle number before submitting.</span>
+            </p>
+          )}
         </div>
 
         {/* 3. Capture Photo & Upload File - Two Large Side-by-Side Buttons (Compulsory) */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="block text-xs sm:text-sm font-bold text-slate-800">
+            {/* <label className="block text-xs sm:text-sm font-bold text-slate-800">
               Photos or Videos Evidence <span className="text-rose-500">*</span>
-            </label>
+            </label> */}
             {attachedFiles.length > 0 && (
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
                 <FiCheck className="w-3 h-3 text-emerald-600" />
@@ -1502,6 +1562,14 @@ export default function MaintenanceFormV2({
                 <FiRefreshCcw className="w-4 h-4" />
               </button>
             </div> */}
+          <div
+            ref={locationSectionRef}
+            className={`transition-all rounded-2xl ${
+              validationErrorField === "location"
+                ? "border-2 border-rose-500 ring-4 ring-rose-200 p-0.5"
+                : ""
+            }`}
+          >
           {locationStatus.resolved ? null : locationStatus.loading ? (
             <div className="flex items-center justify-between px-3.5 py-2.5 bg-blue-50/90 border border-blue-200 rounded-2xl text-xs text-blue-900 shadow-2xs">
               <div className="flex items-center gap-2">
@@ -1540,21 +1608,19 @@ export default function MaintenanceFormV2({
               </div>
             </div>
           ) : (
-            <div className="p-3.5 bg-amber-50/95 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-2xs">
-              <div className="flex items-start gap-2.5 min-w-0">
+            <div className="p-2 bg-amber-50/95 border border-amber-200/90 rounded-2xl flex flex-row sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-2xs">
+              <div className="flex justify-center gap-2.5 min-w-0">
                 <FiAlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   <span className="font-bold block">
                     {requireLocationCoordinates
-                      ? "GPS Location coordinates are compulsory to submit maintenance"
-                      : "GPS Location needed for photo watermark"}
+                      ? "GPS coordinates mandatory for submission."
+                      : "GPS Location needed"}
                   </span>
-                  {/* <span className="text-[11px] text-amber-800 block">
-                    Tap &ldquo;Enable&rdquo; to turn on device GPS, or &ldquo;Skip&rdquo; to upload without watermark.
-                  </span> */}
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+
+              <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
                 {!requireLocationCoordinates && (
                   <button
                     type="button"
@@ -1575,12 +1641,22 @@ export default function MaintenanceFormV2({
               </div>
             </div>
           )}
+          </div>
+
+          {validationErrorField === "location" && (
+            <p className="text-xs font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
+              <FiAlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>GPS Location coordinates are compulsory. Please enable device location.</span>
+            </p>
+          )}
 
           {/* Side by side 50% buttons */}
           <div
+            ref={mediaSectionRef}
             className={`grid grid-cols-2 gap-3 sm:gap-4 transition-all rounded-2xl ${
-              fileError && attachedFiles.length === 0
-                ? "ring-2 ring-rose-300 p-1 bg-rose-50/30"
+              validationErrorField === "media" ||
+              (fileError && attachedFiles.length === 0)
+                ? "border-2 border-rose-500 ring-4 ring-rose-200 p-1.5 bg-rose-50/40"
                 : ""
             }`}
           >
@@ -1733,7 +1809,7 @@ export default function MaintenanceFormV2({
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <label className="block text-xs sm:text-sm font-bold text-slate-800">
-                What is the problem? <span className="text-rose-500">*</span>
+                Maintenance Type <span className="text-rose-500">*</span>
               </label>
               {/* <p className="text-[11px] text-slate-500 font-medium">
                 Type details or tap the microphone to speak
@@ -1762,28 +1838,42 @@ export default function MaintenanceFormV2({
           </div>
 
           {/* Quick Problem Suggestion Chips for Fast Entry */}
-         
-          <div className="flex flex-wrap content-start gap-2 gap-x-3 overflow-x-auto h-[90px] pb-1 scrollbar-none my-3">
-  {FLEET_MAINTENANCE_TYPES.map((chip, idx) => {
-    const isSelected = maintenanceType === chip.type;
 
-    return (
-      <button
-        key={idx}
-        type="button"
-        onClick={() => handleChipClick(chip)}
-        disabled={isSubmitting}
-        className={`shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg text-[13px] font-semibold transition-all cursor-pointer border ${
-          isSelected
-            ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-            : "bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
-        }`}
-      >
-        {chip.label}
-      </button>
-    );
-  })}
-</div>
+          <div
+            ref={typeSectionRef}
+            className={`flex flex-wrap content-start gap-2 gap-x-3 overflow-x-auto h-[90px] pb-1 scrollbar-none my-3 transition-all rounded-xl ${
+              validationErrorField === "type"
+                ? "border-2 border-rose-500 ring-4 ring-rose-200 p-2 bg-rose-50/40"
+                : ""
+            }`}
+          >
+            {FLEET_MAINTENANCE_TYPES.map((chip, idx) => {
+              const isSelected = maintenanceType === chip.type;
+
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleChipClick(chip)}
+                  disabled={isSubmitting}
+                  className={`shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg text-[13px] font-semibold transition-all cursor-pointer border ${
+                    isSelected
+                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                      : "bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200 hover:border-blue-200"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {validationErrorField === "type" && (
+            <p className="text-xs font-semibold text-rose-600 -mt-1 mb-2 flex items-center gap-1 animate-fadeIn">
+              <FiAlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>Please select a maintenance category before submitting.</span>
+            </p>
+          )}
 
           {/* Textarea + Large Microphone Button */}
           <div className="relative">
@@ -1796,13 +1886,18 @@ export default function MaintenanceFormV2({
                 setProblemDescription(val);
                 speechBaseTextRef.current = val;
                 if (formError) setFormError(null);
+                if (validationErrorField === "description") {
+                  setValidationErrorField(null);
+                }
               }}
               disabled={isSubmitting}
               placeholder="e.g. Brake noise, engine overheating, tyre flat, vehicle stopped on highway..."
-              className={`w-full px-4 py-3 pb-14 text-sm sm:text-base font-normal text-slate-900 bg-white border rounded-2xl outline-none transition-all placeholder:text-slate-400 shadow-2xs resize-none ${
-                isListening
-                  ? "border-rose-400 ring-2 ring-rose-200"
-                  : "border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className={`w-full px-4 py-3 pb-14 text-sm sm:text-base font-normal text-slate-900 bg-white border-2 rounded-2xl outline-none transition-all placeholder:text-slate-400 shadow-2xs resize-none ${
+                validationErrorField === "description"
+                  ? "border-rose-500 ring-4 ring-rose-200 bg-rose-50/10"
+                  : isListening
+                    ? "border-rose-400 ring-2 ring-rose-200"
+                    : "border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               }`}
             />
 
@@ -1866,33 +1961,106 @@ export default function MaintenanceFormV2({
               <span>{speechError}</span>
             </p>
           )}
+
+          {validationErrorField === "description" && (
+            <p className="text-xs font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
+              <FiAlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>Please describe the problem or use the microphone to speak.</span>
+            </p>
+          )}
         </div>
 
         {/* 5. Expense / Cost Field (Single Simple Input) */}
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-            <FiDollarSign className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Maintenance Expense / Cost (₹)</span>
-            <span className="text-slate-400 font-normal text-[11px]">
-              (Optional)
-            </span>
-          </div>
-          <div className="relative">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">
-              ₹
-            </span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={expenseCost}
-              onChange={(e) => setExpenseCost(e.target.value)}
-              disabled={isSubmitting}
-              placeholder="e.g. 1500 (Optional, leave blank if not known yet)"
-              className="w-full pl-8 pr-3.5 py-2.5 text-sm font-medium text-slate-900 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-400 disabled:opacity-60"
-            />
-          </div>
-        </div>
+
+{/* <div className="relative">
+  <fieldset
+    className={`border rounded-xl px-3.5 pb-1.5 pt-1 transition-all ${
+      isExpenseFocused
+        ? "border-blue-500 ring-2 ring-blue-100"
+        : "border-slate-300"
+    }`}
+  >
+    <legend
+      className={`px-1 text-[11px] font-medium ${
+        isExpenseFocused ? "text-blue-600" : "text-slate-500"
+      }`}
+    >
+      Maintenance Expense / Cost (Optional)
+    </legend>
+
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-semibold text-slate-500">₹</span>
+
+      <input
+        id="expenseCost"
+        type="number"
+        min="0"
+        step="0.01"
+        value={expenseCost}
+        onChange={(e) => setExpenseCost(e.target.value)}
+        onFocus={() => setIsExpenseFocused(true)}
+        onBlur={() => setIsExpenseFocused(false)}
+        disabled={isSubmitting}
+        placeholder="Enter amount"
+        className="w-full bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+      />
+    </div>
+  </fieldset>
+</div> */}
+
+<div className="relative">
+  <fieldset
+    className={`border rounded-xl px-3.5 pb-2 pt-2 transition-all duration-200 ${
+      isExpenseFocused
+        ? "border-blue-500 ring-2 ring-blue-100"
+        : "border-slate-300"
+    }`}
+  >
+    <legend
+      className={`px-1 transition-all duration-200 text-sm ${
+        isExpenseFloating
+          ? " font-medium"
+          : ""
+      } ${
+        isExpenseFocused ? "text-blue-600" : "text-slate-500"
+      }`}
+    >
+      {isExpenseFloating
+        ? "Maintenance Expense / Cost (Optional)"
+        : ""}
+    </legend>
+
+    <div className="relative flex items-center gap-2">
+      <span className="text-sm font-semibold text-slate-500">₹</span>
+
+      <input
+        id="expenseCost"
+        type="number"
+        min="0"
+        step="0.01"
+        value={expenseCost}
+        onChange={(e) => setExpenseCost(e.target.value)}
+        onFocus={() => setIsExpenseFocused(true)}
+        onBlur={() => setIsExpenseFocused(false)}
+        disabled={isSubmitting}
+        placeholder={
+          isExpenseFocused ? "Enter amount" : " "
+        }
+        className="w-full bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+      />
+
+      {!isExpenseFloating && (
+        <label
+          htmlFor="expenseCost"
+          className="absolute left-7 text-sm text-slate-400 pointer-events-none"
+        >
+          Maintenance Expense / Cost (Optional)
+        </label>
+      )}
+    </div>
+  </fieldset>
+</div>
+
 
         {/* 6. Prominent Full-Width Submit Button */}
         <div className="pt-2 space-y-2.5">
