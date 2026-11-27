@@ -42,6 +42,7 @@ import {
   FiSlash,
   FiDollarSign,
   FiClock,
+  FiZap,
 } from "react-icons/fi";
 import { ImSpinner9 } from "react-icons/im";
 import EnableLocationPopup from "./enableLocationPopup";
@@ -123,6 +124,11 @@ export default function MaintenanceFormV2({
   const [skipWatermark, setSkipWatermark] = useState(false);
   const [pendingCaptureType, setPendingCaptureType] = useState(null); // 'camera' | 'file' | null
   const hasAutoPromptedRef = useRef(false);
+
+  // 3b. AI-Powered Image Recognition State
+  const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState(null);
+  const previousManualInputRef = useRef({ type: "", description: "" });
   const [manualCoordsInput, setManualCoordsInput] = useState({
     lat: "19.0596",
     lng: "72.8895",
@@ -712,6 +718,129 @@ const stopListening = () => {
       }
     }
   };
+
+  // 3b. AI Image Recognition Helper: Resizes photo on offscreen canvas to ~1024px and returns Base64
+  const fileToResizedBase64 = useCallback((file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            let { width, height } = img;
+            const maxDim = 1024;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+            const base64 = canvas.toDataURL("image/jpeg", 0.85);
+            resolve(base64);
+          } catch (_) {
+            resolve(e.target.result);
+          }
+        };
+        img.onerror = () => resolve(e.target.result);
+        img.src = e.target.result;
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  // Run AI Image Recognition on a captured or uploaded photo
+  const runAiImageRecognition = useCallback(
+    async (file, previewUrl = null) => {
+      if (!file || !file.type.startsWith("image/")) {
+        return;
+      }
+
+      // Preserve previous input so user can reject or revert anytime
+      previousManualInputRef.current = {
+        type: maintenanceType,
+        description: problemDescription,
+      };
+
+      setIsAnalyzingAI(true);
+      try {
+        const base64Data = await fileToResizedBase64(file);
+        const res = await postApiData("AI_ANALYZE_IMAGE", {
+          imageBase64: base64Data,
+          mimeType: "image/jpeg",
+          fileName: file.name,
+        });
+
+        if (res?.status && res.data) {
+          const data = res.data;
+          setAiAnalysisResult({
+            ...data,
+            previewUrl: previewUrl || (file ? URL.createObjectURL(file) : null),
+          });
+
+          // Automatically suggest and populate Maintenance Type
+          if (data.maintenance_type) {
+            setMaintenanceType(data.maintenance_type);
+          }
+
+          // Automatically suggest and populate Description
+          if (data.description) {
+            setProblemDescription(data.description);
+            speechBaseTextRef.current = data.description;
+          }
+
+          if (validationErrorField === "type" || validationErrorField === "description") {
+            setValidationErrorField(null);
+          }
+
+          if (data.detected_fault) {
+            showToast({
+              message: `✨ AI Detected: ${data.detected_fault}`,
+              type: "success",
+            });
+          }
+        } else {
+          showToast({
+            message: res?.message || "AI image analysis completed.",
+            type: "info",
+          });
+        }
+      } catch (err) {
+        console.warn("AI vision analysis error:", err);
+        showToast({
+          message: "AI recognition unavailable for this photo. You can enter details manually.",
+          type: "info",
+        });
+      } finally {
+        setIsAnalyzingAI(false);
+      }
+    },
+    [fileToResizedBase64, maintenanceType, problemDescription, validationErrorField],
+  );
+
+  // Reject / Revert AI Suggestion
+  const handleRejectAiSuggestion = useCallback(() => {
+    const prev = previousManualInputRef.current;
+    if (prev) {
+      setMaintenanceType(prev.type || "");
+      setProblemDescription(prev.description || "");
+      speechBaseTextRef.current = prev.description || "";
+    }
+    setAiAnalysisResult(null);
+    showToast({
+      message: "AI suggestion rejected. Previous input restored.",
+      type: "info",
+    });
+  }, []);
+
   // Process files selected from camera or file picker
   const handleFilesSelected = useCallback(
     async (incomingFileList, { isCameraCapture = false } = {}) => {
@@ -839,6 +968,12 @@ const stopListening = () => {
           setAttachedFiles((prev) => [...prev, ...validFiles]);
           setFileError(null);
           setFormError(null);
+
+          // Automatically trigger AI Image Recognition on the first uploaded photo
+          const firstImage = validFiles.find((f) => f.mediaType === "image");
+          if (firstImage?.file) {
+            runAiImageRecognition(firstImage.file, firstImage.previewUrl);
+          }
         }
       } catch (err) {
         console.error("Error processing media files:", err);
@@ -850,7 +985,7 @@ const stopListening = () => {
         setMediaProcessingText("");
       }
     },
-    [attachedFiles, isProcessingMedia, locationStatus, skipWatermark],
+    [attachedFiles, isProcessingMedia, locationStatus, runAiImageRecognition, skipWatermark],
   );
 
   // Remove attached file
@@ -862,7 +997,11 @@ const stopListening = () => {
           URL.revokeObjectURL(target.previewUrl);
         } catch (_) {}
       }
-      return prev.filter((item) => item.id !== fileId);
+      const updated = prev.filter((item) => item.id !== fileId);
+      if (updated.length === 0) {
+        setAiAnalysisResult(null);
+      }
+      return updated;
     });
   };
 
@@ -1059,6 +1198,8 @@ const stopListening = () => {
         setProblemDescription("");
         setMaintenanceType(initialData?.maintenance_type || "");
         setExpenseCost("");
+        setAiAnalysisResult(null);
+
         attachedFiles.forEach((item) => {
           if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
             try {
@@ -1644,12 +1785,29 @@ const stopListening = () => {
                       {(item.fileSize / (1024 * 1024)).toFixed(1)} MB
                     </div>
 
+                    {/* AI Scan button for images */}
+                    {item.mediaType === "image" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          runAiImageRecognition(item.file, item.previewUrl);
+                        }}
+                        disabled={isSubmitting || isProcessingMedia || isAnalyzingAI}
+                        className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-lg bg-blue-600/90 hover:bg-blue-600 active:scale-95 text-white text-[10px] font-bold backdrop-blur-xs flex items-center gap-1 shadow-sm cursor-pointer transition-all z-10"
+                        title="Analyze this photo with AI"
+                      >
+                        <FiZap className="w-2.5 h-2.5 text-amber-300" />
+                        <span>AI Scan</span>
+                      </button>
+                    )}
+
                     {/* Remove Button */}
                     <button
                       type="button"
                       onClick={() => handleRemoveFile(item.id)}
                       disabled={isSubmitting || isProcessingMedia}
-                      className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-md hover:bg-rose-700 active:scale-95 transition-all cursor-pointer"
+                      className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-md hover:bg-rose-700 active:scale-95 transition-all cursor-pointer z-10"
                       title="Remove file"
                     >
                       <FiX className="w-4 h-4" />
@@ -1660,6 +1818,92 @@ const stopListening = () => {
             </div>
           )}
         </div>
+
+        {/* 4b. AI-Powered Image Recognition Status & Suggestion Banner */}
+        {isAnalyzingAI ? (
+          <div className="p-3.5 bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-purple-50/90 border border-blue-200/90 rounded-2xl flex items-center justify-between gap-3 text-xs shadow-xs animate-pulse">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <ImSpinner9 className="w-4 h-4 animate-spin" />
+              </div>
+              <div className="min-w-0">
+                <span className="font-bold text-slate-900 block truncate">
+                  AI Analyzing Vehicle Photo...
+                </span>
+                <span className="text-[11px] text-slate-500 block truncate">
+                  Detecting mechanical faults, body damage, tyre wear & fluid leaks
+                </span>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+              Scanning...
+            </span>
+          </div>
+        ) : aiAnalysisResult ? (
+          <div className="p-3.5 bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-purple-50/80 border border-blue-200/90 rounded-2xl space-y-2.5 shadow-xs transition-all animate-fadeIn">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                  <FiZap className="w-3.5 h-3.5 text-amber-300" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <span className="font-bold text-xs sm:text-sm text-slate-900">
+                      AI Suggestion Applied
+                    </span>
+                    {aiAnalysisResult.confidence && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                        {aiAnalysisResult.confidence}% Confidence
+                      </span>
+                    )}
+                    {aiAnalysisResult.damage_severity && (
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          aiAnalysisResult.damage_severity === "Critical" ||
+                          aiAnalysisResult.damage_severity === "High"
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}
+                      >
+                        {aiAnalysisResult.damage_severity} Severity
+                      </span>
+                    )}
+                  </div>
+                  {aiAnalysisResult.detected_fault && (
+                    <p className="text-[11px] font-semibold text-slate-600 truncate mt-0.5">
+                      Detected: <span className="text-slate-900 font-bold">{aiAnalysisResult.detected_fault}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Action buttons: Reject / Undo */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleRejectAiSuggestion}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 shadow-2xs transition-all cursor-pointer active:scale-95"
+                  title="Reject AI suggestion and restore your previous text"
+                >
+                  <FiX className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Reject / Undo</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white/85 p-2.5 rounded-xl border border-blue-100 text-xs text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+              <div>
+                <span className="font-bold text-blue-900">Suggested Type: </span>
+                <span className="font-semibold text-slate-800">
+                  {aiAnalysisResult.maintenance_type || "Other"}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 italic">
+                You can freely edit the type or description below before saving.
+              </span>
+            </div>
+          </div>
+        ) : null}
 
         {/* 5. Maintenance Details with Voice-to-Text */}
         <div className="space-y-2 mt-2">

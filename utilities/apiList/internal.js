@@ -96,6 +96,7 @@ export const internalList = {
   GET_MAINTENANCE_MEDIA_URL: "/api/maintenance/get-media-url",
   DELETE_MAINTENANCE_MEDIA: "/api/maintenance/delete-media",
   GET_RECENT_MAINTENANCE: "/api/maintenance/recent",
+  AI_ANALYZE_IMAGE: "/api/maintenance/ai-analyze-image",
 
   // media streaming & viewer
   VIEW_MEDIA: "/api/media/view",
