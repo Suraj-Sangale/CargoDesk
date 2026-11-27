@@ -53,5 +53,5 @@ export const getServerSideProps = withUserSsr(
       return { notFound: true };
     }
   },
-  { allowedRoles: ["super_admin"] }
+  { allowedRoles: ["super_admin", "admin"] }
 );

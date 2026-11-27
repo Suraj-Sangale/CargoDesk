@@ -332,15 +332,18 @@ export function getOrganizationDetailsModel(orgId, authUser = null) {
         return resolve({ status: false, message: "Valid organization ID required" });
       }
 
-      // 1. Authorization: strictly allow Super Admin only
+      // 1. Authorization: allow Super Admin or the Organization Administrator of this org
       const isSuperAdmin =
         authUser?.role === "super_admin" || authUser?.email === "suraj@agnibyte.com";
       if (authUser && !isSuperAdmin) {
-        return resolve({
-          status: false,
-          code: 403,
-          message: "Access denied. Organization details are accessible by Super Admin only.",
-        });
+        const userOrg = authUser?.orgId || authUser?.org_id;
+        if (!userOrg || Number(userOrg) !== id) {
+          return resolve({
+            status: false,
+            code: 403,
+            message: "Access denied. Organization details are accessible by Super Admin or this organization's administrator.",
+          });
+        }
       }
 
       // 2. Fetch Organization Record

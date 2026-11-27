@@ -30,6 +30,7 @@ import { ImSpinner9 } from "react-icons/im";
 export default function UsersWrapper({ pageData = {} }) {
   const currentUser = pageData?.user || null;
   const isSuperAdmin = currentUser?.role === "super_admin" || currentUser?.email === "suraj@agnibyte.com";
+  const userOrgId = currentUser?.orgId || currentUser?.org_id;
 
   const [users, setUsers] = useState(pageData?.users || []);
   const [organizations, setOrganizations] = useState(pageData?.organizations || []);
@@ -40,6 +41,14 @@ export default function UsersWrapper({ pageData = {} }) {
   const [orgFilter, setOrgFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selected, setSelected] = useState([]);
+
+  // Current organization of the logged-in org admin
+  const currentOrg = useMemo(() => {
+    return organizations.find((o) => Number(o.orgId) === Number(userOrgId)) || null;
+  }, [organizations, userOrgId]);
+
+  // Current Org Details modal state (for Org Admins)
+  const [isCurrentOrgModalOpen, setIsCurrentOrgModalOpen] = useState(false);
 
   // User Form modal state
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -107,14 +116,19 @@ export default function UsersWrapper({ pageData = {} }) {
 
   // Summary Metrics
   const stats = useMemo(() => {
-    const total = users.length;
+    // If not super admin, scope users strictly to this organization
+    const scopedUsers = !isSuperAdmin && userOrgId
+      ? users.filter((u) => Number(u.orgId) === Number(userOrgId))
+      : users;
+
+    const total = scopedUsers.length;
     let superAdmins = 0;
     let orgAdmins = 0;
     let officeStaff = 0;
     let maintenance = 0;
     let activeCount = 0;
 
-    users.forEach((u) => {
+    scopedUsers.forEach((u) => {
       const r = (u.role || "").toLowerCase();
       const s = (u.status || "").toLowerCase();
 
@@ -127,12 +141,19 @@ export default function UsersWrapper({ pageData = {} }) {
     });
 
     return { total, superAdmins, orgAdmins, officeStaff, maintenance, activeCount, orgCount: organizations.length };
-  }, [users, organizations]);
+  }, [users, organizations, isSuperAdmin, userOrgId]);
 
   // Filtered display list
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      // 1. Search term
+      // 1. Tenant Organization Isolation: Non-superadmins strictly only see their own organization members
+      if (!isSuperAdmin) {
+        if (userOrgId && Number(u.orgId) !== Number(userOrgId)) {
+          return false;
+        }
+      }
+
+      // 2. Search term
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase();
         const fullName = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
@@ -152,7 +173,7 @@ export default function UsersWrapper({ pageData = {} }) {
         }
       }
 
-      // 2. Role filter
+      // 3. Role filter
       if (roleFilter !== "all") {
         let r = (u.role || "").toLowerCase();
         if (r === "manager" || r === "dispatcher") r = "office_staff";
@@ -160,12 +181,12 @@ export default function UsersWrapper({ pageData = {} }) {
         if (r !== roleFilter.toLowerCase()) return false;
       }
 
-      // 3. Organization filter
-      if (orgFilter !== "all") {
+      // 4. Organization filter (Super Admin only)
+      if (isSuperAdmin && orgFilter !== "all") {
         if (String(u.orgId) !== String(orgFilter)) return false;
       }
 
-      // 4. Status filter
+      // 5. Status filter
       if (statusFilter !== "all") {
         const s = (u.status || "").toLowerCase();
         const isActive = s === "active" || s === "1";
@@ -173,16 +194,9 @@ export default function UsersWrapper({ pageData = {} }) {
         if (statusFilter === "inactive" && isActive) return false;
       }
 
-      // 5. Tenant Organization Isolation: Non-superadmins only see their own organization members
-      if (!isSuperAdmin && currentUser?.orgId) {
-        if (Number(u.orgId) !== Number(currentUser.orgId) && u.role !== "super_admin") {
-          return false;
-        }
-      }
-
       return true;
     });
-  }, [users, searchTerm, roleFilter, orgFilter, statusFilter, isSuperAdmin, currentUser]);
+  }, [users, searchTerm, roleFilter, orgFilter, statusFilter, isSuperAdmin, userOrgId]);
 
   // Formatted data for DocumentTable
   const finalDisplayData = useMemo(() => {
@@ -574,10 +588,14 @@ export default function UsersWrapper({ pageData = {} }) {
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-600 mb-1">
             <FiShield className="w-3.5 h-3.5" />
-            <span>Super Administrator Control Panel</span>
+            <span>
+              {isSuperAdmin
+                ? "Super Administrator Control Panel"
+                : `${currentOrg?.orgName || "Company"} Administration`}
+            </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">
-            Organizations, Sub-Users & Roles
+            {isSuperAdmin ? "Organizations, Sub-Users & Roles" : "Team Members & Role Access"}
           </h1>
           {/* <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-xl">
             Super Admin global control: provision tenant Organizations, assign Organization Administrators, and manage Operations Coordinators and Fleet Maintenance Supervisors.
@@ -586,7 +604,7 @@ export default function UsersWrapper({ pageData = {} }) {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-          {isSuperAdmin && (
+          {isSuperAdmin ? (
             <button
               onClick={() => {
                 setSelectedOrg(null);
@@ -598,7 +616,16 @@ export default function UsersWrapper({ pageData = {} }) {
               <FiBriefcase className="w-4 h-4" />
               <span>+ New Organization</span>
             </button>
-          )}
+          ) : currentOrg ? (
+            <button
+              onClick={() => setIsCurrentOrgModalOpen(true)}
+              className="flex-1 sm:flex-none px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs sm:text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+              title="View your company organization details"
+            >
+              <FiBriefcase className="w-4 h-4" />
+              <span>View My Organization</span>
+            </button>
+          ) : null}
 
           <button
             onClick={() => handleOpenAdd("office_staff")}
@@ -612,16 +639,39 @@ export default function UsersWrapper({ pageData = {} }) {
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        {/* Organizations */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-            <FiBriefcase className="w-5 h-5" />
+        {/* Organizations or My Organization */}
+        {isSuperAdmin ? (
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+              <FiBriefcase className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Organizations</p>
+              <p className="text-xl font-bold text-slate-800">{stats.orgCount}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Organizations</p>
-            <p className="text-xl font-bold text-slate-800">{stats.orgCount}</p>
+        ) : (
+          <div
+            onClick={() => setIsCurrentOrgModalOpen(true)}
+            className="bg-white p-4 rounded-2xl border border-purple-200/90 shadow-xs flex items-center justify-between gap-3 cursor-pointer hover:border-purple-400 hover:shadow-xs transition-all group"
+            title="Click to view organization details"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 group-hover:bg-purple-100 transition-colors">
+                <FiBriefcase className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">My Organization</p>
+                <p className="text-sm font-bold text-slate-900 truncate">
+                  {currentOrg?.orgName || "Company"}
+                </p>
+                <p className="text-[10px] text-slate-400 font-medium group-hover:text-purple-600 transition-colors">
+                  View details &rarr;
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Org Admins */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3.5">
@@ -685,16 +735,18 @@ export default function UsersWrapper({ pageData = {} }) {
             <span>All Members ({filteredUsers.length})</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab("organizations")}
-            className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap cursor-pointer ${activeTab === "organizations"
-                ? "border-purple-600 text-purple-600"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-          >
-            <FiBriefcase className="w-4 h-4" />
-            <span>Organizations ({organizations.length})</span>
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => setActiveTab("organizations")}
+              className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap cursor-pointer ${activeTab === "organizations"
+                  ? "border-purple-600 text-purple-600"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+            >
+              <FiBriefcase className="w-4 h-4" />
+              <span>Organizations ({organizations.length})</span>
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab("roles")}
@@ -735,19 +787,21 @@ export default function UsersWrapper({ pageData = {} }) {
 
               {/* Filter Dropdowns */}
               <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-                {/* Organization Filter */}
-                <select
-                  value={orgFilter}
-                  onChange={(e) => setOrgFilter(e.target.value)}
-                  className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
-                >
-                  <option value="all">All Organizations</option>
-                  {organizations.map((org) => (
-                    <option key={org.orgId} value={org.orgId}>
-                      {org.orgName}
-                    </option>
-                  ))}
-                </select>
+                {/* Organization Filter - Super Admin Only */}
+                {isSuperAdmin && (
+                  <select
+                    value={orgFilter}
+                    onChange={(e) => setOrgFilter(e.target.value)}
+                    className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                  >
+                    <option value="all">All Organizations</option>
+                    {organizations.map((org) => (
+                      <option key={org.orgId} value={org.orgId}>
+                        {org.orgName}
+                      </option>
+                    ))}
+                  </select>
+                )}
 
                 {/* Role Filter */}
                 <select
@@ -937,8 +991,8 @@ export default function UsersWrapper({ pageData = {} }) {
           </div>
         )}
 
-        {/* TAB 2: ORGANIZATIONS LISTING */}
-        {activeTab === "organizations" && (
+        {/* TAB 2: ORGANIZATIONS LISTING (Super Admin only) */}
+        {isSuperAdmin && activeTab === "organizations" && (
           <div className="p-4 sm:p-6">
             <OrganizationsList
               organizations={organizations}
@@ -1044,6 +1098,116 @@ export default function UsersWrapper({ pageData = {} }) {
           isLoading={isOrgDeleting}
         />
       </CommonModal>
+
+      {/* MODAL 5: View Current Organization Profile (for Org Admins) */}
+      {isCurrentOrgModalOpen && currentOrg && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setIsCurrentOrgModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                  <FiBriefcase className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {currentOrg.orgName}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Organization Profile & Company Information
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsCurrentOrgModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <FiX className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Profile Fields List */}
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-medium">Organization Code:</span>
+                <span className="font-mono font-bold text-slate-800">{currentOrg.orgCode || "—"}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-medium">Registration / CIN:</span>
+                <span className="font-mono font-semibold text-slate-800">{currentOrg.registrationNumber || "—"}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-medium">GSTIN / Tax ID:</span>
+                <span className="font-mono font-semibold text-slate-800">{currentOrg.taxId || "—"}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-medium">Primary Contact:</span>
+                <span className="font-semibold text-slate-800">{currentOrg.contactPerson || "—"}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-medium">Phone:</span>
+                <span className="font-semibold text-slate-800">{currentOrg.phone || "—"}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-medium">Email:</span>
+                <span className="font-semibold text-slate-800">{currentOrg.email || "—"}</span>
+              </div>
+              {currentOrg.address && (
+                <div className="py-1.5 border-b border-slate-100 space-y-1">
+                  <span className="text-slate-500 font-medium block">Office Address:</span>
+                  <span className="text-slate-800 font-medium leading-relaxed block bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    {[currentOrg.address, currentOrg.city, currentOrg.state, currentOrg.postalCode, currentOrg.country]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between py-1.5">
+                <span className="text-slate-500 font-medium">Status:</span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  {currentOrg.status || "Active"}
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedOrg(currentOrg);
+                  setIsOrgEditMode(true);
+                  setIsOrgModalOpen(true);
+                  setIsCurrentOrgModalOpen(false);
+                }}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <FiEdit2 className="w-3.5 h-3.5" />
+                <span>Edit Profile</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = `/organizations/${currentOrg.orgId}`;
+                }}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Full Organization Hub</span>
+                <span>&rarr;</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
