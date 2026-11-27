@@ -63,7 +63,7 @@ const SUPPORTED_LANGUAGES = [
 // Set to true to make GPS location coordinates compulsory before submitting.
 // To allow upload / submission without coordinates, change this one line to: false
 // ============================================================================
-export const REQUIRE_LOCATION_COORDINATES = false;
+export const REQUIRE_LOCATION_COORDINATES = true;
 
 /**
  * MaintenanceFormV2 - Ultra-Simple, Mobile-Friendly UI
